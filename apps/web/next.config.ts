@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
-  transpilePackages: ["@bos/db"],
+  transpilePackages: ["@bos/db", "@bos/core"],
   serverExternalPackages: ["pg"],
 };
 

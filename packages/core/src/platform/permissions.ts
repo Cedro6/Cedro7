@@ -1,0 +1,43 @@
+export const ROLES = ["owner", "admin", "sales", "purchasing", "warehouse", "viewer"] as const;
+export type Role = (typeof ROLES)[number];
+
+export const PERMISSIONS = [
+  "customer.read",
+  "customer.write",
+  "product.read",
+  "product.write",
+  "product.cost.view",
+  "settings.manage",
+] as const;
+export type Permission = (typeof PERMISSIONS)[number];
+
+const everything: readonly Permission[] = PERMISSIONS;
+
+/** Services check permission keys, never role names. This table is the only place roles are spelled out. */
+const MATRIX: Record<Role, readonly Permission[]> = {
+  owner: everything,
+  admin: everything,
+  sales: ["customer.read", "customer.write", "product.read"],
+  purchasing: ["customer.read", "product.read", "product.write", "product.cost.view"],
+  warehouse: ["product.read"],
+  viewer: ["customer.read", "product.read"],
+};
+
+export class ForbiddenError extends Error {
+  constructor(public readonly permission: Permission) {
+    super(`Not allowed: ${permission}`);
+    this.name = "ForbiddenError";
+  }
+}
+
+export function isRole(value: string): value is Role {
+  return (ROLES as readonly string[]).includes(value);
+}
+
+export function can(role: Role, permission: Permission): boolean {
+  return MATRIX[role].includes(permission);
+}
+
+export function requirePermission(role: Role, permission: Permission): void {
+  if (!can(role, permission)) throw new ForbiddenError(permission);
+}

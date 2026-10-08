@@ -4,21 +4,23 @@ Operations software for wholesale distributors: customers, stock, sales orders a
 
 ## Status
 
-Stage 0 (foundations) only. There is no sign-in and no business feature yet.
+Early build. Working and tested:
 
-Working and tested:
+- Database migrations, tenant isolation by row-level security, append-only audit log.
+- Six roles with a permission table that every service function checks.
+- App shell in the approved glass style: sign-in, Home, Customers (list, detail, create), Products.
+- A demo company with three people, four customers and seven products.
 
-- Database migrations that apply to an empty PostgreSQL 16 database.
-- Tenant isolation by row-level security, with a restricted app role.
-- An append-only audit log.
-- A repeatable demo-company seed.
-- A status page in the approved visual style.
+Sign-in is a development sign-in with no password. It is refused in production unless `DEV_SIGN_IN=1` is set, and must be replaced by a real identity provider before any real data is entered.
 
-Not built yet: authentication, roles and permissions, every business module, background jobs, error monitoring, the AI assistant, billing.
+On Home, the sales chart and briefing show sample figures and are labelled "Sample data" on screen. Sales, Purchasing, Calendar and Reports are placeholder pages.
+
+Not built yet: real authentication, invitations, stock ledger, purchasing, sales orders, imports, reports, background jobs, error monitoring, the AI assistant, billing.
 
 ## Layout
 
 - `apps/web` — Next.js app.
+- `packages/core` — business logic: permissions, customers, products. No HTTP, no React.
 - `packages/db` — SQL migrations, tenant context helper, seed.
 
 ## Running locally
@@ -31,6 +33,8 @@ pnpm db:migrate
 pnpm db:seed
 pnpm dev
 ```
+
+Then open http://localhost:3000 and choose a demo person.
 
 ## Checks
 
