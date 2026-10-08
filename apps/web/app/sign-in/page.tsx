@@ -1,4 +1,4 @@
-import { devSignInEnabled } from "../../lib/session";
+import { devSignInEnabled, previewPasswordRequired } from "../../lib/session";
 import { signIn } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ const demoPeople = [
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   const enabled = devSignInEnabled();
+  const needsPassword = previewPasswordRequired();
   return (
     <main className="sign-in">
       <section className="glass panel sign-in-card">
@@ -23,32 +24,29 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
         </div>
         <h1>Sign in</h1>
         {enabled ? (
-          <>
+          <form action={signIn} className="stack">
             <p className="muted">
-              Development sign-in. There is no password yet; choose a demo person to see the product as their role.
+              {needsPassword
+                ? "Preview. Enter the preview password, then choose a demo person to see the product as their role."
+                : "Development sign-in. Choose a demo person to see the product as their role."}
             </p>
             {error === "unknown" && <p className="error">No active account uses that email.</p>}
+            {error === "password" && <p className="error">That preview password is not right.</p>}
+            {needsPassword && (
+              <label className="field">
+                <span>Preview password</span>
+                <input type="password" name="previewPassword" required autoComplete="current-password" />
+              </label>
+            )}
             <div className="stack">
               {demoPeople.map((person) => (
-                <form key={person.email} action={signIn}>
-                  <input type="hidden" name="email" value={person.email} />
-                  <button type="submit" className="person">
-                    <span>{person.label}</span>
-                    <span className="muted">{person.role}</span>
-                  </button>
-                </form>
+                <button key={person.email} type="submit" name="email" value={person.email} className="person">
+                  <span>{person.label}</span>
+                  <span className="muted">{person.role}</span>
+                </button>
               ))}
             </div>
-            <form action={signIn} className="stack">
-              <label className="field">
-                <span>Or enter an email</span>
-                <input type="email" name="email" required autoComplete="email" />
-              </label>
-              <button type="submit" className="btn btn-primary">
-                Continue
-              </button>
-            </form>
-          </>
+          </form>
         ) : (
           <p className="muted">Sign-in is not available yet on this deployment.</p>
         )}
