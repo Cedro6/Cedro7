@@ -1,12 +1,14 @@
+import Link from "next/link";
 import { can, listProducts } from "@bos/core";
 import { SearchIcon } from "../../../components/icons";
-import { formatMoney } from "../../../lib/format";
+import { formatMoney, formatQty } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
 
-export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; low?: string }> }) {
   const { ctx } = await requireSession();
-  const { q = "" } = await searchParams;
-  const products = await listProducts(ctx, { search: q });
+  const { q = "", low } = await searchParams;
+  const lowOnly = low === "1";
+  const products = await listProducts(ctx, { search: q, lowStockOnly: lowOnly });
   const showCost = can(ctx.role, "product.cost.view");
   return (
     <>
@@ -14,8 +16,17 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         <div>
           <div className="eyebrow">
             {products.length} {products.length === 1 ? "product" : "products"}
+            {lowOnly ? " running low" : ""}
           </div>
           <h1>Products</h1>
+        </div>
+        <div className="segmented" role="group" aria-label="Filter">
+          <Link href="/products" aria-current={lowOnly ? undefined : "true"}>
+            All
+          </Link>
+          <Link href="/products?low=1" aria-current={lowOnly ? "true" : undefined}>
+            Low stock
+          </Link>
         </div>
         <form className="glass search" role="search">
           <SearchIcon />
@@ -23,13 +34,22 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             Search products
           </label>
           <input id="q" name="q" type="search" placeholder="Search name or SKU" defaultValue={q} />
+          {lowOnly && <input type="hidden" name="low" value="1" />}
         </form>
       </header>
       <section className="glass panel">
         {products.length === 0 ? (
           <div className="empty">
-            <div className="empty-title">{q ? "No products match that search" : "No products yet"}</div>
-            <p>{q ? "Try part of the name or SKU." : "Products are added by import in stage 7."}</p>
+            <div className="empty-title">
+              {q ? "No products match that search" : lowOnly ? "Nothing is running low" : "No products yet"}
+            </div>
+            <p>
+              {q
+                ? "Try part of the name or SKU."
+                : lowOnly
+                  ? "Every product is above its reorder point."
+                  : "Products are added by import in stage 7."}
+            </p>
           </div>
         ) : (
           <div className="table-wrap">
@@ -37,31 +57,31 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
               <thead>
                 <tr>
                   <th>Product</th>
-                  <th>Category</th>
                   <th>Shelf</th>
+                  <th className="num">On hand</th>
+                  <th className="num">Reserved</th>
+                  <th className="num">Available</th>
                   {showCost && <th className="num">Cost</th>}
                   <th className="num">Price</th>
-                  {showCost && <th className="num">Margin</th>}
                 </tr>
               </thead>
               <tbody>
                 {products.map((product) => (
                   <tr key={product.id}>
                     <td>
-                      <div className="row-title">{product.name}</div>
+                      <Link href={`/products/${product.id}`} className="row-link">
+                        {product.name}
+                      </Link>
                       <div className="muted mono">{product.sku}</div>
                     </td>
-                    <td>{product.category ?? <span className="muted">None</span>}</td>
                     <td className="mono">{product.shelfLocation ?? ""}</td>
+                    <td className="num">{formatQty(product.onHand)}</td>
+                    <td className="num muted-cell">{formatQty(product.reserved)}</td>
+                    <td className="num strong">
+                      {product.lowStock && <span className="badge badge-warn">Low</span>} {formatQty(product.available)}
+                    </td>
                     {showCost && <td className="num">{product.cost === null ? "" : formatMoney(product.cost)}</td>}
-                    <td className="num strong">{formatMoney(product.price)}</td>
-                    {showCost && (
-                      <td className="num">
-                        {product.cost !== null && product.price > 0
-                          ? `${Math.round(((product.price - product.cost) / product.price) * 100)}%`
-                          : ""}
-                      </td>
-                    )}
+                    <td className="num">{formatMoney(product.price)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -69,7 +89,6 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           </div>
         )}
       </section>
-      <p className="muted footnote">Stock on hand appears here once the stock ledger is built in stage 3.</p>
     </>
   );
 }

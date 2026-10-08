@@ -1,4 +1,17 @@
-export { listProducts, type ProductSummary } from "./catalog/products";
+export { getProduct, listProducts, type ProductSummary } from "./catalog/products";
+export {
+  adjustStock,
+  InsufficientStockError,
+  listMovements,
+  postMovements,
+  reconcileStock,
+  releaseReservation,
+  reserveStock,
+  StockInputError,
+  type Movement,
+  type MovementKind,
+  type StockMismatch,
+} from "./inventory/ledger";
 export {
   createCustomer,
   getCustomer,

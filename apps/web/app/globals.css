@@ -465,6 +465,17 @@ a.tile:hover {
   color: #7cf0b0;
 }
 
+.badge-warn {
+  background: rgba(255, 179, 64, 0.22);
+  color: #ffd08a;
+}
+
+.badge-large {
+  padding: 8px 16px;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
 .badge-sample {
   align-self: flex-start;
   background: rgba(255, 179, 64, 0.22);
@@ -581,6 +592,81 @@ td.num {
 
 .strong {
   font-weight: 600;
+}
+
+.muted-cell {
+  color: var(--ink-2);
+}
+
+.plus {
+  color: #7cf0b0;
+}
+
+.minus {
+  color: #ffb3ad;
+}
+
+table.compact td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.notice {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(52, 209, 122, 0.18);
+  color: #a6f5c8;
+  font-weight: 500;
+}
+
+/* Segmented control: filter links and radio choices */
+
+.segmented {
+  display: inline-flex;
+  padding: 4px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.segmented a,
+.segmented label span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: #d5dae3;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.segmented a[aria-current],
+.segmented input:checked + span {
+  background: rgba(255, 255, 255, 0.22);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.segmented input {
+  position: absolute;
+  opacity: 0;
+}
+
+.segmented input:focus-visible + span {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.segmented-form {
+  display: flex;
+}
+
+.segmented-form label {
+  flex: 1;
 }
 
 .row-link {
@@ -702,6 +788,15 @@ td.num {
 
   .panel {
     padding: 18px;
+  }
+
+  .tiles {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .numeral {
+    font-size: 38px;
   }
 
   .contact-lines {
