@@ -12,7 +12,8 @@
     "db:migrate": "pnpm --filter @bos/db migrate",
     "db:seed": "pnpm --filter @bos/db seed",
     "dev": "pnpm --filter @bos/web dev",
-    "build": "pnpm --filter @bos/web build"
+    "build": "pnpm --filter @bos/web build",
+    "db:demo-orders": "pnpm --filter @bos/core demo-orders"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

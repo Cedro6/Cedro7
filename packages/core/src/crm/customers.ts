@@ -1,5 +1,6 @@
 import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "../platform/context";
+import { ValidationError } from "../platform/errors";
 import { requirePermission } from "../platform/permissions";
 
 export type CustomerSummary = {
@@ -21,13 +22,6 @@ export type Contact = {
 };
 
 export type CustomerDetail = CustomerSummary & { createdAt: Date; contacts: Contact[] };
-
-export class ValidationError extends Error {
-  constructor(public readonly field: string, message: string) {
-    super(message);
-    this.name = "ValidationError";
-  }
-}
 
 const SUMMARY_SQL = `
   select c.id, c.name, c.payment_terms as "paymentTerms", c.created_at as "createdAt",
