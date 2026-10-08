@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { overview } from "@bos/core";
+import { can, overview } from "@bos/core";
 import { SparkIcon } from "../../components/icons";
 import { sampleBriefing, sampleSales } from "../../lib/sample";
 import { requireSession } from "../../lib/session";
@@ -28,9 +28,9 @@ export default async function HomePage() {
             {greeting(hour)}, {firstName}
           </h1>
         </div>
-        {counts.customers !== null && (
-          <Link href="/customers/new" className="btn btn-primary">
-            New customer
+        {can(ctx.role, "sales_order.write") && (
+          <Link href="/sales/new" className="btn btn-primary">
+            New order
           </Link>
         )}
       </header>
@@ -50,6 +50,13 @@ export default async function HomePage() {
             <div className="muted">In the catalog</div>
           </Link>
         )}
+        {counts.readyToShip !== null && (
+          <Link href="/sales?show=open" className="glass panel tile">
+            <h2 className="label">Ready to ship</h2>
+            <div className="numeral">{counts.readyToShip}</div>
+            <div className="muted">Of {counts.openOrders} open orders</div>
+          </Link>
+        )}
         {counts.lowStock !== null && (
           <Link href="/products?low=1" className="glass panel tile">
             <h2 className="label">Low stock</h2>
@@ -57,11 +64,6 @@ export default async function HomePage() {
             <div className="muted">At or below reorder point</div>
           </Link>
         )}
-        <div className="glass panel tile">
-          <h2 className="label">Team</h2>
-          <div className="numeral">{counts.team}</div>
-          <div className="muted">People with access</div>
-        </div>
       </div>
 
       <div className="split">

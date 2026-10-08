@@ -9,6 +9,9 @@ export const PERMISSIONS = [
   "product.cost.view",
   "stock.adjust",
   "stock.reserve",
+  "sales_order.read",
+  "sales_order.write",
+  "sales_order.ship",
   "settings.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -19,10 +22,10 @@ const everything: readonly Permission[] = PERMISSIONS;
 const MATRIX: Record<Role, readonly Permission[]> = {
   owner: everything,
   admin: everything,
-  sales: ["customer.read", "customer.write", "product.read", "stock.reserve"],
-  purchasing: ["customer.read", "product.read", "product.write", "product.cost.view", "stock.adjust"],
-  warehouse: ["product.read", "stock.adjust"],
-  viewer: ["customer.read", "product.read"],
+  sales: ["customer.read", "customer.write", "product.read", "stock.reserve", "sales_order.read", "sales_order.write"],
+  purchasing: ["customer.read", "product.read", "product.write", "product.cost.view", "stock.adjust", "sales_order.read"],
+  warehouse: ["product.read", "stock.adjust", "sales_order.read", "sales_order.ship"],
+  viewer: ["customer.read", "product.read", "sales_order.read"],
 };
 
 export class ForbiddenError extends Error {

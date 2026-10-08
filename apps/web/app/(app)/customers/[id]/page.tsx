@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, getCustomer } from "@bos/core";
-import { initials } from "../../../../lib/format";
+import { can, getCustomer, listOrders } from "@bos/core";
+import { StatusBadge } from "../../../../components/StatusBadge";
+import { formatMoney, initials } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -10,6 +11,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   if (!can(ctx.role, "customer.read")) notFound();
   const customer = await getCustomer(ctx, id);
   if (!customer) notFound();
+  const orders = can(ctx.role, "sales_order.read") ? await listOrders(ctx, { customerId: id }) : [];
   const since = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
     customer.createdAt,
   );
@@ -22,6 +24,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           </div>
           <h1>{customer.name}</h1>
         </div>
+        {can(ctx.role, "sales_order.write") && (
+          <Link href={`/sales/new?customer=${customer.id}`} className="btn btn-primary">
+            New order
+          </Link>
+        )}
       </header>
       <div className="tiles">
         <div className="glass panel tile">
@@ -61,10 +68,30 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           </div>
         )}
       </section>
-      <section className="glass panel empty">
-        <div className="empty-title">Orders and activity</div>
-        <p>Order history arrives with sales orders in stage 5; notes and reminders in stage 6.</p>
+      <section className="glass panel">
+        <h2 className="title">Orders</h2>
+        {orders.length === 0 ? (
+          <p className="muted">No orders yet.</p>
+        ) : (
+          <div className="rows">
+            {orders.map((order) => (
+              <div className="row" key={order.id}>
+                <div className="row-text">
+                  <Link href={`/sales/${order.id}`} className="row-link mono">
+                    {order.number}
+                  </Link>
+                  <div className="muted">
+                    {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(order.createdAt)}
+                  </div>
+                </div>
+                <StatusBadge status={order.status} />
+                <div className="strong order-total-cell">{formatMoney(order.total)}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
+      <p className="muted footnote">Notes and reminders arrive in stage 6.</p>
     </>
   );
 }

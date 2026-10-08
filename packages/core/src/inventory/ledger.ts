@@ -198,6 +198,75 @@ export async function adjustStock(
   });
 }
 
+export type ReserveLine = {
+  productId: string;
+  qty: number;
+  source: { type: string; id: string };
+  idempotencyKey: string;
+};
+
+export type ReserveResult = { reserved: number; reservationId: string | null; replayed: boolean };
+
+const round4 = (value: number): number => Math.round(value * 1e4) / 1e4;
+
+/**
+ * Reserves stock for several document lines inside the caller's transaction.
+ * All balance rows are locked in one step, so a document never holds some locks
+ * while waiting for others. With partial: true each line gets what is available.
+ */
+export async function reserveLinesInTx(
+  tx: PoolClient,
+  ctx: Ctx,
+  lines: ReserveLine[],
+  options: { partial: boolean },
+): Promise<ReserveResult[]> {
+  for (const line of lines) {
+    checkQuantity(line.qty, "Quantity");
+    if (line.qty < 0) throw new StockInputError("Quantity must be positive.");
+    if (!UUID.test(line.source.id)) throw new StockInputError("Unknown source document.");
+  }
+  if (lines.length === 0) return [];
+  const locationId = await defaultLocation(tx);
+  const levels = await lockLevels(
+    tx,
+    ctx.orgId,
+    locationId,
+    lines.map((line) => line.productId),
+  );
+  const results: ReserveResult[] = [];
+  for (const line of lines) {
+    const existing = await tx.query<{ id: string; qty: number }>(
+      "select id, qty::float8 as qty from stock_reservations where idempotency_key = $1",
+      [line.idempotencyKey],
+    );
+    if (existing.rows[0]) {
+      results.push({ reserved: existing.rows[0].qty, reservationId: existing.rows[0].id, replayed: true });
+      continue;
+    }
+    const level = levels.get(line.productId)!;
+    const available = round4(level.onHand - level.reserved);
+    const qty = options.partial ? Math.min(line.qty, available) : line.qty;
+    if (qty > available) throw new InsufficientStockError(line.productId, available, line.qty);
+    if (qty <= 0) {
+      results.push({ reserved: 0, reservationId: null, replayed: false });
+      continue;
+    }
+    await tx.query(
+      "update stock_levels set reserved = reserved + $1, updated_at = now() where product_id = $2 and location_id = $3",
+      [qty, line.productId, locationId],
+    );
+    const created = await tx.query<{ id: string }>(
+      `insert into stock_reservations
+         (org_id, product_id, location_id, qty, source_type, source_id, idempotency_key, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+      [ctx.orgId, line.productId, locationId, qty, line.source.type, line.source.id, line.idempotencyKey, ctx.userId],
+    );
+    level.reserved = round4(level.reserved + qty);
+    results.push({ reserved: qty, reservationId: created.rows[0]!.id, replayed: false });
+  }
+  return results;
+}
+
 /**
  * Sets stock aside for a document line. With partial: true it reserves what is
  * available (possibly nothing); otherwise it reserves the full quantity or fails.
@@ -211,37 +280,117 @@ export async function reserveStock(
     idempotencyKey: string;
     partial?: boolean;
   },
-): Promise<{ reserved: number; reservationId: string | null; replayed: boolean }> {
+): Promise<ReserveResult> {
   requirePermission(ctx.role, "stock.reserve");
-  checkQuantity(input.qty, "Quantity");
-  if (input.qty < 0) throw new StockInputError("Quantity must be positive.");
-  if (!UUID.test(input.source.id)) throw new StockInputError("Unknown source document.");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const locationId = await defaultLocation(tx);
-    const level = (await lockLevels(tx, ctx.orgId, locationId, [input.productId])).get(input.productId)!;
-    const existing = await tx.query<{ id: string; qty: number }>(
-      "select id, qty::float8 as qty from stock_reservations where idempotency_key = $1",
-      [input.idempotencyKey],
-    );
-    if (existing.rows[0]) {
-      return { reserved: existing.rows[0].qty, reservationId: existing.rows[0].id, replayed: true };
-    }
-    const available = level.onHand - level.reserved;
-    const qty = input.partial ? Math.min(input.qty, available) : input.qty;
-    if (qty > available) throw new InsufficientStockError(input.productId, available, input.qty);
-    if (qty <= 0) return { reserved: 0, reservationId: null, replayed: false };
-    await tx.query(
-      "update stock_levels set reserved = reserved + $1, updated_at = now() where product_id = $2 and location_id = $3",
-      [qty, input.productId, locationId],
-    );
-    const created = await tx.query<{ id: string }>(
-      `insert into stock_reservations
-         (org_id, product_id, location_id, qty, source_type, source_id, idempotency_key, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
-      [ctx.orgId, input.productId, locationId, qty, input.source.type, input.source.id, input.idempotencyKey, ctx.userId],
-    );
-    return { reserved: qty, reservationId: created.rows[0]!.id, replayed: false };
+    const [result] = await reserveLinesInTx(tx, ctx, [input], { partial: input.partial ?? false });
+    return result!;
   });
+}
+
+/**
+ * Ships reserved stock: consumes the reservations held for each source line and
+ * posts a shipment entry, lowering on-hand and reserved together. Returns
+ * replayed: true when this idempotency key was already shipped.
+ */
+export async function shipReservedInTx(
+  tx: PoolClient,
+  ctx: Ctx,
+  input: {
+    idempotencyKey: string;
+    source: { type: string; id: string };
+    lines: { productId: string; qty: number; reservedFor: string }[];
+  },
+): Promise<{ replayed: boolean }> {
+  if (input.lines.length === 0) throw new StockInputError("Nothing to ship.");
+  for (const line of input.lines) {
+    checkQuantity(line.qty, "Quantity");
+    if (line.qty < 0) throw new StockInputError("Quantity must be positive.");
+  }
+  const locationId = await defaultLocation(tx);
+  await lockLevels(
+    tx,
+    ctx.orgId,
+    locationId,
+    input.lines.map((line) => line.productId),
+  );
+  const key = `ship:${input.idempotencyKey}`;
+  const already = await tx.query("select 1 from stock_movements where idempotency_key like $1 || ':%' limit 1", [
+    key.replace(/[\\%_]/g, "\\$&"),
+  ]);
+  if (already.rowCount) return { replayed: true };
+
+  for (const [index, line] of input.lines.entries()) {
+    const held = await tx.query<{ id: string; qty: number }>(
+      `select id, qty::float8 as qty from stock_reservations
+       where source_id = $1 and product_id = $2 and location_id = $3 and status = 'open'
+       order by created_at, id for update`,
+      [line.reservedFor, line.productId, locationId],
+    );
+    const total = round4(held.rows.reduce((sum, row) => sum + row.qty, 0));
+    if (total < line.qty) throw new InsufficientStockError(line.productId, total, line.qty);
+    let remaining = line.qty;
+    for (const reservation of held.rows) {
+      if (remaining <= 0) break;
+      const take = Math.min(reservation.qty, remaining);
+      if (take >= reservation.qty) {
+        await tx.query("update stock_reservations set status = 'consumed', updated_at = now() where id = $1", [
+          reservation.id,
+        ]);
+      } else {
+        await tx.query("update stock_reservations set qty = qty - $1, updated_at = now() where id = $2", [
+          take,
+          reservation.id,
+        ]);
+      }
+      remaining = round4(remaining - take);
+    }
+    await tx.query(
+      `update stock_levels set on_hand = on_hand - $1, reserved = reserved - $1, updated_at = now()
+       where product_id = $2 and location_id = $3`,
+      [line.qty, line.productId, locationId],
+    );
+    await tx.query(
+      `insert into stock_movements
+         (org_id, product_id, location_id, qty_delta, kind, source_type, source_id, idempotency_key, posted_by)
+       values ($1, $2, $3, $4, 'shipment', $5, $6, $7, $8)`,
+      [ctx.orgId, line.productId, locationId, -line.qty, input.source.type, input.source.id, `${key}:${index}`, ctx.userId],
+    );
+  }
+  return { replayed: false };
+}
+
+/** Releases every open reservation held for these source lines. Returns the quantity released per source id. */
+export async function releaseForSourcesInTx(
+  tx: PoolClient,
+  ctx: Ctx,
+  sourceIds: string[],
+): Promise<Map<string, number>> {
+  const released = new Map<string, number>();
+  if (sourceIds.length === 0) return released;
+  const open = await tx.query<{ product_id: string; location_id: string }>(
+    "select distinct product_id, location_id from stock_reservations where source_id = any($1::uuid[]) and status = 'open'",
+    [sourceIds],
+  );
+  const byLocation = new Map<string, string[]>();
+  for (const row of open.rows) byLocation.set(row.location_id, [...(byLocation.get(row.location_id) ?? []), row.product_id]);
+  for (const locationId of [...byLocation.keys()].sort()) {
+    await lockLevels(tx, ctx.orgId, locationId, byLocation.get(locationId)!);
+  }
+  const rows = await tx.query<{ source_id: string; product_id: string; location_id: string; qty: number }>(
+    `update stock_reservations set status = 'released', updated_at = now()
+     where source_id = any($1::uuid[]) and status = 'open'
+     returning source_id, product_id, location_id, qty::float8 as qty`,
+    [sourceIds],
+  );
+  for (const row of rows.rows) {
+    await tx.query(
+      "update stock_levels set reserved = reserved - $1, updated_at = now() where product_id = $2 and location_id = $3",
+      [row.qty, row.product_id, row.location_id],
+    );
+    released.set(row.source_id, round4((released.get(row.source_id) ?? 0) + row.qty));
+  }
+  return released;
 }
 
 /** Returns reserved stock to available. Releasing twice changes nothing the second time. */

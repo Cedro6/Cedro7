@@ -476,6 +476,23 @@ a.tile:hover {
   margin-bottom: 6px;
 }
 
+.badge-info {
+  background: rgba(111, 177, 255, 0.24);
+  color: #b9d8ff;
+}
+
+.badge-muted {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-2);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .badge-sample {
   align-self: flex-start;
   background: rgba(255, 179, 64, 0.22);
@@ -538,6 +555,11 @@ a.tile:hover {
   background: rgba(255, 255, 255, 0.45);
 }
 
+.dot-white {
+  background: var(--ink);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.8);
+}
+
 .dot-ok {
   background: var(--ok);
   box-shadow: 0 0 14px var(--ok);
@@ -588,6 +610,11 @@ td.num {
   text-align: right;
   padding-right: 0;
   padding-left: 12px;
+}
+
+th.num + th:not(.num),
+td.num + td:not(.num) {
+  padding-left: 28px;
 }
 
 .strong {
@@ -802,4 +829,196 @@ table.compact td {
   .contact-lines {
     align-items: flex-start;
   }
+}
+
+/* Orders */
+
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.title-row .badge-large {
+  margin-bottom: 0;
+}
+
+.numeral-caption {
+  font-size: 16px;
+  color: var(--ink-2);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 14px;
+}
+
+.legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend .dot {
+  width: 8px;
+  height: 8px;
+}
+
+.meter {
+  display: flex;
+  gap: 3px;
+  min-width: 120px;
+  margin-bottom: 4px;
+}
+
+.meter span {
+  height: 6px;
+  border-radius: 999px;
+  flex-basis: 0;
+}
+
+.meter-large {
+  gap: 5px;
+  margin-top: 14px;
+}
+
+.meter-large span {
+  height: 14px;
+}
+
+.meter-shipped {
+  background: var(--ink);
+}
+
+.meter-ready {
+  background: var(--info);
+}
+
+.meter-back {
+  background: var(--warn);
+}
+
+.meter-idle {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.meter-large .meter-shipped {
+  box-shadow: 0 0 22px rgba(255, 255, 255, 0.45);
+}
+
+.meter-large .meter-ready {
+  box-shadow: 0 0 22px rgba(111, 177, 255, 0.55);
+}
+
+.meter-large .meter-back {
+  box-shadow: 0 0 22px rgba(255, 179, 64, 0.55);
+}
+
+.meter-note {
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.stack-panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.total-rows {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.total-rows div {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+
+.order-notes {
+  margin-top: 10px;
+}
+
+.order-total-cell {
+  min-width: 96px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.grow {
+  flex: 1 1 260px;
+}
+
+.tax-field {
+  flex: 0 1 120px;
+}
+
+.field select {
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.32);
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  max-width: 100%;
+}
+
+.order-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.order-line-product {
+  flex: 3 1 260px;
+  min-width: 0;
+}
+
+.order-line-qty {
+  flex: 0 1 120px;
+}
+
+.order-line-info {
+  flex: 2 1 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 48px;
+  font-size: 14px;
+}
+
+.warn-text {
+  color: #ffd08a;
+  font-size: 13px;
+}
+
+.order-lines-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-subtotal {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
