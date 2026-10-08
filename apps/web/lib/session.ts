@@ -6,20 +6,41 @@ import { pool } from "./pool";
 
 const COOKIE = "bos_session";
 
+const inProduction = (): boolean => process.env.NODE_ENV === "production";
+
 /**
- * Development sign-in: an email with no password. It exists so the product can be
- * built and reviewed before a real identity provider is connected, and it is
- * refused in production unless DEV_SIGN_IN=1 is set on purpose.
+ * Development sign-in: choose a person by email, with no personal password. It
+ * exists so the product can be built and reviewed before a real identity
+ * provider is connected.
+ *
+ * On a deployed copy it is off unless DEV_SIGN_IN=1 is set, and then it also
+ * needs PREVIEW_PASSWORD: one shared password, so a preview on the internet is
+ * not open to anyone who finds the address.
  */
 export function devSignInEnabled(): boolean {
-  return process.env.NODE_ENV !== "production" || process.env.DEV_SIGN_IN === "1";
+  if (!inProduction()) return true;
+  return process.env.DEV_SIGN_IN === "1" && Boolean(process.env.PREVIEW_PASSWORD);
+}
+
+/** True when sign-in must also present the shared preview password. */
+export function previewPasswordRequired(): boolean {
+  return inProduction();
+}
+
+export function previewPasswordMatches(given: string): boolean {
+  const expected = process.env.PREVIEW_PASSWORD ?? "";
+  if (!expected) return false;
+  const a = createHmac("sha256", "preview").update(given).digest();
+  const b = createHmac("sha256", "preview").update(expected).digest();
+  return timingSafeEqual(a, b);
 }
 
 function secret(): string {
   const value = process.env.SESSION_SECRET;
-  if (value) return value;
-  if (devSignInEnabled()) return "dev-only-session-secret";
-  throw new Error("SESSION_SECRET is not set");
+  if (value && value.length >= 32) return value;
+  // A deployed copy must sign sessions with its own secret, or cookies could be forged.
+  if (inProduction()) throw new Error("SESSION_SECRET must be set to at least 32 characters");
+  return "dev-only-session-secret";
 }
 
 function sign(payload: string): string {
@@ -31,7 +52,7 @@ export async function startSession(userId: string, orgId: string): Promise<void>
   (await cookies()).set(COOKIE, `${payload}.${sign(payload)}`, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production" && process.env.DEV_SIGN_IN !== "1",
+    secure: inProduction() && process.env.INSECURE_COOKIES !== "1",
     path: "/",
     maxAge: 60 * 60 * 12,
   });

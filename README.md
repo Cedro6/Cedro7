@@ -14,7 +14,7 @@ Early build. Working and tested:
 - Purchasing: suppliers, purchase orders with an approval limit, partial receiving, moving average cost, and new stock reserved automatically for waiting sales orders (oldest first). Low-stock products can be turned into a suggested purchase order.
 - A demo company with three people, four customers, seven products and opening stock.
 
-Sign-in is a development sign-in with no password. It is refused in production unless `DEV_SIGN_IN=1` is set, and must be replaced by a real identity provider before any real data is entered.
+Sign-in is a development sign-in: you choose a demo person. A deployed copy keeps it off unless `DEV_SIGN_IN=1`, `PREVIEW_PASSWORD` and `SESSION_SECRET` are all set, and then asks for the shared preview password. It must be replaced by a real identity provider before any real data is entered.
 
 On Home, the sales chart and briefing show sample figures and are labelled "Sample data" on screen. Calendar and Reports are placeholder pages.
 
