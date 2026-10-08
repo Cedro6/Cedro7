@@ -12,12 +12,14 @@ export type Overview = {
   openOrders: number | null;
   /** Open orders with reserved stock waiting to ship. */
   readyToShip: number | null;
+  /** Purchase orders approved or sent and not yet fully received. */
+  openPurchaseOrders: number | null;
 };
 
 /** Counts for the Home screen. A count the role may not see comes back as null. */
 export async function overview(ctx: Ctx): Promise<Overview> {
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const result = await tx.query<{ customers: number; products: number; team: number; low_stock: number; open_orders: number; ready: number }>(
+    const result = await tx.query<{ customers: number; products: number; team: number; low_stock: number; open_orders: number; ready: number; open_pos: number }>(
       `select (select count(*)::int from customers where status = 'active') as customers,
               (select count(*)::int from products where status = 'active') as products,
               (select count(*)::int from memberships where status = 'active') as team,
@@ -30,7 +32,9 @@ export async function overview(ctx: Ctx): Promise<Overview> {
               (select count(*)::int from sales_orders o
                  where o.status in ('confirmed', 'partially_shipped')
                    and exists (select 1 from sales_order_lines l
-                               where l.order_id = o.id and l.qty_reserved > 0)) as ready`,
+                               where l.order_id = o.id and l.qty_reserved > 0)) as ready,
+              (select count(*)::int from purchase_orders
+                 where status in ('pending_approval', 'approved', 'sent', 'partially_received')) as open_pos`,
     );
     const row = result.rows[0]!;
     return {
@@ -40,6 +44,7 @@ export async function overview(ctx: Ctx): Promise<Overview> {
       lowStock: can(ctx.role, "product.read") ? row.low_stock : null,
       openOrders: can(ctx.role, "sales_order.read") ? row.open_orders : null,
       readyToShip: can(ctx.role, "sales_order.read") ? row.ready : null,
+      openPurchaseOrders: can(ctx.role, "purchase_order.read") ? row.open_pos : null,
     };
   });
 }

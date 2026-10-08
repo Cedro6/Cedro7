@@ -996,7 +996,7 @@ table.compact td {
 }
 
 .order-line-info {
-  flex: 2 1 200px;
+  flex: 1 1 140px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1021,4 +1021,73 @@ table.compact td {
   display: flex;
   align-items: baseline;
   gap: 12px;
+}
+
+/* Purchasing */
+
+.date-field {
+  flex: 0 1 200px;
+}
+
+.cell-input {
+  width: 96px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.32);
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  text-align: right;
+}
+
+.receive-actions {
+  align-items: center;
+  margin-top: 16px;
+}
+
+/* On a phone, a table marked cards-on-phone shows each row as a labelled card, so nothing needs sideways scrolling. */
+@media (max-width: 860px) {
+  table.cards-on-phone {
+    min-width: 0;
+  }
+
+  table.cards-on-phone thead {
+    position: absolute;
+    left: -9999px;
+  }
+
+  table.cards-on-phone tr {
+    display: block;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  table.cards-on-phone td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border: 0;
+    text-align: right;
+  }
+
+  table.cards-on-phone td:first-child {
+    display: block;
+    text-align: left;
+    padding-bottom: 8px;
+  }
+
+  table.cards-on-phone td[data-label]::before {
+    content: attr(data-label);
+    color: var(--ink-2);
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  table.cards-on-phone td.num + td:not(.num) {
+    padding-left: 0;
+  }
 }

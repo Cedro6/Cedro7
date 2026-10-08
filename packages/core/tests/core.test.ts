@@ -52,7 +52,7 @@ describe("permission matrix", () => {
     }
   });
 
-  it("matches the documented table for the other roles", () => {
+it("matches the documented table for the other roles", () => {
     const allowed = Object.fromEntries(ROLES.map((role) => [role, PERMISSIONS.filter((p) => can(role, p))]));
     expect(allowed.sales).toEqual([
       "customer.read",
@@ -69,9 +69,19 @@ describe("permission matrix", () => {
       "product.cost.view",
       "stock.adjust",
       "sales_order.read",
+      "purchase_order.read",
+      "purchase_order.write",
+      "purchase_order.receive",
     ]);
-    expect(allowed.warehouse).toEqual(["product.read", "stock.adjust", "sales_order.read", "sales_order.ship"]);
-    expect(allowed.viewer).toEqual(["customer.read", "product.read", "sales_order.read"]);
+    expect(allowed.warehouse).toEqual([
+      "product.read",
+      "stock.adjust",
+      "sales_order.read",
+      "sales_order.ship",
+      "purchase_order.read",
+      "purchase_order.receive",
+    ]);
+    expect(allowed.viewer).toEqual(["customer.read", "product.read", "sales_order.read", "purchase_order.read"]);
   });
 });
 
@@ -160,6 +170,7 @@ describe("products", () => {
       onHand: 212,
       reserved: 0,
       available: 212,
+      onOrder: 0,
       lowStock: false,
     });
     expect(products.filter((p) => p.lowStock).map((p) => p.sku)).toEqual(["GD-NOZ-BR", "PL-CEM-16"]);
@@ -184,7 +195,7 @@ describe("products", () => {
 describe("overview", () => {
   it("counts this company only and hides what the role may not see", async () => {
     const full = await overview(as("owner"));
-    expect(full).toEqual({ customers: 5, products: 7, team: 3, lowStock: 2, openOrders: 0, readyToShip: 0 });
+    expect(full).toEqual({ customers: 5, products: 7, team: 3, lowStock: 2, openOrders: 0, readyToShip: 0, openPurchaseOrders: 0 });
     expect((await overview(as("warehouse"))).customers).toBeNull();
   });
 });

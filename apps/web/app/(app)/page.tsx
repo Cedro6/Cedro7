@@ -43,18 +43,18 @@ export default async function HomePage() {
             <div className="muted">Active accounts</div>
           </Link>
         )}
-        {counts.products !== null && (
-          <Link href="/products" className="glass panel tile">
-            <h2 className="label">Products</h2>
-            <div className="numeral">{counts.products}</div>
-            <div className="muted">In the catalog</div>
-          </Link>
-        )}
         {counts.readyToShip !== null && (
           <Link href="/sales?show=open" className="glass panel tile">
             <h2 className="label">Ready to ship</h2>
             <div className="numeral">{counts.readyToShip}</div>
             <div className="muted">Of {counts.openOrders} open orders</div>
+          </Link>
+        )}
+        {counts.openPurchaseOrders !== null && (
+          <Link href="/purchasing?show=open" className="glass panel tile">
+            <h2 className="label">Purchase orders</h2>
+            <div className="numeral">{counts.openPurchaseOrders}</div>
+            <div className="muted">Open with suppliers</div>
           </Link>
         )}
         {counts.lowStock !== null && (

@@ -211,6 +211,46 @@ async function reserveOutstanding(tx: PoolClient, ctx: Ctx, lines: LockedLine[])
   return total;
 }
 
+/**
+ * Locks every open sales order that has a backorder for one of these products.
+ * Call this BEFORE touching stock balances, so the lock order (orders, then
+ * stock) matches every other order action.
+ */
+export async function lockBackorderedOrdersInTx(tx: PoolClient, productIds: string[]): Promise<string[]> {
+  if (productIds.length === 0) return [];
+  const orders = await tx.query<{ id: string }>(
+    `select o.id from sales_orders o
+     where o.status in ('confirmed', 'partially_shipped')
+       and exists (select 1 from sales_order_lines l
+                   where l.order_id = o.id and l.product_id = any($1::uuid[])
+                     and l.qty - l.qty_reserved - l.qty_shipped > 0)
+     order by o.id
+     for update of o`,
+    [productIds],
+  );
+  return orders.rows.map((row) => row.id);
+}
+
+/** Reserves free stock for the backordered lines of already-locked orders, oldest confirmed order first. */
+export async function allocateBackordersInTx(
+  tx: PoolClient,
+  ctx: Ctx,
+  orderIds: string[],
+  productIds: string[],
+): Promise<number> {
+  if (orderIds.length === 0) return 0;
+  const lines = await tx.query<LockedLine>(
+    `select l.id, l.product_id, l.qty::float8 as qty, l.qty_reserved::float8 as qty_reserved,
+            l.qty_shipped::float8 as qty_shipped
+     from sales_order_lines l join sales_orders o on o.id = l.order_id
+     where o.id = any($1::uuid[]) and l.product_id = any($2::uuid[])
+       and l.qty - l.qty_reserved - l.qty_shipped > 0
+     order by o.confirmed_at, o.number, l.position`,
+    [orderIds, productIds],
+  );
+  return reserveOutstanding(tx, ctx, lines.rows);
+}
+
 /** Turns a quote into an order and reserves the stock that is available. The rest is on backorder. */
 export async function confirmOrder(ctx: Ctx, orderId: string): Promise<{ reserved: number }> {
   requirePermission(ctx.role, "sales_order.write");

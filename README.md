@@ -11,13 +11,14 @@ Early build. Working and tested:
 - App shell in the approved glass style: sign-in, Home, Customers (list, detail, create), Products.
 - Stock ledger for one warehouse: on-hand, reserved and available per product, manual adjustments with history, reservations, and a reconciliation check. Only `packages/core/src/inventory/ledger.ts` writes the stock tables.
 - Sales orders: quote, confirm (reserves available stock, backorders the rest), ship what is reserved as numbered shipments, reserve again when stock arrives, cancel before shipping.
+- Purchasing: suppliers, purchase orders with an approval limit, partial receiving, moving average cost, and new stock reserved automatically for waiting sales orders (oldest first). Low-stock products can be turned into a suggested purchase order.
 - A demo company with three people, four customers, seven products and opening stock.
 
 Sign-in is a development sign-in with no password. It is refused in production unless `DEV_SIGN_IN=1` is set, and must be replaced by a real identity provider before any real data is entered.
 
-On Home, the sales chart and briefing show sample figures and are labelled "Sample data" on screen. Purchasing, Calendar and Reports are placeholder pages.
+On Home, the sales chart and briefing show sample figures and are labelled "Sample data" on screen. Calendar and Reports are placeholder pages.
 
-Not built yet: real authentication, invitations, purchasing, returns, invoices, order editing, automatic backorder allocation, imports, reports, background jobs, error monitoring, the AI assistant, billing.
+Not built yet: real authentication, invitations, emailing purchase orders, over-receipts, returns, invoices, order editing, backorder allocation on manual stock adjustments, imports, reports, background jobs, error monitoring, the AI assistant, billing.
 
 ## Layout
 
@@ -33,7 +34,7 @@ Needs Node 22, pnpm and PostgreSQL 16 with two roles: an owner (`bos_owner`) and
 pnpm install
 pnpm db:migrate
 pnpm db:seed
-pnpm db:demo-orders   # optional: four sample orders created through the real order functions
+pnpm db:demo-orders   # optional: sample sales and purchase orders created through the real functions
 pnpm dev
 ```
 

@@ -15,6 +15,8 @@ export type ProductSummary = {
   onHand: number;
   reserved: number;
   available: number;
+  /** Ordered from suppliers and not yet received. */
+  onOrder: number;
   /** Available stock is at or below the reorder point. */
   lowStock: boolean;
 };
@@ -29,6 +31,10 @@ const PRODUCT_SQL = `
          coalesce(s.on_hand, 0)::float8 as "onHand",
          coalesce(s.reserved, 0)::float8 as reserved,
          coalesce(s.on_hand - s.reserved, 0)::float8 as available,
+         coalesce((select sum(pl.qty - pl.qty_received)
+                   from purchase_order_lines pl join purchase_orders po on po.id = pl.order_id
+                   where pl.product_id = p.id
+                     and po.status in ('approved', 'sent', 'partially_received')), 0)::float8 as "onOrder",
          (p.reorder_point is not null and coalesce(s.on_hand - s.reserved, 0) <= p.reorder_point) as "lowStock"
   from products p
   left join (
