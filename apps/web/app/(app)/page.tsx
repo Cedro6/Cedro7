@@ -77,7 +77,7 @@ export default async function HomePage() {
               </div>
               <div className="muted">{sampleSales.note}</div>
             </div>
-            <span className="badge badge-sample">Sample data · sales arrives in stage 5</span>
+            <span className="badge badge-sample">Sample data · real chart arrives with reports</span>
           </div>
           <svg viewBox="0 0 720 262" role="img" aria-label="Sample chart of daily sales over three weeks" className="chart">
             <defs>
