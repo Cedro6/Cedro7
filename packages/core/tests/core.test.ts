@@ -54,9 +54,15 @@ describe("permission matrix", () => {
 
   it("matches the documented table for the other roles", () => {
     const allowed = Object.fromEntries(ROLES.map((role) => [role, PERMISSIONS.filter((p) => can(role, p))]));
-    expect(allowed.sales).toEqual(["customer.read", "customer.write", "product.read"]);
-    expect(allowed.purchasing).toEqual(["customer.read", "product.read", "product.write", "product.cost.view"]);
-    expect(allowed.warehouse).toEqual(["product.read"]);
+    expect(allowed.sales).toEqual(["customer.read", "customer.write", "product.read", "stock.reserve"]);
+    expect(allowed.purchasing).toEqual([
+      "customer.read",
+      "product.read",
+      "product.write",
+      "product.cost.view",
+      "stock.adjust",
+    ]);
+    expect(allowed.warehouse).toEqual(["product.read", "stock.adjust"]);
     expect(allowed.viewer).toEqual(["customer.read", "product.read"]);
   });
 });
@@ -139,7 +145,16 @@ describe("products", () => {
   it("lists this company's products with cost for roles allowed to see it", async () => {
     const products = await listProducts(as("purchasing"));
     expect(products).toHaveLength(7);
-    expect(products[0]).toMatchObject({ sku: "FS-DS3-100", price: 8.5, cost: 5.1 });
+    expect(products[0]).toMatchObject({
+      sku: "FS-DS3-100",
+      price: 8.5,
+      cost: 5.1,
+      onHand: 212,
+      reserved: 0,
+      available: 212,
+      lowStock: false,
+    });
+    expect(products.filter((p) => p.lowStock).map((p) => p.sku)).toEqual(["GD-NOZ-BR", "PL-CEM-16"]);
   });
 
   it("hides cost from sales, warehouse and viewer", async () => {
@@ -161,7 +176,7 @@ describe("products", () => {
 describe("overview", () => {
   it("counts this company only and hides what the role may not see", async () => {
     const full = await overview(as("owner"));
-    expect(full).toEqual({ customers: 5, products: 7, team: 3 });
+    expect(full).toEqual({ customers: 5, products: 7, team: 3, lowStock: 2 });
     expect((await overview(as("warehouse"))).customers).toBeNull();
   });
 });

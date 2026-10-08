@@ -7,6 +7,8 @@ export const PERMISSIONS = [
   "product.read",
   "product.write",
   "product.cost.view",
+  "stock.adjust",
+  "stock.reserve",
   "settings.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -17,9 +19,9 @@ const everything: readonly Permission[] = PERMISSIONS;
 const MATRIX: Record<Role, readonly Permission[]> = {
   owner: everything,
   admin: everything,
-  sales: ["customer.read", "customer.write", "product.read"],
-  purchasing: ["customer.read", "product.read", "product.write", "product.cost.view"],
-  warehouse: ["product.read"],
+  sales: ["customer.read", "customer.write", "product.read", "stock.reserve"],
+  purchasing: ["customer.read", "product.read", "product.write", "product.cost.view", "stock.adjust"],
+  warehouse: ["product.read", "stock.adjust"],
   viewer: ["customer.read", "product.read"],
 };
 

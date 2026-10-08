@@ -41,6 +41,46 @@ const products = [
   ["GD-SOIL-20", "Potting soil 20 lb", "Garden", "C-02-4", 4.8, 8.75, 30],
 ] as const;
 
+/** Opening stock per SKU. Two products start below their reorder point. */
+const openingStock: Record<string, number> = {
+  "FS-DS3-100": 212,
+  "GL-WK-L": 340,
+  "PL-CEM-16": 18,
+  "TL-UKB-50": 64,
+  "GD-HOSE-50": 31,
+  "GD-NOZ-BR": 20,
+  "GD-SOIL-20": 85,
+};
+
+/** Posts opening balances the same way the ledger does: a movement and its balance change together. */
+async function seedStock(client: PoolClient, orgId: string, ownerId: string): Promise<void> {
+  let location = await client.query<{ id: string }>("select id from locations where org_id = $1 limit 1", [orgId]);
+  if (location.rowCount === 0) {
+    location = await client.query<{ id: string }>(
+      "insert into locations (org_id, name) values ($1, 'Main warehouse') returning id",
+      [orgId],
+    );
+  }
+  const locationId = location.rows[0]!.id;
+  for (const [sku, qty] of Object.entries(openingStock)) {
+    const posted = await client.query<{ product_id: string }>(
+      `insert into stock_movements (org_id, product_id, location_id, qty_delta, unit_cost, kind, reason, idempotency_key, posted_by)
+       select p.org_id, p.id, $2, $3, p.cost, 'opening_balance', 'Opening balance', 'seed:opening:' || p.sku, $4
+       from products p where p.org_id = $1 and p.sku = $5
+       on conflict (org_id, idempotency_key) do nothing
+       returning product_id`,
+      [orgId, locationId, qty, ownerId, sku],
+    );
+    if (posted.rowCount === 1) {
+      await client.query(
+        `insert into stock_levels (org_id, product_id, location_id, on_hand) values ($1, $2, $3, $4)
+         on conflict (org_id, product_id, location_id) do update set on_hand = stock_levels.on_hand + excluded.on_hand`,
+        [orgId, posted.rows[0]!.product_id, locationId, qty],
+      );
+    }
+  }
+}
+
 async function seedMasterData(client: PoolClient, orgId: string, ownerId: string): Promise<void> {
   const existing = await client.query("select 1 from customers where org_id = $1 limit 1", [orgId]);
   if (existing.rowCount === 0) {
@@ -106,6 +146,7 @@ export async function seed(owner: Pool): Promise<{ orgId: string; userId: string
       );
     }
     await seedMasterData(client, orgId, ownerId);
+    await seedStock(client, orgId, ownerId);
     await client.query("commit");
     return { orgId, userId: ownerId };
   } catch (error) {

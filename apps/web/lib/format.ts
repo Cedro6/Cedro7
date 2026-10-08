@@ -4,6 +4,12 @@ export function formatMoney(value: number): string {
   return money.format(value);
 }
 
+const qty = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 });
+
+export function formatQty(value: number): string {
+  return qty.format(value);
+}
+
 export function initials(name: string): string {
   return name
     .split(/\s+/)

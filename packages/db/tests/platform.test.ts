@@ -38,7 +38,7 @@ afterAll(async () => {
 describe("migrations", () => {
   it("apply to an empty database", async () => {
     const applied = await migrate(owner);
-    expect(applied).toEqual(["0001_platform.sql", "0002_master_data.sql"]);
+    expect(applied).toEqual(["0001_platform.sql", "0002_master_data.sql", "0003_stock.sql"]);
   });
 
   it("do nothing when run again", async () => {
@@ -95,7 +95,7 @@ describe("tenant isolation", () => {
   });
 
   it("without a company context the app role sees nothing", async () => {
-    for (const table of ["organizations", "memberships", "users", "audit_log", "customers", "contacts", "products"]) {
+    for (const table of ["organizations", "memberships", "users", "audit_log", "customers", "contacts", "products", "locations", "stock_levels", "stock_movements", "stock_reservations"]) {
       const rows = await app.query(`select 1 from ${table}`);
       expect(rows.rowCount, table).toBe(0);
     }

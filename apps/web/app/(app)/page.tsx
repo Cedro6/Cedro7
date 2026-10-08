@@ -50,6 +50,13 @@ export default async function HomePage() {
             <div className="muted">In the catalog</div>
           </Link>
         )}
+        {counts.lowStock !== null && (
+          <Link href="/products?low=1" className="glass panel tile">
+            <h2 className="label">Low stock</h2>
+            <div className="numeral">{counts.lowStock}</div>
+            <div className="muted">At or below reorder point</div>
+          </Link>
+        )}
         <div className="glass panel tile">
           <h2 className="label">Team</h2>
           <div className="numeral">{counts.team}</div>

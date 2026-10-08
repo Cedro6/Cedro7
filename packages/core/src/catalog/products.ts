@@ -12,24 +12,57 @@ export type ProductSummary = {
   /** Null when the role may not see cost. */
   cost: number | null;
   reorderPoint: number | null;
+  onHand: number;
+  reserved: number;
+  available: number;
+  /** Available stock is at or below the reorder point. */
+  lowStock: boolean;
 };
 
-export async function listProducts(ctx: Ctx, options: { search?: string } = {}): Promise<ProductSummary[]> {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const PRODUCT_SQL = `
+  select p.id, p.sku, p.name, p.category, p.shelf_location as "shelfLocation",
+         p.price::float8 as price,
+         case when $1 then p.cost::float8 end as cost,
+         p.reorder_point::float8 as "reorderPoint",
+         coalesce(s.on_hand, 0)::float8 as "onHand",
+         coalesce(s.reserved, 0)::float8 as reserved,
+         coalesce(s.on_hand - s.reserved, 0)::float8 as available,
+         (p.reorder_point is not null and coalesce(s.on_hand - s.reserved, 0) <= p.reorder_point) as "lowStock"
+  from products p
+  left join (
+    select product_id, sum(on_hand) as on_hand, sum(reserved) as reserved
+    from stock_levels group by product_id
+  ) s on s.product_id = p.id`;
+
+export async function listProducts(
+  ctx: Ctx,
+  options: { search?: string; lowStockOnly?: boolean } = {},
+): Promise<ProductSummary[]> {
   requirePermission(ctx.role, "product.read");
   const search = options.search?.trim() ?? "";
-  const showCost = can(ctx.role, "product.cost.view");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<ProductSummary>(
-      `select id, sku, name, category, shelf_location as "shelfLocation",
-              price::float8 as price,
-              case when $2 then cost::float8 end as cost,
-              reorder_point::float8 as "reorderPoint"
-       from products
-       where status = 'active' and ($1 = '' or name ilike '%' || $1 || '%' or sku ilike '%' || $1 || '%')
-       order by sku
+      `select * from (${PRODUCT_SQL} where p.status = 'active') q
+       where ($2 = '' or q.name ilike '%' || $2 || '%' or q.sku ilike '%' || $2 || '%')
+         and (not $3 or q."lowStock")
+       order by q.sku
        limit 500`,
-      [search, showCost],
+      [can(ctx.role, "product.cost.view"), search, options.lowStockOnly ?? false],
     );
     return result.rows;
+  });
+}
+
+export async function getProduct(ctx: Ctx, id: string): Promise<ProductSummary | null> {
+  requirePermission(ctx.role, "product.read");
+  if (!UUID.test(id)) return null;
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const result = await tx.query<ProductSummary>(`${PRODUCT_SQL} where p.id = $2`, [
+      can(ctx.role, "product.cost.view"),
+      id,
+    ]);
+    return result.rows[0] ?? null;
   });
 }
