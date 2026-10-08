@@ -1,0 +1,70 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { can, getCustomer } from "@bos/core";
+import { initials } from "../../../../lib/format";
+import { requireSession } from "../../../../lib/session";
+
+export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
+  const { ctx } = await requireSession();
+  const { id } = await params;
+  if (!can(ctx.role, "customer.read")) notFound();
+  const customer = await getCustomer(ctx, id);
+  if (!customer) notFound();
+  const since = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
+    customer.createdAt,
+  );
+  return (
+    <>
+      <header className="page-head">
+        <div>
+          <div className="eyebrow">
+            <Link href="/customers">Customers</Link>
+          </div>
+          <h1>{customer.name}</h1>
+        </div>
+      </header>
+      <div className="tiles">
+        <div className="glass panel tile">
+          <h2 className="label">Payment terms</h2>
+          <div className="numeral numeral-md">{customer.paymentTerms ?? "Not set"}</div>
+        </div>
+        <div className="glass panel tile">
+          <h2 className="label">Account owner</h2>
+          <div className="numeral numeral-md">{customer.ownerName ?? "Unassigned"}</div>
+        </div>
+        <div className="glass panel tile">
+          <h2 className="label">Customer since</h2>
+          <div className="numeral numeral-md">{since}</div>
+        </div>
+      </div>
+      <section className="glass panel">
+        <h2 className="title">Contacts</h2>
+        {customer.contacts.length === 0 ? (
+          <p className="muted">No contacts yet.</p>
+        ) : (
+          <div className="rows">
+            {customer.contacts.map((contact) => (
+              <div className="row" key={contact.id}>
+                <span className="avatar" aria-hidden="true">
+                  {initials(contact.name)}
+                </span>
+                <div className="row-text">
+                  <div className="row-title">{contact.name}</div>
+                  <div className="muted">{contact.title ?? "No title"}</div>
+                </div>
+                <div className="muted contact-lines">
+                  {contact.email && <a href={`mailto:${contact.email}`}>{contact.email}</a>}
+                  {contact.phone && <span>{contact.phone}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="glass panel empty">
+        <div className="empty-title">Orders and activity</div>
+        <p>Order history arrives with sales orders in stage 5; notes and reminders in stage 6.</p>
+      </section>
+    </>
+  );
+}

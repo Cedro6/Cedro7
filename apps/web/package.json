@@ -12,7 +12,8 @@
     "@bos/db": "workspace:*",
     "next": "^16.4.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "@bos/core": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

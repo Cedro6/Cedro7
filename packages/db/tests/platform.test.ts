@@ -38,7 +38,7 @@ afterAll(async () => {
 describe("migrations", () => {
   it("apply to an empty database", async () => {
     const applied = await migrate(owner);
-    expect(applied).toContain("0001_platform.sql");
+    expect(applied).toEqual(["0001_platform.sql", "0002_master_data.sql"]);
   });
 
   it("do nothing when run again", async () => {
@@ -53,8 +53,18 @@ describe("seed", () => {
     expect(second).toEqual(first);
     const orgs = await owner.query("select 1 from organizations where slug = $1", [DEMO_ORG_SLUG]);
     expect(orgs.rowCount).toBe(1);
-    const members = await owner.query("select role from memberships where org_id = $1", [first.orgId]);
-    expect(members.rows).toEqual([{ role: "owner" }]);
+    const members = await owner.query<{ role: string }>(
+      "select role from memberships where org_id = $1 order by role",
+      [first.orgId],
+    );
+    expect(members.rows.map((r) => r.role)).toEqual(["owner", "sales", "warehouse"]);
+    const counts = await owner.query<{ customers: number; contacts: number; products: number }>(
+      `select (select count(*)::int from customers where org_id = $1) as customers,
+              (select count(*)::int from contacts where org_id = $1) as contacts,
+              (select count(*)::int from products where org_id = $1) as products`,
+      [first.orgId],
+    );
+    expect(counts.rows[0]).toEqual({ customers: 4, contacts: 4, products: 7 });
   });
 });
 
@@ -85,7 +95,7 @@ describe("tenant isolation", () => {
   });
 
   it("without a company context the app role sees nothing", async () => {
-    for (const table of ["organizations", "memberships", "users", "audit_log"]) {
+    for (const table of ["organizations", "memberships", "users", "audit_log", "customers", "contacts", "products"]) {
       const rows = await app.query(`select 1 from ${table}`);
       expect(rows.rowCount, table).toBe(0);
     }
