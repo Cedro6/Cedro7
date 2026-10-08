@@ -1,0 +1,100 @@
+/* Design tokens from the approved mock-ups: warm charcoal ground, glass surfaces, white type. */
+:root {
+  --ground: #0d0e0d;
+  --ink: #ffffff;
+  --ink-2: #c9d0db;
+  --line: rgba(255, 255, 255, 0.14);
+  --glass: rgba(255, 255, 255, 0.07);
+  --glass-edge: rgba(255, 255, 255, 0.16);
+  --ok: #5be7d2;
+  --warn: #ffb340;
+  --bad: #ff6a61;
+  --info: #6fb1ff;
+  --radius-panel: 30px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Geist", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  background:
+    radial-gradient(900px 640px at 14% -8%, rgba(214, 188, 150, 0.42), transparent 62%),
+    radial-gradient(760px 620px at 98% 14%, rgba(134, 152, 128, 0.38), transparent 62%),
+    radial-gradient(900px 700px at 58% 112%, rgba(120, 128, 138, 0.34), transparent 62%),
+    var(--ground);
+  background-attachment: fixed;
+}
+
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-panel);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 30px 70px rgba(0, 0, 0, 0.4);
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 64px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.eyebrow {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+h1 {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.panel {
+  padding: 22px 26px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.muted {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.mono {
+  font-family: var(--mono);
+}

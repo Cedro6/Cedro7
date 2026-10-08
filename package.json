@@ -1,0 +1,26 @@
+{
+  "name": "businessos",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "db:migrate": "pnpm --filter @bos/db migrate",
+    "db:seed": "pnpm --filter @bos/db seed",
+    "dev": "pnpm --filter @bos/web dev",
+    "build": "pnpm --filter @bos/web build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.4",
+    "eslint": "^10.12.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3"
+  }
+}
