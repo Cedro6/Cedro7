@@ -40,6 +40,10 @@ pnpm dev
 
 Then open http://localhost:3000 and choose a demo person.
 
+## Preview
+
+See `docs/preview.md` for how the hosted review copy is set up.
+
 ## Checks
 
 ```
