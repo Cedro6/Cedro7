@@ -67,7 +67,9 @@ export default async function ProductPage({
         <div className="glass panel tile">
           <h2 className="label">Reserved</h2>
           <div className="numeral">{formatQty(product.reserved)}</div>
-          <div className="muted">Set aside for orders</div>
+          <div className="muted">
+            {product.onOrder > 0 ? `${formatQty(product.onOrder)} more on order from suppliers` : "Set aside for orders"}
+          </div>
         </div>
         <div className="glass panel tile">
           <h2 className="label">Price</h2>

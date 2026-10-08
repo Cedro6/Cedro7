@@ -41,6 +41,23 @@ const products = [
   ["GD-SOIL-20", "Potting soil 20 lb", "Garden", "C-02-4", 4.8, 8.75, 30],
 ] as const;
 
+const suppliers = [
+  ["Ridgeline Fasteners", "orders@ridgeline.example", "555-0201", "Net 30", 9],
+  ["Summit Plumbing Supply", "sales@summitplumbing.example", "555-0202", "Net 30", 9],
+  ["Greenleaf Garden Wholesale", "hello@greenleaf.example", "555-0203", "Net 15", 5],
+] as const;
+
+async function seedSuppliers(client: PoolClient, orgId: string): Promise<void> {
+  const existing = await client.query("select 1 from suppliers where org_id = $1 limit 1", [orgId]);
+  if (existing.rowCount) return;
+  for (const [name, email, phone, terms, lead] of suppliers) {
+    await client.query(
+      "insert into suppliers (org_id, name, email, phone, payment_terms, lead_time_days) values ($1, $2, $3, $4, $5, $6)",
+      [orgId, name, email, phone, terms, lead],
+    );
+  }
+}
+
 /** Opening stock per SKU. Two products start below their reorder point. */
 const openingStock: Record<string, number> = {
   "FS-DS3-100": 212,
@@ -147,6 +164,7 @@ export async function seed(owner: Pool): Promise<{ orgId: string; userId: string
     }
     await seedMasterData(client, orgId, ownerId);
     await seedStock(client, orgId, ownerId);
+    await seedSuppliers(client, orgId);
     await client.query("commit");
     return { orgId, userId: ownerId };
   } catch (error) {

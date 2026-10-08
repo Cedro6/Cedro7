@@ -79,6 +79,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                     <td className="num muted-cell">{formatQty(product.reserved)}</td>
                     <td className="num strong">
                       {product.lowStock && <span className="badge badge-warn">Low</span>} {formatQty(product.available)}
+                      {product.onOrder > 0 && <div className="muted">+{formatQty(product.onOrder)} on order</div>}
                     </td>
                     {showCost && <td className="num">{product.cost === null ? "" : formatMoney(product.cost)}</td>}
                     <td className="num">{formatMoney(product.price)}</td>
