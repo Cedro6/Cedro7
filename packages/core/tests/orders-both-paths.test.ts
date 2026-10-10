@@ -157,6 +157,12 @@ describe("a business that tracks stock (Wholesale)", () => {
     expect((await getOrder(await as("owner"), quote.id))!.status).toBe("shipped");
     expect((await getProduct(await as("owner"), id("FS-DS3-100")))!.onHand).toBe(before.onHand - 5);
   });
+
+  it("still needs the warehouse to ship: a sales person cannot", async () => {
+    const quote = await createQuote(await as("sales"), { customerId, lines: [{ productId: id("FS-DS3-100"), qty: 1 }] });
+    await confirmOrder(await as("sales"), quote.id);
+    await expect(shipOrder(await as("sales"), quote.id, { idempotencyKey: randomUUID() })).rejects.toBeInstanceOf(ForbiddenError);
+  });
 });
 
 describe("a business that does not track stock (Sales)", () => {
@@ -209,6 +215,15 @@ describe("a business that does not track stock (Sales)", () => {
     expect(after.reserved).toBe(before.reserved - 3);
     expect(after.onHand).toBe(before.onHand);
     expect((await getOrder(await as("owner"), reservedBefore))!.status).toBe("shipped");
+  });
+
+  it("lets the sales person complete their own order, since there is no warehouse step", async () => {
+    const quote = await createQuote(await as("sales"), { customerId, lines: [{ productId: id("GL-WK-L"), qty: 2 }] });
+    await confirmOrder(await as("sales"), quote.id);
+    const done = await shipOrder(await as("sales"), quote.id, { idempotencyKey: randomUUID() });
+    expect(done.units).toBe(2);
+    expect((await getOrder(await as("sales"), quote.id))!.status).toBe("shipped");
+    await expect(shipOrder(await as("viewer"), quote.id, { idempotencyKey: randomUUID() })).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("has no reserve step", async () => {
