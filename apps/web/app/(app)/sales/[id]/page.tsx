@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, featureOn, getOrder } from "@bos/core";
+import { can, featureOn, getOrder, listInvoices } from "@bos/core";
+import { InvoiceBadge } from "../../../../components/InvoiceBadge";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
+import { deposit } from "../../invoices/actions";
 import { cancel, confirm, reserve, ship } from "../actions";
 
 const when = new Intl.DateTimeFormat("en-US", {
@@ -32,6 +34,11 @@ export default async function OrderPage({
   const canShip = can(ctx, "sales_order.ship");
   const open = order.status === "confirmed" || order.status === "partially_shipped";
   const tracked = featureOn(ctx.features, "stock");
+  const invoices = await listInvoices(ctx, { orderId: order.id });
+  const canDeposit =
+    can(ctx, "invoice.write") &&
+    (order.status === "quote" || order.status === "confirmed") &&
+    !invoices.some((invoice) => invoice.kind === "deposit" && invoice.state !== "void");
   const couldReserve = order.lines.reduce((sum, line) => sum + Math.min(line.backorder, line.availableNow), 0);
 
   return (
@@ -200,6 +207,49 @@ export default async function OrderPage({
             </div>
             {order.notes && <p className="muted order-notes">{order.notes}</p>}
           </section>
+          {(invoices.length > 0 || canDeposit) && (
+            <section className="glass panel">
+              <div className="panel-head">
+                <h2 className="label">Invoices</h2>
+                <span className="muted">{tracked ? "One per shipment" : "Raised when the order is completed"}</span>
+              </div>
+              {invoices.length > 0 && (
+                <div className="rows">
+                  {invoices.map((invoice) => (
+                    <div className="row" key={invoice.id}>
+                      <div className="row-text">
+                        <Link href={`/invoices/${invoice.id}`} className="row-link mono">
+                          {invoice.number}
+                        </Link>
+                        <div className="muted">
+                          {invoice.kind === "deposit" ? "Deposit · " : ""}
+                          {invoice.balance > 0 && invoice.balance < invoice.amount ? `${formatMoney(invoice.balance)} still owed` : ""}
+                        </div>
+                      </div>
+                      <InvoiceBadge state={invoice.state} />
+                      <div className="strong">{formatMoney(invoice.amount)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {canDeposit && (
+                <details className="disclosure disclosure-flat">
+                  <summary>Ask for a deposit</summary>
+                  <form action={deposit} className="inline-form">
+                    <input type="hidden" name="orderId" value={order.id} />
+                    <label className="sr-only" htmlFor="deposit-percent">
+                      Deposit percent
+                    </label>
+                    <input id="deposit-percent" name="percent" type="number" min="1" max="99" step="any" required placeholder="Percent, for example 30" />
+                    <button type="submit" className="btn btn-glass btn-small">
+                      Raise deposit invoice
+                    </button>
+                  </form>
+                  <p className="muted">It is taken off the invoices that follow.</p>
+                </details>
+              )}
+            </section>
+          )}
           <section className="glass panel">
             <h2 className="label">Activity</h2>
             <div className="rows">

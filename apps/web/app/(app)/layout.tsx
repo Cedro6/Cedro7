@@ -18,6 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (can(ctx, "customer.read")) items.push({ href: "/customers", label: "Customers" });
   if (can(ctx, "product.read")) items.push({ href: "/products", label: "Products", count: stock ? (counts.lowStock ?? 0) : 0 });
   if (can(ctx, "sales_order.read")) items.push({ href: "/sales", label: "Sales", count: counts.readyToShip ?? 0 });
+  if (can(ctx, "sales_order.read")) items.push({ href: "/invoices", label: "Invoices", count: counts.overdueInvoices ?? 0 });
   if (can(ctx, "purchase_order.read")) items.push({ href: "/purchasing", label: "Purchasing" });
   if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
   if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });

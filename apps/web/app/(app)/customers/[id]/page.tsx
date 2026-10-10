@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, featureOn, getCustomer, listOrders, listPriceLists } from "@bos/core";
+import { can, customerStatement, featureOn, getCustomer, listOrders, listPriceLists } from "@bos/core";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import { Avatar } from "../../../../components/Avatar";
 import { formatMoney } from "../../../../lib/format";
@@ -23,6 +23,7 @@ export default async function CustomerPage({
   const orders = can(ctx, "sales_order.read") ? await listOrders(ctx, { customerId: id }) : [];
   const priceLists = can(ctx, "sales_order.read") ? await listPriceLists(ctx) : [];
   const tracked = featureOn(ctx.features, "stock");
+  const statement = can(ctx, "sales_order.read") ? await customerStatement(ctx, id) : null;
   const since = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
     customer.createdAt,
   );
@@ -35,6 +36,16 @@ export default async function CustomerPage({
           </div>
           <h1>{customer.name}</h1>
         </div>
+        {statement && (
+          <Link href={`/customers/${customer.id}/statement`} className="btn btn-glass">
+            Statement
+          </Link>
+        )}
+        {can(ctx, "invoice.write") && (
+          <Link href={`/invoices/new?customer=${customer.id}`} className="btn btn-glass">
+            New invoice
+          </Link>
+        )}
         {can(ctx, "sales_order.write") && (
           <Link href={`/sales/new?customer=${customer.id}`} className="btn btn-primary">
             New order
@@ -52,6 +63,16 @@ export default async function CustomerPage({
           <h2 className="label">Account owner</h2>
           <div className="numeral numeral-md">{customer.ownerName ?? "Unassigned"}</div>
         </div>
+        {statement && (
+          <div className="glass panel tile">
+            <h2 className="label">Unpaid</h2>
+            <div className="numeral numeral-md">{formatMoney(statement.owed)}</div>
+            <div className="muted">
+              {statement.overdue > 0 ? `${formatMoney(statement.overdue)} overdue` : "Nothing overdue"}
+              {statement.credit > 0 ? ` · ${formatMoney(statement.credit)} in credit` : ""}
+            </div>
+          </div>
+        )}
         <div className="glass panel tile">
           <h2 className="label">Customer since</h2>
           <div className="numeral numeral-md">{since}</div>

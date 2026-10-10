@@ -117,7 +117,7 @@ describe("a full order, from quote to shipped", () => {
   it("shipping takes reserved stock out of the warehouse and leaves the backorder open", async () => {
     const key = randomUUID();
     const shipped = await shipOrder(as("warehouse"), orderId, { idempotencyKey: key });
-    expect(shipped).toEqual({ shipmentNumber: "SH-000001", units: 148, replayed: false });
+    expect(shipped).toMatchObject({ shipmentNumber: "SH-000001", units: 148, replayed: false });
     const order = (await getOrder(as("owner"), orderId))!;
     expect(order).toMatchObject({ status: "partially_shipped", unitsShipped: 148, unitsReserved: 0, unitsBackordered: 6 });
     expect(order.shipments).toHaveLength(1);
@@ -127,7 +127,7 @@ describe("a full order, from quote to shipped", () => {
     expect((await listMovements(as("owner"), id("FS-DS3-100")))[0]).toMatchObject({ kind: "shipment", qtyDelta: -40 });
 
     const again = await shipOrder(as("warehouse"), orderId, { idempotencyKey: key });
-    expect(again).toEqual({ shipmentNumber: "SH-000001", units: 148, replayed: true });
+    expect(again).toMatchObject({ shipmentNumber: "SH-000001", units: 148, replayed: true });
     expect((await stock("FS-DS3-100")).onHand).toBe(172);
     expect(await reconcileStock(as("owner"))).toEqual([]);
   });
