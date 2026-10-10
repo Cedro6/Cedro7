@@ -5,7 +5,7 @@ import { releaseForSourcesInTx, reserveLinesInTx, shipReservedInTx } from "../in
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
 import { featureOn } from "../platform/features";
-import { requirePermission } from "../platform/permissions";
+import { can, requirePermission } from "../platform/permissions";
 import { customerPricesInTx } from "./pricing";
 
 /**
@@ -313,7 +313,8 @@ export async function shipOrder(
   orderId: string,
   input: { idempotencyKey: string },
 ): Promise<{ shipmentNumber: string; units: number; replayed: boolean; invoice: { number: string; amount: number } | null }> {
-  requirePermission(ctx, "sales_order.ship");
+  // Without stock there is no warehouse step, so whoever can write the order can also complete it.
+  if (featureOn(ctx.features, "stock") || !can(ctx, "sales_order.write")) requirePermission(ctx, "sales_order.ship");
   if (!input.idempotencyKey.trim()) throw new ValidationError("idempotencyKey", "A request id is required.");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);

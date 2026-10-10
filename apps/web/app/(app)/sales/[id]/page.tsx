@@ -31,7 +31,7 @@ export default async function OrderPage({
   if (!order) notFound();
 
   const canWrite = can(ctx, "sales_order.write");
-  const canShip = can(ctx, "sales_order.ship");
+  const canShip = can(ctx, "sales_order.ship") || (!featureOn(ctx.features, "stock") && can(ctx, "sales_order.write"));
   const open = order.status === "confirmed" || order.status === "partially_shipped";
   const tracked = featureOn(ctx.features, "stock");
   const invoices = await listInvoices(ctx, { orderId: order.id });
