@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { can, featureOn, overview } from "@bos/core";
 import { Avatar } from "../../components/Avatar";
@@ -36,6 +37,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               <div className="muted">{role}</div>
             </div>
             <ModeSwitch />
+            {can(ctx, "settings.manage") && (
+              <Link href="/settings" className="link-button">
+                Settings
+              </Link>
+            )}
             <form action={signOut}>
               <button type="submit" className="link-button">
                 Sign out
