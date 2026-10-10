@@ -13,33 +13,37 @@ import {
   SalesIcon,
 } from "./icons";
 
-const items: { href: string; label: string; icon: ReactNode }[] = [
-  { href: "/", label: "Home", icon: <HomeIcon /> },
-  { href: "/customers", label: "Customers", icon: <CustomersIcon /> },
-  { href: "/products", label: "Products", icon: <ProductsIcon /> },
-  { href: "/sales", label: "Sales", icon: <SalesIcon /> },
-  { href: "/purchasing", label: "Purchasing", icon: <PurchasingIcon /> },
-  { href: "/calendar", label: "Calendar", icon: <CalendarIcon /> },
-  { href: "/reports", label: "Reports", icon: <ReportsIcon /> },
-];
+const ICONS: Record<string, ReactNode> = {
+  "/": <HomeIcon />,
+  "/customers": <CustomersIcon />,
+  "/products": <ProductsIcon />,
+  "/sales": <SalesIcon />,
+  "/purchasing": <PurchasingIcon />,
+  "/calendar": <CalendarIcon />,
+  "/reports": <ReportsIcon />,
+};
 
-export function Sidebar({ footer }: { footer: ReactNode }) {
+/** One entry per screen this person may open. The server decides the list from their role and the company's features. */
+export type NavItem = { href: string; label: string; count?: number };
+
+export function Sidebar({ items, company, footer }: { items: NavItem[]; company: string; footer: ReactNode }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Main" className="glass sidebar">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          <span />
+        <span>
+          Cedro Terminal
+          <small>{company}</small>
         </span>
-        Cedro Terminal
       </div>
       <div className="nav">
         {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
             <Link key={item.href} href={item.href} className="nav-link" aria-current={active ? "page" : undefined}>
-              {item.icon}
-              {item.label}
+              {ICONS[item.href]}
+              <span>{item.label}</span>
+              {item.count ? <span className="nav-count">{item.count}</span> : null}
             </Link>
           );
         })}

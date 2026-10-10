@@ -82,12 +82,12 @@ export default async function HomePage() {
           <svg viewBox="0 0 720 262" role="img" aria-label="Sample chart of daily sales over three weeks" className="chart">
             <defs>
               <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#E6D3B3" stopOpacity="0.55" />
-                <stop offset="1" stopColor="#E6D3B3" stopOpacity="0" />
+                <stop offset="0" stopColor="#A78BFA" stopOpacity="0.55" />
+                <stop offset="1" stopColor="#A78BFA" stopOpacity="0" />
               </linearGradient>
               <linearGradient id="chart-line" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0" stopColor="#A9BC9A" />
-                <stop offset="0.55" stopColor="#E6D3B3" />
+                <stop offset="0" stopColor="#7C4DFF" />
+                <stop offset="0.55" stopColor="#A78BFA" />
                 <stop offset="1" stopColor="#FFFFFF" />
               </linearGradient>
               <filter id="chart-glow" x="-10%" y="-40%" width="120%" height="180%">

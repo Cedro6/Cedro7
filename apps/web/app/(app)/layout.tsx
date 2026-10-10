@@ -1,27 +1,40 @@
 import type { ReactNode } from "react";
-import { Sidebar } from "../../components/Sidebar";
-import { initials } from "../../lib/format";
+import { can, featureOn, overview } from "@bos/core";
+import { Avatar } from "../../components/Avatar";
+import { Main } from "../../components/Main";
+import { ModeSwitch } from "../../components/ModeSwitch";
+import { Sidebar, type NavItem } from "../../components/Sidebar";
 import { requireSession } from "../../lib/session";
 import { signOut } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const { membership } = await requireSession();
+  const { ctx, membership } = await requireSession();
+  const counts = await overview(ctx);
+  const stock = featureOn(ctx.features, "stock");
+  // The menu lists only what this person may open and this company has switched on.
+  const items: NavItem[] = [{ href: "/", label: "Home" }];
+  if (can(ctx, "customer.read")) items.push({ href: "/customers", label: "Customers" });
+  if (can(ctx, "product.read")) items.push({ href: "/products", label: "Products", count: stock ? (counts.lowStock ?? 0) : 0 });
+  if (can(ctx, "sales_order.read")) items.push({ href: "/sales", label: "Sales", count: counts.readyToShip ?? 0 });
+  if (can(ctx, "purchase_order.read")) items.push({ href: "/purchasing", label: "Purchasing" });
+  if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
+  if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
+  const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);
   return (
     <div className="shell">
       <Sidebar
+        items={items}
+        company={membership.orgName}
         footer={
           <div className="account">
-            <span className="avatar" aria-hidden="true">
-              {initials(membership.userName)}
-            </span>
+            <Avatar name={membership.userName} />
             <div className="account-text">
               <div className="account-name">{membership.userName}</div>
-              <div className="muted">
-                {membership.orgName} · {membership.role}
-              </div>
+              <div className="muted">{role}</div>
             </div>
+            <ModeSwitch />
             <form action={signOut}>
               <button type="submit" className="link-button">
                 Sign out
@@ -30,7 +43,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </div>
         }
       />
-      <main className="content">{children}</main>
+      <Main>{children}</Main>
     </div>
   );
 }
