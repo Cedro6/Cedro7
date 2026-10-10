@@ -17,9 +17,6 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
     <main className="sign-in">
       <section className="glass panel sign-in-card">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <span />
-          </span>
           Cedro Terminal
         </div>
         <h1>Sign in</h1>

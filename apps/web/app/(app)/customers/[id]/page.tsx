@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can, getCustomer, listOrders } from "@bos/core";
 import { StatusBadge } from "../../../../components/StatusBadge";
-import { formatMoney, initials } from "../../../../lib/format";
+import { Avatar } from "../../../../components/Avatar";
+import { formatMoney } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -52,9 +53,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <div className="rows">
             {customer.contacts.map((contact) => (
               <div className="row" key={contact.id}>
-                <span className="avatar" aria-hidden="true">
-                  {initials(contact.name)}
-                </span>
+                <Avatar name={contact.name} />
                 <div className="row-text">
                   <div className="row-title">{contact.name}</div>
                   <div className="muted">{contact.title ?? "No title"}</div>
