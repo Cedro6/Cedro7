@@ -2014,3 +2014,4 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .paper { position: relative; }
 .paper-stamp { position: absolute; top: auto; right: auto; left: 34px; bottom: 34px; }
 @media (max-width: 760px) { .paper-stamp { position: static; display: inline-block; margin-top: 16px; } }
+.account > a.link-button { padding-left: 4px; font-size: 14px; }
