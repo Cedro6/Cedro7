@@ -61,6 +61,7 @@ it("matches the documented table for the other roles", () => {
       "stock.reserve",
       "sales_order.read",
       "sales_order.write",
+      "report.view",
     ]);
     expect(allowed.purchasing).toEqual([
       "customer.read",
@@ -72,6 +73,7 @@ it("matches the documented table for the other roles", () => {
       "purchase_order.read",
       "purchase_order.write",
       "purchase_order.receive",
+      "report.view",
     ]);
     expect(allowed.warehouse).toEqual([
       "product.read",
@@ -81,7 +83,13 @@ it("matches the documented table for the other roles", () => {
       "purchase_order.read",
       "purchase_order.receive",
     ]);
-    expect(allowed.viewer).toEqual(["customer.read", "product.read", "sales_order.read", "purchase_order.read"]);
+    expect(allowed.viewer).toEqual([
+      "customer.read",
+      "product.read",
+      "sales_order.read",
+      "purchase_order.read",
+      "report.view",
+    ]);
   });
 });
 

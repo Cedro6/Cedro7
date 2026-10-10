@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "BusinessOS",
+  title: "Cedro Terminal",
   description: "Run your business. Not your software.",
 };
 

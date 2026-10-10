@@ -15,7 +15,7 @@ const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", t
 
 export default async function PurchasingPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const { ctx } = await requireSession();
-  if (!can(ctx.role, "purchase_order.read")) {
+  if (!can(ctx, "purchase_order.read")) {
     return (
       <section className="glass panel empty">
         <div className="empty-title">No access</div>
@@ -26,7 +26,7 @@ export default async function PurchasingPage({ searchParams }: { searchParams: P
   const { show = "all" } = await searchParams;
   const active = filters.find((filter) => filter.key === show) ?? filters[0]!;
   const [orders, suppliers] = await Promise.all([listPurchaseOrders(ctx, { status: active.status }), listSuppliers(ctx)]);
-  const canWrite = can(ctx.role, "purchase_order.write");
+  const canWrite = can(ctx, "purchase_order.write");
   return (
     <>
       <header className="page-head">

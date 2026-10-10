@@ -1,3 +1,5 @@
+import { featureOn, type FeatureId, type FeatureSet } from "./features";
+
 export const ROLES = ["owner", "admin", "sales", "purchasing", "warehouse", "viewer"] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -16,6 +18,8 @@ export const PERMISSIONS = [
   "purchase_order.write",
   "purchase_order.approve",
   "purchase_order.receive",
+  "invoice.write",
+  "report.view",
   "settings.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -26,7 +30,15 @@ const everything: readonly Permission[] = PERMISSIONS;
 const MATRIX: Record<Role, readonly Permission[]> = {
   owner: everything,
   admin: everything,
-  sales: ["customer.read", "customer.write", "product.read", "stock.reserve", "sales_order.read", "sales_order.write"],
+  sales: [
+    "customer.read",
+    "customer.write",
+    "product.read",
+    "stock.reserve",
+    "sales_order.read",
+    "sales_order.write",
+    "report.view",
+  ],
   purchasing: [
     "customer.read",
     "product.read",
@@ -37,6 +49,7 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "purchase_order.read",
     "purchase_order.write",
     "purchase_order.receive",
+    "report.view",
   ],
   warehouse: [
     "product.read",
@@ -46,7 +59,7 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "purchase_order.read",
     "purchase_order.receive",
   ],
-  viewer: ["customer.read", "product.read", "sales_order.read", "purchase_order.read"],
+  viewer: ["customer.read", "product.read", "sales_order.read", "purchase_order.read", "report.view"],
 };
 
 export class ForbiddenError extends Error {
@@ -60,10 +73,28 @@ export function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
 
-export function can(role: Role, permission: Permission): boolean {
-  return MATRIX[role].includes(permission);
+/** A permission that belongs to a feature is not held while that feature is switched off. */
+const PERMISSION_FEATURE: Partial<Record<Permission, FeatureId>> = {
+  "stock.adjust": "stock",
+  "stock.reserve": "stock",
+  "purchase_order.read": "purchasing",
+  "purchase_order.write": "purchasing",
+  "purchase_order.approve": "purchasing",
+  "purchase_order.receive": "purchasing",
+  "report.view": "reports",
+};
+
+/** Either a bare role, or the acting person with their company's feature switches. */
+export type Actor = Role | { role: Role; features?: FeatureSet };
+
+export function can(actor: Actor, permission: Permission): boolean {
+  const role = typeof actor === "string" ? actor : actor.role;
+  if (!MATRIX[role].includes(permission)) return false;
+  const feature = PERMISSION_FEATURE[permission];
+  if (!feature || typeof actor === "string") return true;
+  return featureOn(actor.features, feature);
 }
 
-export function requirePermission(role: Role, permission: Permission): void {
-  if (!can(role, permission)) throw new ForbiddenError(permission);
+export function requirePermission(actor: Actor, permission: Permission): void {
+  if (!can(actor, permission)) throw new ForbiddenError(permission);
 }

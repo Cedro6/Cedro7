@@ -74,5 +74,5 @@ export async function requireSession(): Promise<Session> {
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) redirect("/sign-in");
   const membership = await currentMembership(pool, orgId, userId).catch(() => null);
   if (!membership) redirect("/sign-in");
-  return { ctx: { pool, orgId, userId, role: membership.role }, membership };
+  return { ctx: { pool, orgId, userId, role: membership.role, features: membership.features }, membership };
 }

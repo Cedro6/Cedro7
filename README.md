@@ -1,6 +1,8 @@
-# BusinessOS
+# Cedro Terminal
 
-Operations software for wholesale distributors: customers, stock, sales orders and purchasing, with an AI assistant.
+One app for a small or midsize product business to run customers, quotes and orders, invoices, stock and purchasing. Each business sees only what its kind of business needs and can switch on the rest.
+
+The product was first called BusinessOS. Internal names (`@bos/*` packages, the `bos_app` database role, the `bos_session` cookie) keep that prefix; renaming them would break the deployed preview database for no visible gain.
 
 ## Status
 
@@ -8,6 +10,7 @@ Early build. Working and tested:
 
 - Database migrations, tenant isolation by row-level security, append-only audit log.
 - Six roles with a permission table that every service function checks.
+- Business types and feature switches per company (`packages/core/src/platform/features.ts`). A feature that is off withholds its permissions on the server, so its actions are refused, not just hidden. Changes are owner-only and audit-logged. There is no Settings screen for them yet, and with Stock and shipping off the order engine still reserves and ships stock; the complete-without-stock path is the next stage.
 - App shell in the approved glass style: sign-in, Home, Customers (list, detail, create), Products.
 - Stock ledger for one warehouse: on-hand, reserved and available per product, manual adjustments with history, reservations, and a reconciliation check. Only `packages/core/src/inventory/ledger.ts` writes the stock tables.
 - Sales orders: quote, confirm (reserves available stock, backorders the rest), ship what is reserved as numbered shipments, reserve again when stock arrives, cancel before shipping.

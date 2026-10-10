@@ -6,7 +6,7 @@ import { saveSupplier } from "../../actions";
 
 export default async function NewSupplierPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { ctx } = await requireSession();
-  if (!can(ctx.role, "purchase_order.write")) redirect("/purchasing");
+  if (!can(ctx, "purchase_order.write")) redirect("/purchasing");
   const { error } = await searchParams;
   return (
     <>

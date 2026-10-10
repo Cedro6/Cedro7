@@ -133,7 +133,7 @@ export async function createQuote(
     notes?: string;
   },
 ): Promise<{ id: string; number: string }> {
-  requirePermission(ctx.role, "sales_order.write");
+  requirePermission(ctx, "sales_order.write");
   if (!UUID.test(input.customerId)) throw new ValidationError("customerId", "Choose a customer.");
   if (input.lines.length === 0) throw new ValidationError("lines", "Add at least one product.");
   if (input.lines.length > 200) throw new ValidationError("lines", "An order can have at most 200 lines.");
@@ -253,7 +253,7 @@ export async function allocateBackordersInTx(
 
 /** Turns a quote into an order and reserves the stock that is available. The rest is on backorder. */
 export async function confirmOrder(ctx: Ctx, orderId: string): Promise<{ reserved: number }> {
-  requirePermission(ctx.role, "sales_order.write");
+  requirePermission(ctx, "sales_order.write");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (!order) throw new StateError("Order not found.");
@@ -270,7 +270,7 @@ export async function confirmOrder(ctx: Ctx, orderId: string): Promise<{ reserve
 
 /** Reserves newly available stock for an open order's backordered lines. */
 export async function reserveAvailable(ctx: Ctx, orderId: string): Promise<{ reserved: number }> {
-  requirePermission(ctx.role, "sales_order.write");
+  requirePermission(ctx, "sales_order.write");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (!order) throw new StateError("Order not found.");
@@ -292,7 +292,7 @@ export async function shipOrder(
   orderId: string,
   input: { idempotencyKey: string },
 ): Promise<{ shipmentNumber: string; units: number; replayed: boolean }> {
-  requirePermission(ctx.role, "sales_order.ship");
+  requirePermission(ctx, "sales_order.ship");
   if (!input.idempotencyKey.trim()) throw new ValidationError("idempotencyKey", "A request id is required.");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
@@ -348,7 +348,7 @@ export async function shipOrder(
 
 /** Cancels a quote or an order that has not shipped anything, returning its reserved stock. */
 export async function cancelOrder(ctx: Ctx, orderId: string): Promise<{ released: number }> {
-  requirePermission(ctx.role, "sales_order.write");
+  requirePermission(ctx, "sales_order.write");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (!order) throw new StateError("Order not found.");
@@ -379,7 +379,7 @@ export async function listOrders(
   ctx: Ctx,
   options: { status?: OrderStatus | "open"; customerId?: string } = {},
 ): Promise<OrderSummary[]> {
-  requirePermission(ctx.role, "sales_order.read");
+  requirePermission(ctx, "sales_order.read");
   if (options.customerId && !UUID.test(options.customerId)) return [];
   const statuses =
     options.status === "open" ? ["confirmed", "partially_shipped"] : options.status ? [options.status] : null;
@@ -396,7 +396,7 @@ export async function listOrders(
 }
 
 export async function getOrder(ctx: Ctx, orderId: string): Promise<OrderDetail | null> {
-  requirePermission(ctx.role, "sales_order.read");
+  requirePermission(ctx, "sales_order.read");
   if (!UUID.test(orderId)) return null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const header = await tx.query<Omit<OrderDetail, "lines" | "shipments" | "unitsBackordered">>(

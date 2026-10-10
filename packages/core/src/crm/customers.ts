@@ -33,7 +33,7 @@ const SUMMARY_SQL = `
   left join users u on u.id = c.owner_user_id`;
 
 export async function listCustomers(ctx: Ctx, options: { search?: string } = {}): Promise<CustomerSummary[]> {
-  requirePermission(ctx.role, "customer.read");
+  requirePermission(ctx, "customer.read");
   const search = options.search?.trim() ?? "";
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<CustomerSummary>(
@@ -48,7 +48,7 @@ export async function listCustomers(ctx: Ctx, options: { search?: string } = {})
 }
 
 export async function getCustomer(ctx: Ctx, id: string): Promise<CustomerDetail | null> {
-  requirePermission(ctx.role, "customer.read");
+  requirePermission(ctx, "customer.read");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const customer = await tx.query<CustomerSummary & { createdAt: Date }>(`${SUMMARY_SQL} where c.id = $1`, [id]);
@@ -67,7 +67,7 @@ export async function createCustomer(
   ctx: Ctx,
   input: { name: string; paymentTerms?: string },
 ): Promise<{ id: string }> {
-  requirePermission(ctx.role, "customer.write");
+  requirePermission(ctx, "customer.write");
   const name = input.name.trim();
   const paymentTerms = input.paymentTerms?.trim() || null;
   if (name.length === 0) throw new ValidationError("name", "Enter the customer's name.");

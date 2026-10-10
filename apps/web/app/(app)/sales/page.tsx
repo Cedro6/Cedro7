@@ -38,7 +38,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
         </div>
-        {can(ctx.role, "sales_order.write") && (
+        {can(ctx, "sales_order.write") && (
           <Link href="/sales/new" className="btn btn-primary">
             New order
           </Link>

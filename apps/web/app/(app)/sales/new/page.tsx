@@ -11,7 +11,7 @@ export default async function NewOrderPage({
   searchParams: Promise<{ error?: string; customer?: string }>;
 }) {
   const { ctx } = await requireSession();
-  if (!can(ctx.role, "sales_order.write")) redirect("/sales");
+  if (!can(ctx, "sales_order.write")) redirect("/sales");
   const { error, customer } = await searchParams;
   const [customers, products] = await Promise.all([listCustomers(ctx), listProducts(ctx)]);
   return (

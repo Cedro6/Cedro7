@@ -9,7 +9,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const { q = "", low } = await searchParams;
   const lowOnly = low === "1";
   const products = await listProducts(ctx, { search: q, lowStockOnly: lowOnly });
-  const showCost = can(ctx.role, "product.cost.view");
+  const showCost = can(ctx, "product.cost.view");
   return (
     <>
       <header className="page-head">

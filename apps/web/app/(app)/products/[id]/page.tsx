@@ -38,7 +38,7 @@ export default async function ProductPage({
   const product = await getProduct(ctx, id);
   if (!product) notFound();
   const movements = await listMovements(ctx, id);
-  const canAdjust = can(ctx.role, "stock.adjust");
+  const canAdjust = can(ctx, "stock.adjust");
   return (
     <>
       <header className="page-head">

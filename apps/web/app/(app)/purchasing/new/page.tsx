@@ -11,7 +11,7 @@ export default async function NewPurchaseOrderPage({
   searchParams: Promise<{ error?: string; low?: string }>;
 }) {
   const { ctx } = await requireSession();
-  if (!can(ctx.role, "purchase_order.write")) redirect("/purchasing");
+  if (!can(ctx, "purchase_order.write")) redirect("/purchasing");
   const { error, low } = await searchParams;
   const [suppliers, products] = await Promise.all([listSuppliers(ctx), listProducts(ctx)]);
   // Suggestion: bring available plus on-order stock up to twice the reorder point.
