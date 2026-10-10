@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { can, listCustomers, listProducts } from "@bos/core";
+import { can, featureOn, listCustomers, listProducts, pricesForCustomer } from "@bos/core";
 import { OrderLinesEditor } from "../../../../components/OrderLinesEditor";
 import { requireSession } from "../../../../lib/session";
 import { saveQuote } from "../actions";
@@ -14,6 +14,11 @@ export default async function NewOrderPage({
   if (!can(ctx, "sales_order.write")) redirect("/sales");
   const { error, customer } = await searchParams;
   const [customers, products] = await Promise.all([listCustomers(ctx), listProducts(ctx)]);
+  const tracked = featureOn(ctx.features, "stock");
+  const onLists = customers.filter((option) => option.priceListId);
+  const customerPrices = Object.fromEntries(
+    await Promise.all(onLists.map(async (option) => [option.id, await pricesForCustomer(ctx, option.id)] as const)),
+  );
   return (
     <>
       <header className="page-head">
@@ -35,6 +40,7 @@ export default async function NewOrderPage({
                 {customers.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.name}
+                    {option.priceListName ? ` · ${option.priceListName}` : ""}
                   </option>
                 ))}
               </select>
@@ -48,6 +54,9 @@ export default async function NewOrderPage({
         <section className="glass panel">
           <h2 className="title">Items</h2>
           <OrderLinesEditor
+            tracked={tracked}
+            customerPrices={customerPrices}
+            initialCustomer={customer ?? ""}
             products={products.map((product) => ({
               id: product.id,
               sku: product.sku,
@@ -71,7 +80,11 @@ export default async function NewOrderPage({
             Cancel
           </Link>
         </div>
-        <p className="muted footnote">A quote reserves no stock. Stock is reserved when you confirm the order.</p>
+        <p className="muted footnote">
+          {tracked
+            ? "A quote reserves no stock. Stock is reserved when you confirm the order."
+            : "A quote commits to nothing. Confirm it when the customer says yes, then complete the order."}
+        </p>
       </form>
     </>
   );

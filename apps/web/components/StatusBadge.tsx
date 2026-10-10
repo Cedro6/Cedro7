@@ -16,6 +16,16 @@ const tone: Record<OrderStatus, string> = {
   cancelled: "badge-muted",
 };
 
-export function StatusBadge({ status, large = false }: { status: OrderStatus; large?: boolean }) {
-  return <span className={`badge ${tone[status]} ${large ? "badge-large" : ""}`}>{label[status]}</span>;
+/** `tracked` is whether the business tracks stock: without it a finished order is "Completed", not "Shipped". */
+export function StatusBadge({
+  status,
+  large = false,
+  tracked = true,
+}: {
+  status: OrderStatus;
+  large?: boolean;
+  tracked?: boolean;
+}) {
+  const text = tracked ? label[status] : status === "shipped" ? "Completed" : status === "partially_shipped" ? "Part completed" : label[status];
+  return <span className={`badge ${tone[status]} ${large ? "badge-large" : ""}`}>{text}</span>;
 }

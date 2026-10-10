@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { can, listOrders, type OrderStatus } from "@bos/core";
+import { can, featureOn, listOrders, type OrderStatus } from "@bos/core";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { formatMoney, formatQty } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
@@ -18,6 +18,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const { show = "all" } = await searchParams;
   const active = filters.find((filter) => filter.key === show) ?? filters[0]!;
   const orders = await listOrders(ctx, { status: active.status });
+  const tracked = featureOn(ctx.features, "stock");
   return (
     <>
       <header className="page-head">
@@ -34,10 +35,15 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
               href={filter.key === "all" ? "/sales" : `/sales?show=${filter.key}`}
               aria-current={filter.key === active.key ? "true" : undefined}
             >
-              {filter.label}
+              {filter.key === "shipped" && !tracked ? "Completed" : filter.label}
             </Link>
           ))}
         </div>
+        {can(ctx, "sales_order.write") && (
+          <Link href="/sales/price-lists" className="btn btn-glass">
+            Price lists
+          </Link>
+        )}
         {can(ctx, "sales_order.write") && (
           <Link href="/sales/new" className="btn btn-primary">
             New order
@@ -58,7 +64,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                   <th>Order</th>
                   <th>Customer</th>
                   <th>Status</th>
-                  <th>Fulfilment</th>
+                  {tracked && <th>Fulfilment</th>}
                   <th className="num">Total</th>
                 </tr>
               </thead>
@@ -76,23 +82,25 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                       </td>
                       <td>{order.customerName}</td>
                       <td>
-                        <StatusBadge status={order.status} />
+                        <StatusBadge status={order.status} tracked={tracked} />
                       </td>
+                      {tracked && (
                       <td>
-                        <div
-                          className="meter"
-                          role="img"
-                          aria-label={`${order.unitsShipped} shipped, ${order.unitsReserved} ready, ${back} not reserved`}
-                        >
-                          {order.unitsShipped > 0 && <span className="meter-shipped" style={{ flexGrow: order.unitsShipped }} />}
-                          {order.unitsReserved > 0 && <span className="meter-ready" style={{ flexGrow: order.unitsReserved }} />}
-                          {back > 0 && <span className={open ? "meter-back" : "meter-idle"} style={{ flexGrow: back }} />}
-                        </div>
-                        <div className="muted">
-                          {formatQty(order.unitsShipped)} of {formatQty(order.unitsOrdered)} shipped
-                          {order.unitsReserved > 0 ? ` · ${formatQty(order.unitsReserved)} ready` : ""}
-                        </div>
-                      </td>
+                          <div
+                            className="meter"
+                            role="img"
+                            aria-label={`${order.unitsShipped} shipped, ${order.unitsReserved} ready, ${back} not reserved`}
+                          >
+                            {order.unitsShipped > 0 && <span className="meter-shipped" style={{ flexGrow: order.unitsShipped }} />}
+                            {order.unitsReserved > 0 && <span className="meter-ready" style={{ flexGrow: order.unitsReserved }} />}
+                            {back > 0 && <span className={open ? "meter-back" : "meter-idle"} style={{ flexGrow: back }} />}
+                          </div>
+                          <div className="muted">
+                            {formatQty(order.unitsShipped)} of {formatQty(order.unitsOrdered)} shipped
+                            {order.unitsReserved > 0 ? ` · ${formatQty(order.unitsReserved)} ready` : ""}
+                          </div>
+                        </td>
+                      )}
                       <td className="num strong">{formatMoney(order.total)}</td>
                     </tr>
                   );

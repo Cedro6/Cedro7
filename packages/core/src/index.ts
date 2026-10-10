@@ -68,6 +68,14 @@ export {
   type Shipment,
 } from "./sales/orders";
 export {
+  createPriceList,
+  deletePriceList,
+  listPriceLists,
+  pricesForCustomer,
+  setCustomerPriceList,
+  type PriceList,
+} from "./sales/pricing";
+export {
   approvePurchaseOrder,
   cancelPurchaseOrder,
   createPurchaseOrder,

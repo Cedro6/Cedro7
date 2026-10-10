@@ -3,7 +3,9 @@ import { withTenant, type PoolClient } from "@bos/db/runtime";
 import { releaseForSourcesInTx, reserveLinesInTx, shipReservedInTx } from "../inventory/ledger";
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
+import { featureOn } from "../platform/features";
 import { requirePermission } from "../platform/permissions";
+import { customerPricesInTx } from "./pricing";
 
 /**
  * Sales orders. Every function that changes an order locks the order row first
@@ -32,7 +34,11 @@ export type OrderLine = {
   sku: string;
   name: string;
   qty: number;
+  /** What the customer pays per unit, after any discount. */
   unitPrice: number;
+  /** The price the line started from: the customer's price, or one typed in. */
+  listPrice: number;
+  discountPercent: number;
   amount: number;
   reserved: number;
   shipped: number;
@@ -128,7 +134,7 @@ export async function createQuote(
   ctx: Ctx,
   input: {
     customerId: string;
-    lines: { productId: string; qty: number; unitPrice?: number }[];
+    lines: { productId: string; qty: number; unitPrice?: number; discountPercent?: number }[];
     taxRatePercent?: number;
     notes?: string;
   },
@@ -145,6 +151,10 @@ export async function createQuote(
     if (line.unitPrice !== undefined && (!Number.isFinite(line.unitPrice) || line.unitPrice < 0 || line.unitPrice > 1e12)) {
       throw new ValidationError("lines", "A price cannot be negative.");
     }
+    const discount = line.discountPercent ?? 0;
+    if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
+      throw new ValidationError("lines", "A discount must be between 0 and 100 percent.");
+    }
   }
   const taxPercent = input.taxRatePercent ?? 0;
   if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent >= 100) {
@@ -157,12 +167,9 @@ export async function createQuote(
     const customer = await tx.query("select 1 from customers where id = $1 and status = 'active'", [input.customerId]);
     if (customer.rowCount === 0) throw new ValidationError("customerId", "Choose a customer.");
     const productIds = [...new Set(input.lines.map((line) => line.productId))];
-    const products = await tx.query<{ id: string; price: number }>(
-      "select id, price::float8 as price from products where id = any($1::uuid[]) and status = 'active'",
-      [productIds],
-    );
-    if (products.rowCount !== productIds.length) throw new ValidationError("lines", "Choose a product on every line.");
-    const price = new Map(products.rows.map((row) => [row.id, row.price]));
+    // The customer's own prices: a price list's special price or percentage, else the product's price.
+    const price = await customerPricesInTx(tx, input.customerId, productIds);
+    if (price.size !== productIds.length) throw new ValidationError("lines", "Choose a product on every line.");
 
     const number = await nextNumber(tx, ctx.orgId, "sales_order", "SO");
     const order = await tx.query<{ id: string }>(
@@ -172,10 +179,13 @@ export async function createQuote(
     );
     const id = order.rows[0]!.id;
     for (const [index, line] of input.lines.entries()) {
+      const listPrice = line.unitPrice ?? price.get(line.productId)!;
+      const discount = Math.round((line.discountPercent ?? 0) * 100) / 100;
+      const net = Math.round(listPrice * (100 - discount)) / 100;
       await tx.query(
-        `insert into sales_order_lines (org_id, order_id, position, product_id, qty, unit_price)
-         values ($1, $2, $3, $4, $5, $6)`,
-        [ctx.orgId, id, index + 1, line.productId, line.qty, line.unitPrice ?? price.get(line.productId)!],
+        `insert into sales_order_lines (org_id, order_id, position, product_id, qty, unit_price, list_price, discount_pct)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [ctx.orgId, id, index + 1, line.productId, line.qty, net, listPrice, discount],
       );
     }
     await audit(tx, ctx, "sales_order.created", id, { number, lines: input.lines.length });
@@ -238,7 +248,7 @@ export async function allocateBackordersInTx(
   orderIds: string[],
   productIds: string[],
 ): Promise<number> {
-  if (orderIds.length === 0) return 0;
+  if (orderIds.length === 0 || !featureOn(ctx.features, "stock")) return 0;
   const lines = await tx.query<LockedLine>(
     `select l.id, l.product_id, l.qty::float8 as qty, l.qty_reserved::float8 as qty_reserved,
             l.qty_shipped::float8 as qty_shipped
@@ -251,14 +261,17 @@ export async function allocateBackordersInTx(
   return reserveOutstanding(tx, ctx, lines.rows);
 }
 
-/** Turns a quote into an order and reserves the stock that is available. The rest is on backorder. */
+/**
+ * Turns a quote into an order. With stock tracked it reserves what is available and the rest is on
+ * backorder. A business that does not track stock reserves nothing: the order is simply ready to complete.
+ */
 export async function confirmOrder(ctx: Ctx, orderId: string): Promise<{ reserved: number }> {
   requirePermission(ctx, "sales_order.write");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (!order) throw new StateError("Order not found.");
     if (order.status !== "quote") throw new StateError("Only a quote can be confirmed.");
-    const reserved = await reserveOutstanding(tx, ctx, order.lines);
+    const reserved = featureOn(ctx.features, "stock") ? await reserveOutstanding(tx, ctx, order.lines) : 0;
     await tx.query(
       "update sales_orders set status = 'confirmed', confirmed_at = now(), updated_at = now() where id = $1",
       [orderId],
@@ -271,6 +284,7 @@ export async function confirmOrder(ctx: Ctx, orderId: string): Promise<{ reserve
 /** Reserves newly available stock for an open order's backordered lines. */
 export async function reserveAvailable(ctx: Ctx, orderId: string): Promise<{ reserved: number }> {
   requirePermission(ctx, "sales_order.write");
+  if (!featureOn(ctx.features, "stock")) throw new StateError("This business does not track stock.");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (!order) throw new StateError("Order not found.");
@@ -286,7 +300,13 @@ export async function reserveAvailable(ctx: Ctx, orderId: string): Promise<{ res
   });
 }
 
-/** Ships everything currently reserved for the order as one shipment. */
+/**
+ * Ships everything currently reserved for the order as one shipment.
+ *
+ * A business that does not track stock completes the order instead: everything still outstanding is
+ * marked as delivered in one step, and no stock is moved. The same record is kept either way, so the
+ * invoice that follows has one thing to point at.
+ */
 export async function shipOrder(
   ctx: Ctx,
   orderId: string,
@@ -309,8 +329,24 @@ export async function shipOrder(
     if (order.status !== "confirmed" && order.status !== "partially_shipped") {
       throw new StateError("Only a confirmed order can be shipped.");
     }
-    const ready = order.lines.filter((line) => line.qty_reserved > 0);
-    if (ready.length === 0) throw new StateError("Nothing is reserved to ship yet.");
+    const tracked = featureOn(ctx.features, "stock");
+    if (!tracked) {
+      // Stock may have been reserved before tracking was switched off. Hand it back first.
+      const releasedBy = await releaseForSourcesInTx(
+        tx,
+        ctx,
+        order.lines.filter((line) => line.qty_reserved > 0).map((line) => line.id),
+      );
+      for (const [lineId, qty] of releasedBy) {
+        await tx.query("update sales_order_lines set qty_reserved = qty_reserved - $1 where id = $2", [qty, lineId]);
+      }
+    }
+    const ready = tracked
+      ? order.lines.filter((line) => line.qty_reserved > 0)
+      : order.lines
+          .map((line) => ({ ...line, qty_reserved: Math.round((line.qty - line.qty_shipped) * 1e4) / 1e4 }))
+          .filter((line) => line.qty_reserved > 0);
+    if (ready.length === 0) throw new StateError(tracked ? "Nothing is reserved to ship yet." : "This order is already complete.");
 
     const shipmentNumber = await nextNumber(tx, ctx.orgId, "shipment", "SH");
     const shipment = await tx.query<{ id: string }>(
@@ -319,11 +355,13 @@ export async function shipOrder(
       [ctx.orgId, shipmentNumber, orderId, input.idempotencyKey, ctx.userId],
     );
     const shipmentId = shipment.rows[0]!.id;
-    await shipReservedInTx(tx, ctx, {
-      idempotencyKey: shipmentId,
-      source: { type: "shipment", id: shipmentId },
-      lines: ready.map((line) => ({ productId: line.product_id, qty: line.qty_reserved, reservedFor: line.id })),
-    });
+    if (tracked) {
+      await shipReservedInTx(tx, ctx, {
+        idempotencyKey: shipmentId,
+        source: { type: "shipment", id: shipmentId },
+        lines: ready.map((line) => ({ productId: line.product_id, qty: line.qty_reserved, reservedFor: line.id })),
+      });
+    }
     let units = 0;
     for (const line of ready) {
       units += line.qty_reserved;
@@ -331,17 +369,17 @@ export async function shipOrder(
         "insert into shipment_lines (org_id, shipment_id, order_line_id, qty) values ($1, $2, $3, $4)",
         [ctx.orgId, shipmentId, line.id, line.qty_reserved],
       );
-      await tx.query(
-        "update sales_order_lines set qty_shipped = qty_shipped + qty_reserved, qty_reserved = 0 where id = $1",
-        [line.id],
-      );
+      await tx.query("update sales_order_lines set qty_shipped = qty_shipped + $2, qty_reserved = 0 where id = $1", [
+        line.id,
+        line.qty_reserved,
+      ]);
     }
     const open = await tx.query("select 1 from sales_order_lines where order_id = $1 and qty_shipped < qty limit 1", [
       orderId,
     ]);
     const status: OrderStatus = open.rowCount ? "partially_shipped" : "shipped";
     await tx.query("update sales_orders set status = $1, updated_at = now() where id = $2", [status, orderId]);
-    await audit(tx, ctx, "sales_order.shipped", orderId, { shipmentNumber, units, status });
+    await audit(tx, ctx, tracked ? "sales_order.shipped" : "sales_order.completed", orderId, { shipmentNumber, units, status });
     return { shipmentNumber, units, replayed: false };
   });
 }
@@ -408,6 +446,7 @@ export async function getOrder(ctx: Ctx, orderId: string): Promise<OrderDetail |
     const lines = await tx.query<OrderLine>(
       `select l.id, l.product_id as "productId", p.sku, p.name,
               l.qty::float8 as qty, l.unit_price::float8 as "unitPrice",
+              l.list_price::float8 as "listPrice", l.discount_pct::float8 as "discountPercent",
               round(l.qty * l.unit_price, 2)::float8 as amount,
               l.qty_reserved::float8 as reserved, l.qty_shipped::float8 as shipped,
               (l.qty - l.qty_reserved - l.qty_shipped)::float8 as backorder,

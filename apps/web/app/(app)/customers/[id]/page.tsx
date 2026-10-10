@@ -1,18 +1,28 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, getCustomer, listOrders } from "@bos/core";
+import { can, featureOn, getCustomer, listOrders, listPriceLists } from "@bos/core";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import { Avatar } from "../../../../components/Avatar";
 import { formatMoney } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
+import { assignPriceList } from "../../sales/actions";
 
-export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
+}) {
   const { ctx } = await requireSession();
   const { id } = await params;
   if (!can(ctx, "customer.read")) notFound();
   const customer = await getCustomer(ctx, id);
   if (!customer) notFound();
+  const { error, notice } = await searchParams;
   const orders = can(ctx, "sales_order.read") ? await listOrders(ctx, { customerId: id }) : [];
+  const priceLists = can(ctx, "sales_order.read") ? await listPriceLists(ctx) : [];
+  const tracked = featureOn(ctx.features, "stock");
   const since = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
     customer.createdAt,
   );
@@ -31,6 +41,8 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           </Link>
         )}
       </header>
+      {error && <p className="error">{error}</p>}
+      {notice && !error && <p className="notice">{notice}</p>}
       <div className="tiles">
         <div className="glass panel tile">
           <h2 className="label">Payment terms</h2>
@@ -45,6 +57,39 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <div className="numeral numeral-md">{since}</div>
         </div>
       </div>
+      {priceLists.length > 0 && (
+        <section className="glass panel">
+          <div className="panel-head">
+            <div>
+              <h2 className="title">Price list</h2>
+              <div className="muted">
+                {customer.priceListName
+                  ? `New orders for this customer use the "${customer.priceListName}" prices.`
+                  : "This customer pays list prices."}
+              </div>
+            </div>
+            {can(ctx, "customer.write") && (
+              <form action={assignPriceList} className="inline-form">
+                <input type="hidden" name="customerId" value={customer.id} />
+                <label className="sr-only" htmlFor="price-list">
+                  Price list
+                </label>
+                <select id="price-list" name="priceListId" className="select-pill glass" defaultValue={customer.priceListId ?? ""}>
+                  <option value="">List prices</option>
+                  {priceLists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="btn btn-glass btn-small">
+                  Save
+                </button>
+              </form>
+            )}
+          </div>
+        </section>
+      )}
       <section className="glass panel">
         <h2 className="title">Contacts</h2>
         {customer.contacts.length === 0 ? (
@@ -83,7 +128,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                     {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(order.createdAt)}
                   </div>
                 </div>
-                <StatusBadge status={order.status} />
+                <StatusBadge status={order.status} tracked={tracked} />
                 <div className="strong order-total-cell">{formatMoney(order.total)}</div>
               </div>
             ))}

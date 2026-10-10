@@ -10,6 +10,8 @@ export type CustomerSummary = {
   ownerName: string | null;
   primaryContact: string | null;
   contactCount: number;
+  priceListId: string | null;
+  priceListName: string | null;
 };
 
 export type Contact = {
@@ -25,7 +27,8 @@ export type CustomerDetail = CustomerSummary & { createdAt: Date; contacts: Cont
 
 const SUMMARY_SQL = `
   select c.id, c.name, c.payment_terms as "paymentTerms", c.created_at as "createdAt",
-         u.name as "ownerName",
+         u.name as "ownerName", c.price_list_id as "priceListId",
+         (select pl.name from price_lists pl where pl.id = c.price_list_id) as "priceListName",
          (select k.name from contacts k where k.customer_id = c.id
             order by k.is_primary desc, k.created_at limit 1) as "primaryContact",
          (select count(*)::int from contacts k where k.customer_id = c.id) as "contactCount"
