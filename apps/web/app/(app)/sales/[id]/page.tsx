@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, getOrder } from "@bos/core";
+import { can, featureOn, getOrder } from "@bos/core";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
@@ -31,6 +31,7 @@ export default async function OrderPage({
   const canWrite = can(ctx, "sales_order.write");
   const canShip = can(ctx, "sales_order.ship");
   const open = order.status === "confirmed" || order.status === "partially_shipped";
+  const tracked = featureOn(ctx.features, "stock");
   const couldReserve = order.lines.reduce((sum, line) => sum + Math.min(line.backorder, line.availableNow), 0);
 
   return (
@@ -42,7 +43,7 @@ export default async function OrderPage({
           </div>
           <div className="title-row">
             <h1>{order.number}</h1>
-            <StatusBadge status={order.status} large />
+            <StatusBadge status={order.status} large tracked={tracked} />
           </div>
         </div>
         {canWrite && (order.status === "quote" || order.status === "confirmed") && (
@@ -53,7 +54,7 @@ export default async function OrderPage({
             </button>
           </form>
         )}
-        {canWrite && open && couldReserve > 0 && (
+        {tracked && canWrite && open && couldReserve > 0 && (
           <form action={reserve}>
             <input type="hidden" name="orderId" value={order.id} />
             <button type="submit" className="btn btn-glass">
@@ -69,12 +70,12 @@ export default async function OrderPage({
             </button>
           </form>
         )}
-        {canShip && open && order.unitsReserved > 0 && (
+        {canShip && open && (tracked ? order.unitsReserved > 0 : true) && (
           <form action={ship}>
             <input type="hidden" name="orderId" value={order.id} />
             <input type="hidden" name="requestId" value={randomUUID()} />
             <button type="submit" className="btn btn-primary">
-              Ship what&apos;s ready
+              {tracked ? "Ship what's ready" : "Complete order"}
             </button>
           </form>
         )}
@@ -83,6 +84,7 @@ export default async function OrderPage({
       {error && <p className="error">{error}</p>}
       {notice && !error && <p className="notice">{notice}</p>}
 
+      {tracked && (
       <section className="glass panel">
         <div className="panel-head">
           <div>
@@ -124,6 +126,7 @@ export default async function OrderPage({
           {open && order.unitsBackordered === 0 && "All remaining units are reserved and ready to ship."}
         </p>
       </section>
+      )}
 
       <div className="split">
         <section className="glass panel grow-3">
@@ -133,9 +136,9 @@ export default async function OrderPage({
               <thead>
                 <tr>
                   <th>Product</th>
-                  <th className="num">Ordered</th>
-                  <th className="num">Shipped</th>
-                  <th>Status</th>
+                  <th className="num">{tracked ? "Ordered" : "Quantity"}</th>
+                  {tracked && <th className="num">Shipped</th>}
+                  {tracked && <th>Status</th>}
                   <th className="num">Price</th>
                   <th className="num">Amount</th>
                 </tr>
@@ -150,7 +153,8 @@ export default async function OrderPage({
                       <div className="muted mono">{line.sku}</div>
                     </td>
                     <td className="num">{formatQty(line.qty)}</td>
-                    <td className="num">{formatQty(line.shipped)}</td>
+                    {tracked && <td className="num">{formatQty(line.shipped)}</td>}
+                    {tracked && (
                     <td>
                       <div className="badges">
                         {line.shipped >= line.qty && <span className="badge">Shipped</span>}
@@ -163,7 +167,15 @@ export default async function OrderPage({
                         )}
                       </div>
                     </td>
-                    <td className="num">{formatMoney(line.unitPrice)}</td>
+                    )}
+                    <td className="num">
+                      {formatMoney(line.unitPrice)}
+                      {line.discountPercent > 0 ? (
+                        <div className="muted">
+                          {formatQty(line.discountPercent)}% off {formatMoney(line.listPrice)}
+                        </div>
+                      ) : null}
+                    </td>
                     <td className="num strong">{formatMoney(line.amount)}</td>
                   </tr>
                 ))}
@@ -205,7 +217,13 @@ export default async function OrderPage({
                   <span className={`dot ${index === 0 ? "dot-white" : ""}`} aria-hidden="true" />
                   <div className="row-text">
                     <div className="row-title">
-                      Shipment <span className="mono">{shipment.number}</span>
+                      {tracked ? (
+                        <>
+                          Shipment <span className="mono">{shipment.number}</span>
+                        </>
+                      ) : (
+                        "Order completed"
+                      )}
                     </div>
                     <div className="muted">
                       {when.format(shipment.shippedAt)} · {formatQty(shipment.units)} units · {shipment.shippedBy ?? "System"}
