@@ -1988,3 +1988,29 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .mode-switch { width: 36px; height: 36px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid var(--line); background: rgba(var(--w), 0.06); color: var(--ink); cursor: pointer; }
 .mode-switch svg { width: 16px; height: 16px; }
 .brand small { display: block; font-size: 12.5px; font-weight: 400; color: var(--ink-2); letter-spacing: 0; }
+
+/* ===== Printing a document =====
+   Only the document prints: no menu, buttons, side panels or notices, on a plain white page. */
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; }
+  .sidebar, .no-print, nextjs-portal { display: none !important; }
+  .shell { display: block; padding: 0; }
+  #main { display: block; }
+  .split { display: block; }
+  .paper { box-shadow: none !important; border: 0; border-radius: 0; margin: 0; padding: 0; max-width: none; }
+  .paper a { color: inherit; text-decoration: none; }
+}
+
+/* Documents are always dark ink on paper, whatever the screen mode. */
+#main .paper th, .paper th { color: #5d6055; opacity: 1; }
+.paper a, .paper a.row-link { color: #171813; text-decoration: underline; text-decoration-color: rgba(23, 24, 19, 0.3); }
+.paper .badge { background: rgba(23, 24, 19, 0.08); color: #171813; }
+.paper .badge-ok { background: #d1fae5; color: #065f46; }
+.paper .badge-warn { background: #fef3c7; color: #92400e; }
+.paper .badge-bad { background: #fee2e2; color: #991b1b; }
+.paper .badge-info { background: #dbeafe; color: #1e40af; }
+/* The paid stamp sits clear of the totals. */
+.paper { position: relative; }
+.paper-stamp { position: absolute; top: auto; right: auto; left: 34px; bottom: 34px; }
+@media (max-width: 760px) { .paper-stamp { position: static; display: inline-block; margin-top: 16px; } }

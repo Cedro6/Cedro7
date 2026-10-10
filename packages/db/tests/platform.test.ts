@@ -42,6 +42,7 @@ describe("migrations", () => {
       "0006_explicit_grants.sql",
       "0007_business_type_and_features.sql",
       "0008_pricing.sql",
+      "0009_invoices.sql",
     ]);
   });
 

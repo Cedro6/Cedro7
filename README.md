@@ -21,7 +21,10 @@ Sign-in is a development sign-in: you choose a demo person. A deployed copy keep
 
 On Home, the sales chart and briefing show sample figures and are labelled "Sample data" on screen. Calendar and Reports are placeholder pages.
 
-Not built yet: real authentication, invitations, emailing purchase orders, over-receipts, returns, invoices, order editing, backorder allocation on manual stock adjustments, imports, reports, background jobs, error monitoring, the AI assistant, billing.
+- Orders on both paths: a business that tracks stock reserves and ships (in parts if short); one that does not confirms and completes. Price lists per customer and line discounts.
+- Invoices: one raised automatically with each shipment or completed order, deposits taken off the invoices that follow, hand-written invoices, part payments, credit notes that reduce an invoice or stay on the customer's account, voiding, customer statements, and a print layout that doubles as "save as PDF". Every rule has a test in `packages/core/tests/invoices.test.ts`.
+
+Not built yet: real authentication, invitations, emailing invoices or purchase orders, online payment, over-receipts, returns, recurring invoices, payment reminders, a Settings screen, order editing, backorder allocation on manual stock adjustments, imports, reports, background jobs, error monitoring, the AI assistant, billing.
 
 ## Layout
 

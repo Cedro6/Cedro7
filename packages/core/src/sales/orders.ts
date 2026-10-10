@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { withTenant, type PoolClient } from "@bos/db/runtime";
+import { invoiceShipmentInTx } from "../billing/invoices";
 import { releaseForSourcesInTx, reserveLinesInTx, shipReservedInTx } from "../inventory/ledger";
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
@@ -311,7 +312,7 @@ export async function shipOrder(
   ctx: Ctx,
   orderId: string,
   input: { idempotencyKey: string },
-): Promise<{ shipmentNumber: string; units: number; replayed: boolean }> {
+): Promise<{ shipmentNumber: string; units: number; replayed: boolean; invoice: { number: string; amount: number } | null }> {
   requirePermission(ctx, "sales_order.ship");
   if (!input.idempotencyKey.trim()) throw new ValidationError("idempotencyKey", "A request id is required.");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
@@ -324,7 +325,7 @@ export async function shipOrder(
       [input.idempotencyKey],
     );
     if (earlier.rows[0]) {
-      return { shipmentNumber: earlier.rows[0].number, units: earlier.rows[0].units, replayed: true };
+      return { shipmentNumber: earlier.rows[0].number, units: earlier.rows[0].units, replayed: true, invoice: null };
     }
     if (order.status !== "confirmed" && order.status !== "partially_shipped") {
       throw new StateError("Only a confirmed order can be shipped.");
@@ -379,8 +380,14 @@ export async function shipOrder(
     ]);
     const status: OrderStatus = open.rowCount ? "partially_shipped" : "shipped";
     await tx.query("update sales_orders set status = $1, updated_at = now() where id = $2", [status, orderId]);
-    await audit(tx, ctx, tracked ? "sales_order.shipped" : "sales_order.completed", orderId, { shipmentNumber, units, status });
-    return { shipmentNumber, units, replayed: false };
+    // The invoice is raised in the same transaction: there is never a shipment without one.
+    const invoice = await invoiceShipmentInTx(tx, ctx, {
+      orderId,
+      shipmentId,
+      lines: ready.map((line) => ({ orderLineId: line.id, qty: line.qty_reserved })),
+    });
+    await audit(tx, ctx, tracked ? "sales_order.shipped" : "sales_order.completed", orderId, { shipmentNumber, units, status, invoice: invoice.number });
+    return { shipmentNumber, units, replayed: false, invoice: { number: invoice.number, amount: invoice.amount } };
   });
 }
 

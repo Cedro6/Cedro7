@@ -16,6 +16,27 @@ export {
   type StockMismatch,
 } from "./inventory/ledger";
 export {
+  createInvoice,
+  customerStatement,
+  getInvoice,
+  listInvoices,
+  PAYMENT_METHODS,
+  raiseCredit,
+  recordPayment,
+  requestDeposit,
+  termsDays,
+  useCustomerCredit,
+  voidInvoice,
+  type AppliedCredit,
+  type InvoiceDetail,
+  type InvoiceKind,
+  type InvoiceLine,
+  type InvoiceState,
+  type InvoiceSummary,
+  type Payment,
+  type Statement,
+} from "./billing/invoices";
+export {
   createCustomer,
   getCustomer,
   listCustomers,

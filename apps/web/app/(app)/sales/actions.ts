@@ -83,9 +83,10 @@ export async function ship(formData: FormData): Promise<void> {
   const { ctx } = await requireSession();
   await act(formData, async (orderId) => {
     const result = await shipOrder(ctx, orderId, { idempotencyKey: String(formData.get("requestId") ?? "") });
+    const billed = result.invoice ? ` Invoice ${result.invoice.number} raised.` : "";
     return featureOn(ctx.features, "stock")
-      ? `${result.shipmentNumber} shipped with ${result.units} units.`
-      : "Order completed.";
+      ? `${result.shipmentNumber} shipped with ${result.units} units.${billed}`
+      : `Order completed.${billed}`;
   });
 }
 

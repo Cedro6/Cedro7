@@ -203,7 +203,7 @@ describe("products", () => {
 describe("overview", () => {
   it("counts this company only and hides what the role may not see", async () => {
     const full = await overview(as("owner"));
-    expect(full).toEqual({ customers: 5, products: 7, team: 3, lowStock: 2, openOrders: 0, readyToShip: 0, openPurchaseOrders: 0 });
+    expect(full).toEqual({ customers: 5, products: 7, team: 3, lowStock: 2, openOrders: 0, readyToShip: 0, openPurchaseOrders: 0, overdueInvoices: 0 });
     expect((await overview(as("warehouse"))).customers).toBeNull();
   });
 });
