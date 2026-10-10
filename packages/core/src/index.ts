@@ -26,6 +26,21 @@ export {
 export { currentMembership, membershipsByEmail, type Membership } from "./platform/auth";
 export type { Ctx } from "./platform/context";
 export { StateError, ValidationError } from "./platform/errors";
+export {
+  BUSINESS_TYPES,
+  featureOn,
+  FEATURES,
+  featuresFor,
+  isBusinessType,
+  isFeature,
+  NEEDS_STOCK,
+  parseFeatures,
+  TYPE_FEATURES,
+  type BusinessType,
+  type FeatureId,
+  type FeatureSet,
+} from "./platform/features";
+export { getSettings, setBusinessType, setFeature, type Settings } from "./platform/settings";
 export { overview, type Overview } from "./platform/overview";
 export {
   can,
@@ -34,6 +49,7 @@ export {
   PERMISSIONS,
   requirePermission,
   ROLES,
+  type Actor,
   type Permission,
   type Role,
 } from "./platform/permissions";

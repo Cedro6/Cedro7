@@ -132,7 +132,7 @@ async function lockOrder(tx: PoolClient, orderId: string): Promise<Locked> {
 }
 
 export async function listSuppliers(ctx: Ctx): Promise<Supplier[]> {
-  requirePermission(ctx.role, "purchase_order.read");
+  requirePermission(ctx, "purchase_order.read");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<Supplier>(
       `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays"
@@ -146,7 +146,7 @@ export async function createSupplier(
   ctx: Ctx,
   input: { name: string; email?: string; phone?: string; paymentTerms?: string; leadTimeDays?: number },
 ): Promise<{ id: string }> {
-  requirePermission(ctx.role, "purchase_order.write");
+  requirePermission(ctx, "purchase_order.write");
   const name = input.name.trim();
   if (!name) throw new ValidationError("name", "Enter the supplier's name.");
   if (name.length > 200) throw new ValidationError("name", "Keep the name under 200 characters.");
@@ -186,7 +186,7 @@ export async function createPurchaseOrder(
     notes?: string;
   },
 ): Promise<{ id: string; number: string }> {
-  requirePermission(ctx.role, "purchase_order.write");
+  requirePermission(ctx, "purchase_order.write");
   if (!UUID.test(input.supplierId)) throw new ValidationError("supplierId", "Choose a supplier.");
   if (input.lines.length === 0) throw new ValidationError("lines", "Add at least one product.");
   if (input.lines.length > 200) throw new ValidationError("lines", "A purchase order can have at most 200 lines.");
@@ -241,12 +241,12 @@ export async function createPurchaseOrder(
  * the spot; anything larger waits for someone who may approve.
  */
 export async function submitPurchaseOrder(ctx: Ctx, orderId: string): Promise<{ status: PurchaseOrderStatus }> {
-  requirePermission(ctx.role, "purchase_order.write");
+  requirePermission(ctx, "purchase_order.write");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (order.status !== "draft") throw new StateError("Only a draft can be submitted.");
     const limit = (await tx.query<{ v: number }>("select po_approval_threshold::float8 as v from organizations")).rows[0]!.v;
-    const auto = order.total <= limit || can(ctx.role, "purchase_order.approve");
+    const auto = order.total <= limit || can(ctx, "purchase_order.approve");
     const status: PurchaseOrderStatus = auto ? "approved" : "pending_approval";
     await tx.query(
       `update purchase_orders
@@ -258,14 +258,14 @@ export async function submitPurchaseOrder(ctx: Ctx, orderId: string): Promise<{ 
     await audit(tx, ctx, auto ? "purchase_order.approved" : "purchase_order.submitted", orderId, {
       total: order.total,
       limit,
-      automatic: auto && !can(ctx.role, "purchase_order.approve"),
+      automatic: auto && !can(ctx, "purchase_order.approve"),
     });
     return { status };
   });
 }
 
 export async function approvePurchaseOrder(ctx: Ctx, orderId: string): Promise<void> {
-  requirePermission(ctx.role, "purchase_order.approve");
+  requirePermission(ctx, "purchase_order.approve");
   await withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (order.status !== "pending_approval") throw new StateError("This purchase order is not waiting for approval.");
@@ -279,7 +279,7 @@ export async function approvePurchaseOrder(ctx: Ctx, orderId: string): Promise<v
 
 /** Records that the approved order went to the supplier. Sending the email itself is not built yet. */
 export async function markPurchaseOrderSent(ctx: Ctx, orderId: string): Promise<void> {
-  requirePermission(ctx.role, "purchase_order.write");
+  requirePermission(ctx, "purchase_order.write");
   await withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (order.status !== "approved") throw new StateError("Only an approved purchase order can be marked as sent.");
@@ -291,7 +291,7 @@ export async function markPurchaseOrderSent(ctx: Ctx, orderId: string): Promise<
 }
 
 export async function cancelPurchaseOrder(ctx: Ctx, orderId: string): Promise<void> {
-  requirePermission(ctx.role, "purchase_order.write");
+  requirePermission(ctx, "purchase_order.write");
   await withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const order = await lockOrder(tx, orderId);
     if (order.status === "cancelled") return;
@@ -316,7 +316,7 @@ export async function receivePurchaseOrder(
   orderId: string,
   input: { idempotencyKey: string; lines: { lineId: string; qty: number }[] },
 ): Promise<{ receiptNumber: string; units: number; allocatedToBackorders: number; replayed: boolean }> {
-  requirePermission(ctx.role, "purchase_order.receive");
+  requirePermission(ctx, "purchase_order.receive");
   if (!input.idempotencyKey.trim()) throw new ValidationError("idempotencyKey", "A request id is required.");
   const wanted = input.lines.filter((line) => line.qty !== 0);
   for (const line of wanted) {
@@ -423,7 +423,7 @@ export async function listPurchaseOrders(
   ctx: Ctx,
   options: { status?: PurchaseOrderStatus | "open" } = {},
 ): Promise<PurchaseOrderSummary[]> {
-  requirePermission(ctx.role, "purchase_order.read");
+  requirePermission(ctx, "purchase_order.read");
   const statuses =
     options.status === "open"
       ? ["pending_approval", "approved", "sent", "partially_received"]
@@ -438,13 +438,13 @@ export async function listPurchaseOrders(
        limit 200`,
       [statuses],
     );
-    const showCost = can(ctx.role, "product.cost.view");
+    const showCost = can(ctx, "product.cost.view");
     return showCost ? result.rows : result.rows.map((row) => ({ ...row, total: null }));
   });
 }
 
 export async function getPurchaseOrder(ctx: Ctx, orderId: string): Promise<PurchaseOrderDetail | null> {
-  requirePermission(ctx.role, "purchase_order.read");
+  requirePermission(ctx, "purchase_order.read");
   if (!UUID.test(orderId)) return null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const header = await tx.query<Omit<PurchaseOrderDetail, "lines" | "receipts">>(`${SUMMARY_SQL} where o.id = $1`, [
@@ -471,7 +471,7 @@ export async function getPurchaseOrder(ctx: Ctx, orderId: string): Promise<Purch
        order by r.received_at desc`,
       [orderId],
     );
-    if (!can(ctx.role, "product.cost.view")) {
+    if (!can(ctx, "product.cost.view")) {
       return {
         ...order,
         total: null,

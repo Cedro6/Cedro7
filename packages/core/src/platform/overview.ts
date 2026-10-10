@@ -38,13 +38,13 @@ export async function overview(ctx: Ctx): Promise<Overview> {
     );
     const row = result.rows[0]!;
     return {
-      customers: can(ctx.role, "customer.read") ? row.customers : null,
-      products: can(ctx.role, "product.read") ? row.products : null,
+      customers: can(ctx, "customer.read") ? row.customers : null,
+      products: can(ctx, "product.read") ? row.products : null,
       team: row.team,
-      lowStock: can(ctx.role, "product.read") ? row.low_stock : null,
-      openOrders: can(ctx.role, "sales_order.read") ? row.open_orders : null,
-      readyToShip: can(ctx.role, "sales_order.read") ? row.ready : null,
-      openPurchaseOrders: can(ctx.role, "purchase_order.read") ? row.open_pos : null,
+      lowStock: can(ctx, "product.read") ? row.low_stock : null,
+      openOrders: can(ctx, "sales_order.read") ? row.open_orders : null,
+      readyToShip: can(ctx, "sales_order.read") ? row.ready : null,
+      openPurchaseOrders: can(ctx, "purchase_order.read") ? row.open_pos : null,
     };
   });
 }

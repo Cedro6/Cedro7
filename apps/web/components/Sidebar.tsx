@@ -31,7 +31,7 @@ export function Sidebar({ footer }: { footer: ReactNode }) {
         <span className="brand-mark" aria-hidden="true">
           <span />
         </span>
-        BusinessOS
+        Cedro Terminal
       </div>
       <div className="nav">
         {items.map((item) => {

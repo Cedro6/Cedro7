@@ -28,8 +28,8 @@ export default async function OrderPage({
   const order = await getOrder(ctx, id);
   if (!order) notFound();
 
-  const canWrite = can(ctx.role, "sales_order.write");
-  const canShip = can(ctx.role, "sales_order.ship");
+  const canWrite = can(ctx, "sales_order.write");
+  const canShip = can(ctx, "sales_order.ship");
   const open = order.status === "confirmed" || order.status === "partially_shipped";
   const couldReserve = order.lines.reduce((sum, line) => sum + Math.min(line.backorder, line.availableNow), 0);
 

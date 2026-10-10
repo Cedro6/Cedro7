@@ -8,10 +8,10 @@ import { requireSession } from "../../../../lib/session";
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { ctx } = await requireSession();
   const { id } = await params;
-  if (!can(ctx.role, "customer.read")) notFound();
+  if (!can(ctx, "customer.read")) notFound();
   const customer = await getCustomer(ctx, id);
   if (!customer) notFound();
-  const orders = can(ctx.role, "sales_order.read") ? await listOrders(ctx, { customerId: id }) : [];
+  const orders = can(ctx, "sales_order.read") ? await listOrders(ctx, { customerId: id }) : [];
   const since = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
     customer.createdAt,
   );
@@ -24,7 +24,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           </div>
           <h1>{customer.name}</h1>
         </div>
-        {can(ctx.role, "sales_order.write") && (
+        {can(ctx, "sales_order.write") && (
           <Link href={`/sales/new?customer=${customer.id}`} className="btn btn-primary">
             New order
           </Link>

@@ -20,7 +20,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
           <span className="brand-mark" aria-hidden="true">
             <span />
           </span>
-          BusinessOS
+          Cedro Terminal
         </div>
         <h1>Sign in</h1>
         {enabled ? (

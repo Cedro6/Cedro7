@@ -40,6 +40,7 @@ describe("migrations", () => {
     const applied = await migrate(owner);
     expect(applied).toEqual(["0001_platform.sql", "0002_master_data.sql", "0003_stock.sql", "0004_sales.sql", "0005_purchasing.sql",
       "0006_explicit_grants.sql",
+      "0007_business_type_and_features.sql",
     ]);
   });
 

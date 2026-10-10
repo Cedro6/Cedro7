@@ -26,14 +26,14 @@ export default async function PurchaseOrderPage({
   const { ctx } = await requireSession();
   const { id } = await params;
   const { error, notice } = await searchParams;
-  if (!can(ctx.role, "purchase_order.read")) notFound();
+  if (!can(ctx, "purchase_order.read")) notFound();
   const order = await getPurchaseOrder(ctx, id);
   if (!order) notFound();
 
-  const canWrite = can(ctx.role, "purchase_order.write");
-  const canApprove = can(ctx.role, "purchase_order.approve");
+  const canWrite = can(ctx, "purchase_order.write");
+  const canApprove = can(ctx, "purchase_order.approve");
   const receivable = ["approved", "sent", "partially_received"].includes(order.status);
-  const canReceive = receivable && can(ctx.role, "purchase_order.receive");
+  const canReceive = receivable && can(ctx, "purchase_order.receive");
   const cancellable = ["draft", "pending_approval", "approved", "sent"].includes(order.status);
   const outstanding = order.unitsOrdered - order.unitsReceived;
   const showCost = order.total !== null;

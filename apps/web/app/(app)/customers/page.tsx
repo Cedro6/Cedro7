@@ -6,7 +6,7 @@ import { requireSession } from "../../../lib/session";
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { ctx } = await requireSession();
   const { q = "" } = await searchParams;
-  if (!can(ctx.role, "customer.read")) {
+  if (!can(ctx, "customer.read")) {
     return (
       <section className="glass panel empty">
         <div className="empty-title">No access</div>
@@ -31,7 +31,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           </label>
           <input id="q" name="q" type="search" placeholder="Search customers" defaultValue={q} />
         </form>
-        {can(ctx.role, "customer.write") && (
+        {can(ctx, "customer.write") && (
           <Link href="/customers/new" className="btn btn-primary">
             New customer
           </Link>

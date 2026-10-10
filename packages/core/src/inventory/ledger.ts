@@ -176,7 +176,7 @@ export async function adjustStock(
   ctx: Ctx,
   input: { productId: string; qtyDelta: number; reason: string; idempotencyKey: string },
 ): Promise<{ replayed: boolean }> {
-  requirePermission(ctx.role, "stock.adjust");
+  requirePermission(ctx, "stock.adjust");
   const reason = input.reason.trim();
   if (!reason) throw new StockInputError("Give a reason for the adjustment.");
   if (reason.length > 200) throw new StockInputError("Keep the reason under 200 characters.");
@@ -281,7 +281,7 @@ export async function reserveStock(
     partial?: boolean;
   },
 ): Promise<ReserveResult> {
-  requirePermission(ctx.role, "stock.reserve");
+  requirePermission(ctx, "stock.reserve");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const [result] = await reserveLinesInTx(tx, ctx, [input], { partial: input.partial ?? false });
     return result!;
@@ -395,7 +395,7 @@ export async function releaseForSourcesInTx(
 
 /** Returns reserved stock to available. Releasing twice changes nothing the second time. */
 export async function releaseReservation(ctx: Ctx, reservationId: string): Promise<{ released: number }> {
-  requirePermission(ctx.role, "stock.reserve");
+  requirePermission(ctx, "stock.reserve");
   if (!UUID.test(reservationId)) throw new StockInputError("Unknown reservation.");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const found = await tx.query<{ product_id: string; location_id: string }>(
@@ -422,7 +422,7 @@ export async function releaseReservation(ctx: Ctx, reservationId: string): Promi
 }
 
 export async function listMovements(ctx: Ctx, productId: string, limit = 50): Promise<Movement[]> {
-  requirePermission(ctx.role, "product.read");
+  requirePermission(ctx, "product.read");
   if (!UUID.test(productId)) return [];
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<Movement>(
@@ -449,7 +449,7 @@ export type StockMismatch = {
 
 /** Recomputes every balance from the ledger and open reservations. An empty list means the books agree. */
 export async function reconcileStock(ctx: Ctx): Promise<StockMismatch[]> {
-  requirePermission(ctx.role, "product.read");
+  requirePermission(ctx, "product.read");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<StockMismatch>(
       `with keys as (

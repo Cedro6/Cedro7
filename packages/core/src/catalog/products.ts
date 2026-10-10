@@ -46,7 +46,7 @@ export async function listProducts(
   ctx: Ctx,
   options: { search?: string; lowStockOnly?: boolean } = {},
 ): Promise<ProductSummary[]> {
-  requirePermission(ctx.role, "product.read");
+  requirePermission(ctx, "product.read");
   const search = options.search?.trim() ?? "";
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<ProductSummary>(
@@ -55,18 +55,18 @@ export async function listProducts(
          and (not $3 or q."lowStock")
        order by q.sku
        limit 500`,
-      [can(ctx.role, "product.cost.view"), search, options.lowStockOnly ?? false],
+      [can(ctx, "product.cost.view"), search, options.lowStockOnly ?? false],
     );
     return result.rows;
   });
 }
 
 export async function getProduct(ctx: Ctx, id: string): Promise<ProductSummary | null> {
-  requirePermission(ctx.role, "product.read");
+  requirePermission(ctx, "product.read");
   if (!UUID.test(id)) return null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<ProductSummary>(`${PRODUCT_SQL} where p.id = $2`, [
-      can(ctx.role, "product.cost.view"),
+      can(ctx, "product.cost.view"),
       id,
     ]);
     return result.rows[0] ?? null;

@@ -6,7 +6,7 @@ import { saveCustomer } from "./actions";
 
 export default async function NewCustomerPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { ctx } = await requireSession();
-  if (!can(ctx.role, "customer.write")) redirect("/customers");
+  if (!can(ctx, "customer.write")) redirect("/customers");
   const { error } = await searchParams;
   return (
     <>
