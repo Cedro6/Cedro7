@@ -176,3 +176,4 @@ export {
   type Reminder,
   type TeamMember,
 } from "./crm/reminders";
+export { getCompanyProfile, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, type CompanyProfile } from "./platform/company";

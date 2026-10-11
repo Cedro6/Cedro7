@@ -120,6 +120,24 @@ export default async function CustomerPage({
           </div>
         </section>
       )}
+      {(customer.billingAddress || customer.shippingAddress) && (
+        <section className="glass panel">
+          <div className="form-row">
+            {customer.billingAddress && (
+              <div className="field">
+                <span>Billing address</span>
+                <div className="address">{customer.billingAddress}</div>
+              </div>
+            )}
+            {customer.shippingAddress && (
+              <div className="field">
+                <span>Shipping address</span>
+                <div className="address">{customer.shippingAddress}</div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
       <section className="glass panel">
         <h2 className="title">Contacts</h2>
         {customer.contacts.length === 0 ? (

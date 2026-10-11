@@ -49,6 +49,7 @@ describe("migrations", () => {
       "0013_assistant_proposals.sql",
       "0014_assistant_briefings.sql",
       "0015_reminders.sql",
+      "0016_company_and_addresses.sql",
     ]);
   });
 

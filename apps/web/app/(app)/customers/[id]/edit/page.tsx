@@ -37,6 +37,14 @@ export default async function EditCustomerPage({ params, searchParams }: { param
             <span>Payment terms</span>
             <input name="paymentTerms" maxLength={50} placeholder="Net 30" defaultValue={customer.paymentTerms ?? ""} />
           </label>
+          <label className="field">
+            <span>Billing address</span>
+            <textarea name="billingAddress" rows={3} maxLength={500} defaultValue={customer.billingAddress ?? ""} />
+          </label>
+          <label className="field">
+            <span>Shipping address, if different</span>
+            <textarea name="shippingAddress" rows={3} maxLength={500} defaultValue={customer.shippingAddress ?? ""} />
+          </label>
           <div className="actions">
             <button type="submit" className="btn btn-primary">Save</button>
             <Link href={`/customers/${id}`} className="btn btn-glass">Cancel</Link>
