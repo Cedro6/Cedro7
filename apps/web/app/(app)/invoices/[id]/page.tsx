@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, getInvoice, PAYMENT_METHODS, getCompanyProfile, getCustomer } from "@bos/core";
+import { can, getInvoice, PAYMENT_METHODS, getCompanyProfile } from "@bos/core";
 import { InvoiceBadge } from "../../../../components/InvoiceBadge";
+import { PaperBrand } from "../../../../components/PaperBrand";
 import { PrintButton } from "../../../../components/PrintButton";
 import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
@@ -30,7 +31,7 @@ export default async function InvoicePage({
   const { error, notice } = await searchParams;
   const invoice = await getInvoice(ctx, id);
   if (!invoice) notFound();
-  const [company, billTo] = await Promise.all([getCompanyProfile(ctx), can(ctx, "customer.read") ? getCustomer(ctx, invoice.customerId) : null]);
+  const company = await getCompanyProfile(ctx);
   const manage = can(ctx, "invoice.write");
   const owing = invoice.balance > 0;
   const voidable = manage && invoice.kind === "manual" && invoice.state !== "void" && invoice.paid === 0 && invoice.credited === 0;
@@ -74,15 +75,7 @@ export default async function InvoicePage({
         <div className="grow-3 stack-panels">
           <section className="paper">
             <div className="paper-head">
-              <div className="paper-brand">
-                {company.logo && <img src={company.logo} alt="" className="paper-logo" />}
-                <div>
-                  <div className="paper-company">{company.name}</div>
-                  {company.address && <div className="paper-muted address">{company.address}</div>}
-                  {(company.phone || company.email) && <div className="paper-muted">{[company.phone, company.email].filter(Boolean).join(" · ")}</div>}
-                  {company.taxNumber && <div className="paper-muted">{company.taxNumber}</div>}
-                </div>
-              </div>
+              <PaperBrand company={company} />
               <div className="paper-title">
                 {invoice.kind === "deposit" ? "Deposit invoice" : "Invoice"}
                 <div className="paper-muted mono">{invoice.number}</div>
@@ -92,12 +85,12 @@ export default async function InvoicePage({
               <div>
                 <div className="paper-label">Bill to</div>
                 <div className="paper-strong">{invoice.customerName}</div>
-                {billTo?.billingAddress && <div className="address">{billTo.billingAddress}</div>}
+                {invoice.billToAddress && <div className="address">{invoice.billToAddress}</div>}
               </div>
-              {billTo?.shippingAddress && invoice.kind !== "deposit" && (
+              {invoice.shipToAddress && invoice.kind !== "deposit" && (
                 <div>
                   <div className="paper-label">Ship to</div>
-                  <div className="address">{billTo.shippingAddress}</div>
+                  <div className="address">{invoice.shipToAddress}</div>
                 </div>
               )}
               <div>

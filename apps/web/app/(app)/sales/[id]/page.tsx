@@ -279,6 +279,11 @@ export default async function OrderPage({
                       {when.format(shipment.shippedAt)} · {formatQty(shipment.units)} units · {shipment.shippedBy ?? "System"}
                     </div>
                   </div>
+                  {tracked && (
+                    <Link href={`/sales/${order.id}/packing-slip/${shipment.id}`} className="btn btn-glass btn-small">
+                      Packing slip
+                    </Link>
+                  )}
                 </div>
               ))}
               {order.confirmedAt && (

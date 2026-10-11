@@ -177,3 +177,4 @@ export {
   type TeamMember,
 } from "./crm/reminders";
 export { getCompanyProfile, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, type CompanyProfile } from "./platform/company";
+export { getPackingSlip, type PackingSlip } from "./sales/orders";
