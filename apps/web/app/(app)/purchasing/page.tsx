@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { can, listPurchaseOrders, listSuppliers, type PurchaseOrderStatus } from "@bos/core";
+import { can, listArchivedSuppliers, listPurchaseOrders, listSuppliers, type PurchaseOrderStatus } from "@bos/core";
 import { PoStatusBadge } from "../../../components/PoStatusBadge";
 import { formatMoney, formatQty } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
@@ -13,7 +13,7 @@ const filters: { key: string; label: string; status?: PurchaseOrderStatus | "ope
 
 const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-export default async function PurchasingPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
+export default async function PurchasingPage({ searchParams }: { searchParams: Promise<{ show?: string; notice?: string }> }) {
   const { ctx } = await requireSession();
   if (!can(ctx, "purchase_order.read")) {
     return (
@@ -23,9 +23,13 @@ export default async function PurchasingPage({ searchParams }: { searchParams: P
       </section>
     );
   }
-  const { show = "all" } = await searchParams;
+  const { show = "all", notice } = await searchParams;
   const active = filters.find((filter) => filter.key === show) ?? filters[0]!;
-  const [orders, suppliers] = await Promise.all([listPurchaseOrders(ctx, { status: active.status }), listSuppliers(ctx)]);
+  const [orders, suppliers, archivedSuppliers] = await Promise.all([
+    listPurchaseOrders(ctx, { status: active.status }),
+    listSuppliers(ctx),
+    listArchivedSuppliers(ctx),
+  ]);
   const canWrite = can(ctx, "purchase_order.write");
   return (
     <>
@@ -58,6 +62,7 @@ export default async function PurchasingPage({ searchParams }: { searchParams: P
           </>
         )}
       </header>
+      {notice && <p className="notice">{notice}</p>}
       <section className="glass panel">
         {orders.length === 0 ? (
           <div className="empty">
@@ -123,7 +128,9 @@ export default async function PurchasingPage({ searchParams }: { searchParams: P
           {suppliers.map((supplier) => (
             <div className="row" key={supplier.id}>
               <div className="row-text">
-                <div className="row-title">{supplier.name}</div>
+                <div className="row-title">
+                  {canWrite ? <Link href={`/purchasing/suppliers/${supplier.id}`} className="row-link">{supplier.name}</Link> : supplier.name}
+                </div>
                 <div className="muted">
                   {[supplier.paymentTerms, supplier.leadTimeDays === null ? null : `${supplier.leadTimeDays} day lead time`]
                     .filter(Boolean)
@@ -137,6 +144,18 @@ export default async function PurchasingPage({ searchParams }: { searchParams: P
             </div>
           ))}
         </div>
+        {canWrite && archivedSuppliers.length > 0 && (
+          <details className="edit-item">
+            <summary><span className="muted">{archivedSuppliers.length} archived</span></summary>
+            <div className="rows">
+              {archivedSuppliers.map((supplier) => (
+                <div className="row" key={supplier.id}>
+                  <Link href={`/purchasing/suppliers/${supplier.id}`} className="row-link">{supplier.name}</Link>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </section>
     </>
   );

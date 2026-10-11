@@ -30,11 +30,11 @@ export default async function ProductPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; notice?: string }>;
 }) {
   const { ctx } = await requireSession();
   const { id } = await params;
-  const { error, saved } = await searchParams;
+  const { error, saved, notice } = await searchParams;
   const product = await getProduct(ctx, id);
   if (!product) notFound();
   const movements = await listMovements(ctx, id);
@@ -49,7 +49,13 @@ export default async function ProductPage({
           <h1>{product.name}</h1>
         </div>
         {product.lowStock && <span className="badge badge-warn badge-large">Low stock</span>}
+        {can(ctx, "product.write") && (
+          <Link href={`/products/${product.id}/edit`} className="btn btn-glass">
+            Edit
+          </Link>
+        )}
       </header>
+      {notice && <p className="notice">{notice}</p>}
 
       <div className="tiles">
         <div className="glass panel tile">
