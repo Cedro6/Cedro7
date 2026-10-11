@@ -483,3 +483,37 @@ export async function getOrder(ctx: Ctx, orderId: string): Promise<OrderDetail |
     };
   });
 }
+
+export type PackingSlip = {
+  shipmentNumber: string;
+  shippedAt: Date;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  /** Where the goods go: the customer's shipping address, or their billing address if they have only one. */
+  shipTo: string | null;
+  lines: { sku: string; name: string; qty: number; ordered: number }[];
+};
+
+/** What went out on one shipment, for the slip that goes in the box. No prices. */
+export async function getPackingSlip(ctx: Ctx, shipmentId: string): Promise<PackingSlip | null> {
+  requirePermission(ctx, "sales_order.read");
+  if (!UUID.test(shipmentId)) return null;
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const head = await tx.query<Omit<PackingSlip, "lines">>(
+      `select s.number as "shipmentNumber", s.shipped_at as "shippedAt", o.id as "orderId", o.number as "orderNumber",
+              c.name as "customerName", coalesce(c.shipping_address, c.billing_address) as "shipTo"
+         from shipments s join sales_orders o on o.id = s.order_id join customers c on c.id = o.customer_id
+        where s.id = $1`,
+      [shipmentId],
+    );
+    if (!head.rows[0]) return null;
+    const lines = await tx.query<PackingSlip["lines"][number]>(
+      `select p.sku, p.name, sl.qty::float8 as qty, ol.qty::float8 as ordered
+         from shipment_lines sl join sales_order_lines ol on ol.id = sl.order_line_id join products p on p.id = ol.product_id
+        where sl.shipment_id = $1 order by ol.position`,
+      [shipmentId],
+    );
+    return { ...head.rows[0], lines: lines.rows };
+  });
+}

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
-import { ForbiddenError, getCompanyProfile, getCustomer, listCustomers, setCompanyLogo, updateCompanyProfile, updateCustomer, ValidationError, type Ctx, type Role } from "../src/index";
+import { randomUUID } from "node:crypto";
+import { confirmOrder, createInvoice, createQuote, getInvoice, getOrder, getPackingSlip, listInvoices, listProducts, shipOrder, ForbiddenError, getCompanyProfile, getCustomer, listCustomers, setCompanyLogo, updateCompanyProfile, updateCustomer, ValidationError, type Ctx, type Role } from "../src/index";
 
 let owner: Pool;
 let app: Pool;
@@ -54,5 +55,29 @@ describe("company details", () => {
     expect(await getCustomer(as("owner"), c.id)).toMatchObject({ billingAddress: "1 Main St\nBoston, MA", shippingAddress: "Dock 4, 9 Pier Ave", paymentTerms: "Net 30" });
     await updateCustomer(as("sales"), c.id, { name: c.name, shippingAddress: " " });
     expect(await getCustomer(as("owner"), c.id)).toMatchObject({ billingAddress: "1 Main St\nBoston, MA", shippingAddress: null });
+  });
+
+  it("freezes the addresses on an invoice when it is issued, and prints a packing slip without prices", async () => {
+    const c = (await listCustomers(as("owner")))[1]!;
+    const product = (await listProducts(as("owner"))).find((p) => p.available >= 5)!;
+    await updateCustomer(as("sales"), c.id, { name: c.name, billingAddress: "Old billing", shippingAddress: "Old dock" });
+    const quote = await createQuote(as("sales"), { customerId: c.id, lines: [{ productId: product.id, qty: 3 }] });
+    await confirmOrder(as("sales"), quote.id);
+    await shipOrder(as("warehouse"), quote.id, { idempotencyKey: randomUUID() });
+    const shipped = (await listInvoices(as("owner"), { orderId: quote.id }))[0]!;
+    const manual = await createInvoice(as("owner"), { customerId: c.id, lines: [{ description: "Delivery", qty: 1, unitPrice: 20 }] });
+    await updateCustomer(as("sales"), c.id, { name: c.name, billingAddress: "New billing", shippingAddress: "New dock" });
+    for (const id of [shipped.id, manual.id]) {
+      expect(await getInvoice(as("owner"), id)).toMatchObject({ billToAddress: "Old billing", shipToAddress: "Old dock" });
+    }
+    const later = await createInvoice(as("owner"), { customerId: c.id, lines: [{ description: "Delivery", qty: 1, unitPrice: 20 }] });
+    expect(await getInvoice(as("owner"), later.id)).toMatchObject({ billToAddress: "New billing" });
+
+    const order = (await getOrder(as("owner"), quote.id))!;
+    const slip = (await getPackingSlip(as("warehouse"), order.shipments[0]!.id))!;
+    expect(slip).toMatchObject({ orderNumber: order.number, customerName: c.name, shipTo: "New dock" });
+    expect(slip.lines).toEqual([{ sku: product.sku, name: product.name, qty: 3, ordered: 3 }]);
+    expect(JSON.stringify(slip)).not.toMatch(/price|amount/i);
+    expect(await getPackingSlip(as("warehouse"), randomUUID())).toBeNull();
   });
 });

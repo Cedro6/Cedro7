@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, customerStatement } from "@bos/core";
+import { can, customerStatement, getCompanyProfile, getCustomer } from "@bos/core";
 import { InvoiceBadge } from "../../../../../components/InvoiceBadge";
+import { PaperBrand } from "../../../../../components/PaperBrand";
 import { PrintButton } from "../../../../../components/PrintButton";
 import { formatMoney } from "../../../../../lib/format";
 import { requireSession } from "../../../../../lib/session";
@@ -9,11 +10,12 @@ import { requireSession } from "../../../../../lib/session";
 const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 
 export default async function StatementPage({ params }: { params: Promise<{ id: string }> }) {
-  const { ctx, membership } = await requireSession();
+  const { ctx } = await requireSession();
   if (!can(ctx, "sales_order.read")) notFound();
   const { id } = await params;
   const statement = await customerStatement(ctx, id);
   if (!statement) notFound();
+  const [company, customer] = await Promise.all([getCompanyProfile(ctx), can(ctx, "customer.read") ? getCustomer(ctx, id) : null]);
   return (
     <>
       <header className="page-head no-print">
@@ -27,11 +29,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
       </header>
       <section className="paper">
         <div className="paper-head">
-          <div className="paper-brand">
-            <div>
-              <div className="paper-company">{membership.orgName}</div>
-            </div>
-          </div>
+          <PaperBrand company={company} />
           <div className="paper-title">
             Statement
             <div className="paper-muted">{day.format(new Date())}</div>
@@ -41,6 +39,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
           <div>
             <div className="paper-label">For</div>
             <div className="paper-strong">{statement.customerName}</div>
+            {customer?.billingAddress && <div className="address">{customer.billingAddress}</div>}
           </div>
           <div>
             <div className="paper-label">Owed</div>

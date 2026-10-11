@@ -52,6 +52,9 @@ export type Payment = {
 export type AppliedCredit = { number: string; amount: number; reason: string; appliedAt: Date };
 
 export type InvoiceDetail = InvoiceSummary & {
+  /** The addresses as they were when the invoice was issued. */
+  billToAddress: string | null;
+  shipToAddress: string | null;
   shipmentNumber: string | null;
   depositPercent: number | null;
   taxRate: number;
@@ -588,12 +591,17 @@ export async function getInvoice(ctx: Ctx, invoiceId: string): Promise<InvoiceDe
   requirePermission(ctx, "sales_order.read");
   if (!UUID.test(invoiceId)) return null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const header = await tx.query<Omit<InvoiceDetail, "lines" | "payments" | "credits" | "customerCredit">>(
+    const header = await tx.query<Omit<InvoiceDetail, "lines" | "payments" | "credits" | "customerCredit" | "billToAddress" | "shipToAddress">>(
       `${SUMMARY_SQL} where i.id = $1`,
       [invoiceId],
     );
-    const invoice = header.rows[0];
-    if (!invoice) return null;
+    const found = header.rows[0];
+    if (!found) return null;
+    const frozen = await tx.query<{ billToAddress: string | null; shipToAddress: string | null }>(
+      `select bill_to_address as "billToAddress", ship_to_address as "shipToAddress" from invoices where id = $1`,
+      [invoiceId],
+    );
+    const invoice = { ...found, ...frozen.rows[0]! };
     const lines = await tx.query<InvoiceLine>(
       `select l.description, p.sku, l.qty::float8 as qty, l.unit_price::float8 as "unitPrice",
               l.list_price::float8 as "listPrice", l.discount_pct::float8 as "discountPercent", l.amount::float8 as amount
