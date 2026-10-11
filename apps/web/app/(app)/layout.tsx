@@ -21,6 +21,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (can(ctx, "sales_order.read")) items.push({ href: "/sales", label: "Sales", count: counts.readyToShip ?? 0 });
   if (can(ctx, "sales_order.read")) items.push({ href: "/invoices", label: "Invoices", count: counts.overdueInvoices ?? 0 });
   if (can(ctx, "purchase_order.read")) items.push({ href: "/purchasing", label: "Purchasing" });
+  // Warehouse appears when at least one of its jobs is switched on and this person can do it.
+  const warehouseJobs =
+    stock &&
+    ((featureOn(ctx.features, "picking") && can(ctx, "sales_order.ship")) ||
+      (featureOn(ctx.features, "putaway") && can(ctx, "purchase_order.receive")) ||
+      (featureOn(ctx.features, "counts") && can(ctx, "stock.adjust")));
+  if (warehouseJobs) items.push({ href: "/warehouse", label: "Warehouse" });
   if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
   if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
   const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);

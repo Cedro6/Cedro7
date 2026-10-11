@@ -26,6 +26,19 @@ export {
   type StockMismatch,
 } from "./inventory/ledger";
 export {
+  countCategories,
+  countSheet,
+  markPutAway,
+  pickQueue,
+  putawayList,
+  submitCount,
+  type CountLine,
+  type CountResult,
+  type PickLine,
+  type PickOrder,
+  type PutawayLine,
+} from "./inventory/warehouse";
+export {
   createInvoice,
   customerStatement,
   getInvoice,

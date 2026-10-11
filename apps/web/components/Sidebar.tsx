@@ -12,6 +12,7 @@ import {
   PurchasingIcon,
   ReportsIcon,
   SalesIcon,
+  WarehouseIcon,
 } from "./icons";
 
 const ICONS: Record<string, ReactNode> = {
@@ -21,6 +22,7 @@ const ICONS: Record<string, ReactNode> = {
   "/sales": <SalesIcon />,
   "/invoices": <InvoicesIcon />,
   "/purchasing": <PurchasingIcon />,
+  "/warehouse": <WarehouseIcon />,
   "/calendar": <CalendarIcon />,
   "/reports": <ReportsIcon />,
 };
