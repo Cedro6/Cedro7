@@ -53,8 +53,8 @@ describe("assistant", () => {
     expect(names(as("warehouse"))).not.toContain("find_customers");
     expect(names(as("owner", { purchasing: false, reports: false }))).not.toEqual(expect.arrayContaining(["list_purchase_orders", "sales_report"]));
     const model = scripted([]);
-    await ask(as("warehouse"), { ...who, question: "hi" }, model.call);
-    expect(model.requests[0]!.tools.map((t) => t.name)).toEqual(names(as("warehouse")));
+    await ask(as("viewer"), { ...who, question: "hi" }, model.call);
+    expect(model.requests[0]!.tools.map((t) => t.name)).toEqual(names(as("viewer")));
   });
 
   it("refuses a lookup the person is not offered, even if the model asks for it", async () => {

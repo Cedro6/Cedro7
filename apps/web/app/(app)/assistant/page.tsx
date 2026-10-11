@@ -16,6 +16,7 @@ export default async function AssistantPage() {
     featureOn(ctx.features, "reports") && can(ctx, "report.view") ? "How were sales in the last 30 days?" : null,
     can(ctx, "sales_order.write") ? "Make a quote for Bayside Hardware: 20 pairs of work gloves" : null,
     featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.write") ? "Draft a purchase order for what is running low" : null,
+    can(ctx, "sales_order.ship") && !can(ctx, "sales_order.write") ? "Ship the oldest order that is ready" : null,
   ].filter((q): q is string => q !== null);
   return (
     <>
@@ -33,7 +34,7 @@ export default async function AssistantPage() {
       )}
       <AssistantChat suggestions={suggestions} disabled={!on || left === 0} />
       <p className="muted footnote">
-        The assistant reads your records to answer and can prepare changes for you. It sees and does only what your role allows, and nothing changes until you press Confirm. It cannot send email, take payments or delete anything.
+        The assistant reads your records to answer and can prepare changes for you. It sees and does only what your role allows, and nothing changes until you press Confirm. It cannot send email or delete records.
       </p>
     </>
   );
