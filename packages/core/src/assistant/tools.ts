@@ -6,11 +6,11 @@ import { featureOn } from "../platform/features";
 import { attention } from "../platform/home";
 import { can } from "../platform/permissions";
 import { isReportPeriod, report } from "../platform/reports";
-import { listPurchaseOrders } from "../purchasing/orders";
+import { listPurchaseOrders, listSuppliers } from "../purchasing/orders";
 import { listOrders } from "../sales/orders";
 
 /**
- * What the assistant may look up. Every tool only reads, and each one goes through the same
+ * What the assistant may look up. Every tool here only reads (changes are prepared separately, in actions.ts), and each one goes through the same
  * functions the screens use, so the person's role and the company's feature switches apply
  * exactly as they do on screen. A tool the person could not use is not offered at all.
  */
@@ -72,6 +72,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
       const rows = await listProducts(ctx, { search: text(input.search), lowStockOnly: tracked && input.low_stock_only === true });
       return cap(
         rows.map((p) => ({
+          id: p.id,
           sku: p.sku,
           name: p.name,
           price: p.price,
@@ -90,7 +91,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     run: async (ctx, input) => {
       const status = ["open", "quote", "shipped", "cancelled"].includes(String(input.status)) ? (input.status as "open" | "quote" | "shipped" | "cancelled") : undefined;
       const rows = await listOrders(ctx, { status, customerId: text(input.customer_id) || undefined });
-      return cap(rows.map((o) => ({ number: o.number, customer: o.customerName, status: o.status, total: o.total, created: day(o.createdAt), link: `/sales/${o.id}` })));
+      return cap(rows.map((o) => ({ id: o.id, number: o.number, customer: o.customerName, status: o.status, total: o.total, created: day(o.createdAt), link: `/sales/${o.id}` })));
     },
   },
   {
@@ -111,6 +112,13 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     allowed: (ctx) => featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.read"),
     run: async (ctx) =>
       cap((await listPurchaseOrders(ctx)).map((po) => ({ number: po.number, supplier: po.supplierName, status: po.status, total: po.total, expected: po.expectedOn ?? null, link: `/purchasing/${po.id}` }))),
+  },
+  {
+    name: "find_suppliers",
+    description: "The company's suppliers, with id, payment terms and lead time in days.",
+    input_schema: none,
+    allowed: (ctx) => featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.read"),
+    run: async (ctx) => cap((await listSuppliers(ctx)).map((s) => ({ id: s.id, name: s.name, terms: s.paymentTerms, leadTimeDays: s.leadTimeDays }))),
   },
   {
     name: "sales_report",

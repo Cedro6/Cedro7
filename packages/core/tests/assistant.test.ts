@@ -44,7 +44,7 @@ describe("assistant", () => {
     expect(answer.lookups).toEqual(["find_customers"]);
     expect(answer.text).toContain("Bayside Hardware");
     expect(answer.text).toContain("/customers/");
-    expect(model.requests[0]!.system).toContain("You can only read");
+    expect(model.requests[0]!.system).toContain("You never change anything yourself");
   });
 
   it("offers only the lookups the role and features allow", async () => {
