@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, customerStatement, featureOn, getCustomer, listOrders, listPriceLists } from "@bos/core";
+import { can, customerStatement, featureOn, getCustomer, listOrders, listPriceLists, listReminders, listTeam } from "@bos/core";
+import { ReminderList } from "../../../../components/ReminderList";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import { Avatar } from "../../../../components/Avatar";
 import { formatMoney } from "../../../../lib/format";
@@ -23,6 +24,9 @@ export default async function CustomerPage({
   const orders = can(ctx, "sales_order.read") ? await listOrders(ctx, { customerId: id }) : [];
   const priceLists = can(ctx, "sales_order.read") ? await listPriceLists(ctx) : [];
   const tracked = featureOn(ctx.features, "stock");
+  const calendar = featureOn(ctx.features, "calendar");
+  const [reminders, team] = calendar ? await Promise.all([listReminders(ctx, { customerId: id }), listTeam(ctx)]) : [[], []];
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
   const statement = can(ctx, "sales_order.read") ? await customerStatement(ctx, id) : null;
   const since = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
     customer.createdAt,
@@ -140,6 +144,12 @@ export default async function CustomerPage({
           </div>
         )}
       </section>
+      {calendar && (
+        <section className="glass panel">
+          <h2 className="title">Reminders</h2>
+          <ReminderList reminders={reminders} team={team} back={`/customers/${customer.id}`} defaultDate={today} customerId={customer.id} me={ctx.userId} showCustomer={false} empty="No reminders for this customer." />
+        </section>
+      )}
       <section className="glass panel">
         <h2 className="title">Orders</h2>
         {orders.length === 0 ? (

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
-  actionsFor, ask, confirmProposal, dismissProposal, ForbiddenError, getCustomer, getOrder, getProduct, listCustomers, listInvoices, listOrders, listProducts, listPurchaseOrders, reconcileStock,
+  actionsFor, ask, confirmProposal, dismissProposal, ForbiddenError, getCustomer, getOrder, getProduct, listCustomers, listInvoices, listOrders, listProducts, listPurchaseOrders, listReminders, reconcileStock,
   listSuppliers, StateError, type Ctx, type ModelCall, type ModelRequest, type Role,
 } from "../src/index";
 
@@ -80,15 +80,15 @@ describe("assistant actions", () => {
 
   it("offers each role only the changes it may make, and ignores one it may not", async () => {
     const names = (ctx: Ctx) => actionsFor(ctx).map((a) => a.name);
-    expect(names(as("owner"))).toEqual(["propose_quote", "propose_confirm_order", "propose_customer", "propose_contact", "propose_purchase_order", "propose_ship_order", "propose_cancel_order", "propose_payment", "propose_stock_adjustment"]);
+    expect(names(as("owner"))).toEqual(["propose_quote", "propose_confirm_order", "propose_customer", "propose_contact", "propose_purchase_order", "propose_ship_order", "propose_cancel_order", "propose_payment", "propose_stock_adjustment", "propose_reminder"]);
     expect(names(as("sales"))).not.toContain("propose_purchase_order");
-    expect(names(as("warehouse"))).toEqual(["propose_ship_order", "propose_stock_adjustment"]);
+    expect(names(as("warehouse"))).toEqual(["propose_ship_order", "propose_stock_adjustment", "propose_reminder"]);
     expect(names(as("owner", { purchasing: false }))).not.toContain("propose_purchase_order");
     const before = await counts();
     const model = scripted([{ name: "propose_customer", input: { name: "Sneaky Co" } }]);
     const answer = await ask(as("warehouse"), { ...who, question: "add a customer" }, model.call);
     expect(answer.proposals).toHaveLength(0);
-    expect((await ask(as("viewer"), { ...who, question: "hi" }, model.call)).proposals).toHaveLength(0);
+    expect((await ask(as("viewer", { calendar: false }), { ...who, question: "hi" }, model.call)).proposals).toHaveLength(0);
     expect(model.requests.at(-1)!.system).toContain("You can only read");
     expect(await counts()).toEqual(before);
   });
@@ -175,6 +175,18 @@ describe("assistant actions", () => {
     expect(fixed.summary).toContain(`from ${before} to ${before - 2} on hand`);
     expect((await getProduct(as("owner"), product.id))!.onHand).toBe(before - 2);
     expect(await reconcileStock(as("owner"))).toEqual([]);
+  });
+
+  it("adds a reminder for a real date and person, and refuses an impossible date", async () => {
+    const customer = (await listCustomers(as("owner")))[0]!;
+    const good = await ask(as("sales"), { ...who, question: "x" }, scripted([{ name: "propose_reminder", input: { title: "Call about renewal", date: "2026-11-03", customer_id: customer.id } }]).call);
+    expect(good.proposals[0]!.summary).toBe(`Add a reminder for you on Tuesday, November 3, 2026: "Call about renewal", about ${customer.name}.`);
+    expect(await listReminders(as("owner"), { customerId: customer.id })).toHaveLength(0);
+    const done = await confirmProposal(as("sales"), good.proposals[0]!.id);
+    expect(done.link).toBe("/calendar?month=2026-11&day=2026-11-03");
+    expect((await listReminders(as("owner"), { customerId: customer.id }))[0]).toMatchObject({ title: "Call about renewal", dueOn: "2026-11-03", assignedTo: userId });
+    const bad = await ask(as("sales"), { ...who, question: "x" }, scripted([{ name: "propose_reminder", input: { title: "x", date: "2026-02-30" } }]).call);
+    expect(bad.proposals).toHaveLength(0);
   });
 
   it("cancels a quote on confirm and refuses to cancel a shipped order", async () => {

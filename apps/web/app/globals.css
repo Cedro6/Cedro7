@@ -2073,3 +2073,17 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .change-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
 .change-summary { margin: 4px 0 10px; font-weight: 500; max-width: 70ch; }
 .change .notice, .change .error { margin: 0 0 10px; }
+
+/* Reminders */
+.tick { width: 30px; height: 30px; border-radius: 999px; border: 2px solid rgba(var(--w), 0.5); background: transparent; color: #062313; font: inherit; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.tick[aria-pressed="true"] { background: #7cf0b0; border-color: #7cf0b0; }
+.row.is-done .row-title, .cal-chip.is-done span:last-child { text-decoration: line-through; opacity: 0.6; }
+.reminder-add { align-items: flex-end; margin-top: 14px; }
+.reminder-add .grow { flex: 2 1 200px; }
+.cal-legend .dot { display: inline-block; vertical-align: middle; }
+.cal-cell { text-decoration: none; }
+@media (max-width: 640px) {
+  .cal-cell { min-height: 58px; padding: 5px; }
+  .cal-chip span:last-child, .cal-more { display: none; }
+  .cal-entries { flex-direction: row; flex-wrap: wrap; }
+}

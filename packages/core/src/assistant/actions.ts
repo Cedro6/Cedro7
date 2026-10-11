@@ -3,6 +3,7 @@ import { withTenant } from "@bos/db/runtime";
 import { getInvoice, PAYMENT_METHODS, recordPayment } from "../billing/invoices";
 import { getProduct } from "../catalog/products";
 import { createCustomer, getCustomer, saveContact } from "../crm/customers";
+import { createReminder, listTeam } from "../crm/reminders";
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
 import { featureOn } from "../platform/features";
@@ -290,6 +291,37 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       }
       const product = await getProduct(ctx, id);
       return { message: `Stock corrected.${product ? ` ${product.name} now has ${qtyText(product.onHand)} on hand.` : ""}`, link: `/products/${id}` };
+    },
+  },
+  {
+    name: "propose_reminder",
+    description: "Prepare a reminder on the calendar for a date (YYYY-MM-DD), optionally about a customer and for a named team member (ids from list_reminders), for the person to confirm. Work out the date from today's date.",
+    input_schema: {
+      type: "object",
+      properties: { title: { type: "string" }, date: { type: "string", description: "YYYY-MM-DD" }, customer_id: { type: "string" }, for_user_id: { type: "string" } },
+      required: ["title", "date"],
+    },
+    allowed: (ctx) => featureOn(ctx.features, "calendar"),
+    describe: async (ctx, input) => {
+      const title = str(input.title);
+      const dueOn = str(input.date, 10);
+      if (!title) throw bad("Say what the reminder is for.");
+      const when = new Date(`${dueOn}T12:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueOn) || Number.isNaN(when.getTime()) || when.toISOString().slice(0, 10) !== dueOn) throw bad("I need a real date for the reminder.");
+      const customer = input.customer_id && can(ctx, "customer.read") ? await getCustomer(ctx, str(input.customer_id, 36)) : null;
+      if (input.customer_id && !customer) throw bad("I could not find that customer.");
+      const team = await listTeam(ctx);
+      const person = input.for_user_id ? team.find((m) => m.id === str(input.for_user_id, 36)) : team.find((m) => m.id === ctx.userId);
+      if (!person) throw bad("I could not find that person on the team.");
+      const date = when.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+      return {
+        payload: { title, dueOn, ...(customer ? { customerId: customer.id } : {}), assignedTo: person.id },
+        summary: `Add a reminder for ${person.id === ctx.userId ? "you" : person.name} on ${date}: "${title}"${customer ? `, about ${customer.name}` : ""}.`,
+      };
+    },
+    apply: async (ctx, payload) => {
+      await createReminder(ctx, payload as Parameters<typeof createReminder>[1]);
+      return { message: "Reminder added.", link: `/calendar?month=${String(payload.dueOn).slice(0, 7)}&day=${String(payload.dueOn)}` };
     },
   },
 ];
