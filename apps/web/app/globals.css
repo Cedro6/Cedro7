@@ -2034,3 +2034,18 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 }
 .count-input { text-align: right; }
 .count-filter { align-items: flex-end; }
+
+/* Reports: labelled horizontal bars. The number is always printed beside the bar. */
+.rep-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.rep-row { display: grid; grid-template-columns: minmax(110px, 1.2fr) minmax(60px, 2fr) minmax(0, 1.6fr); align-items: center; gap: 12px; }
+.rep-label { min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.rep-track { height: 10px; border-radius: 999px; background: rgba(var(--w), 0.08); overflow: hidden; }
+.rep-fill { height: 100%; border-radius: 999px; }
+.rep-accent { background: #a78bfa; }
+.rep-warn { background: var(--warn); }
+.rep-bad { background: var(--bad); }
+.rep-value { min-width: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 14px; }
+@media (max-width: 640px) {
+  .rep-row { grid-template-columns: 1fr; gap: 4px; }
+  .rep-track { order: 3; }
+}
