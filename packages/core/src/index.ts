@@ -95,6 +95,7 @@ export {
 } from "./platform/features";
 export { getSettings, setBusinessType, setFeature, type Settings } from "./platform/settings";
 export { overview, type Overview } from "./platform/overview";
+export { isReportPeriod, report, REPORT_PERIODS, type Report, type ReportPeriod } from "./platform/reports";
 export { attention, salesTrend, type AttentionItem, type SalesTrend } from "./platform/home";
 export {
   can,
@@ -148,3 +149,14 @@ export {
   type Supplier,
 } from "./purchasing/orders";
 export { getSupplier, listArchivedSuppliers, setSupplierArchived, updateSupplier } from "./purchasing/orders";
+export {
+  ask,
+  AssistantLimitError,
+  assistantUsage,
+  type AssistantAnswer,
+  type AssistantUsage,
+  type ModelCall,
+  type ModelRequest,
+  type ModelResponse,
+} from "./assistant/ask";
+export { ASSISTANT_TOOLS, toolsFor } from "./assistant/tools";
