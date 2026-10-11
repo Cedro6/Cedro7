@@ -45,6 +45,7 @@ describe("migrations", () => {
       "0009_invoices.sql",
       "0010_contact_delete.sql",
       "0011_putaway.sql",
+      "0012_assistant_usage.sql",
     ]);
   });
 

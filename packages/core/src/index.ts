@@ -149,3 +149,14 @@ export {
   type Supplier,
 } from "./purchasing/orders";
 export { getSupplier, listArchivedSuppliers, setSupplierArchived, updateSupplier } from "./purchasing/orders";
+export {
+  ask,
+  AssistantLimitError,
+  assistantUsage,
+  type AssistantAnswer,
+  type AssistantUsage,
+  type ModelCall,
+  type ModelRequest,
+  type ModelResponse,
+} from "./assistant/ask";
+export { ASSISTANT_TOOLS, toolsFor } from "./assistant/tools";

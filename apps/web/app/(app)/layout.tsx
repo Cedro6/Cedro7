@@ -30,6 +30,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (warehouseJobs) items.push({ href: "/warehouse", label: "Warehouse" });
   if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
   if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
+  items.push({ href: "/assistant", label: "Assistant" });
   const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);
   return (
     <div className="shell">

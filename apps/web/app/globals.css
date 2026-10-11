@@ -2049,3 +2049,15 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
   .rep-row { grid-template-columns: 1fr; gap: 4px; }
   .rep-track { order: 3; }
 }
+
+/* Assistant */
+.assistant-answer p { margin: 10px 0 0; max-width: 70ch; line-height: 1.55; }
+.assistant-line { display: block; }
+.assistant-chips, .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.chip {
+  min-height: 40px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: rgba(var(--w), 0.05); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; text-align: left;
+}
+.chip:hover:not(:disabled) { background: rgba(var(--w), 0.1); }
+.chip:disabled { opacity: 0.5; cursor: default; }
+.field textarea { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(var(--k), 0.25); color: var(--ink); font: inherit; resize: vertical; }
