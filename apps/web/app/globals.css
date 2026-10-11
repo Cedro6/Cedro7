@@ -2061,3 +2061,15 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .chip:hover:not(:disabled) { background: rgba(var(--w), 0.1); }
 .chip:disabled { opacity: 0.5; cursor: default; }
 .field textarea { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(var(--k), 0.25); color: var(--ink); font: inherit; resize: vertical; }
+
+/* Assistant conversation and changes waiting for a Confirm. */
+.assistant-thread { display: flex; flex-direction: column; gap: var(--gap); }
+.assistant-thread:empty { display: none; }
+.assistant-question { font-weight: 600; }
+.assistant-wait { margin: 0; padding: 0 6px; }
+.change { margin-top: 14px; padding: 14px 16px; border: 1px solid rgba(124, 77, 255, 0.55); border-radius: 16px; background: rgba(124, 77, 255, 0.1); }
+.change-done { border-color: rgba(52, 209, 122, 0.45); background: rgba(52, 209, 122, 0.08); }
+.change-dismissed { border-color: var(--line); background: transparent; opacity: 0.7; }
+.change-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.change-summary { margin: 4px 0 10px; font-weight: 500; max-width: 70ch; }
+.change .notice, .change .error { margin: 0 0 10px; }
