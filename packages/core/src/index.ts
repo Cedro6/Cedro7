@@ -82,6 +82,7 @@ export {
 } from "./platform/features";
 export { getSettings, setBusinessType, setFeature, type Settings } from "./platform/settings";
 export { overview, type Overview } from "./platform/overview";
+export { isReportPeriod, report, REPORT_PERIODS, type Report, type ReportPeriod } from "./platform/reports";
 export { attention, salesTrend, type AttentionItem, type SalesTrend } from "./platform/home";
 export {
   can,
