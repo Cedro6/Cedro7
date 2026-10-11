@@ -2087,3 +2087,11 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
   .cal-chip span:last-child, .cal-more { display: none; }
   .cal-entries { flex-direction: row; flex-wrap: wrap; }
 }
+
+/* Company details, logo and addresses */
+.address { white-space: pre-line; overflow-wrap: anywhere; }
+.logo-preview { max-width: 220px; max-height: 110px; object-fit: contain; padding: 12px; border-radius: 14px; background: #fff; }
+.paper-logo { max-width: 150px; max-height: 72px; object-fit: contain; flex: none; }
+.paper-footer { border-top: 1px solid #d9dccf; padding-top: 14px; }
+.company-split { margin-top: 14px; align-items: flex-start; }
+.field input[type="file"] { padding: 10px; }

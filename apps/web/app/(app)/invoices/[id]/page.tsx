@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, getInvoice, PAYMENT_METHODS } from "@bos/core";
+import { can, getInvoice, PAYMENT_METHODS, getCompanyProfile, getCustomer } from "@bos/core";
 import { InvoiceBadge } from "../../../../components/InvoiceBadge";
 import { PrintButton } from "../../../../components/PrintButton";
 import { formatMoney, formatQty } from "../../../../lib/format";
@@ -24,12 +24,13 @@ export default async function InvoicePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
-  const { ctx, membership } = await requireSession();
+  const { ctx } = await requireSession();
   if (!can(ctx, "sales_order.read")) notFound();
   const { id } = await params;
   const { error, notice } = await searchParams;
   const invoice = await getInvoice(ctx, id);
   if (!invoice) notFound();
+  const [company, billTo] = await Promise.all([getCompanyProfile(ctx), can(ctx, "customer.read") ? getCustomer(ctx, invoice.customerId) : null]);
   const manage = can(ctx, "invoice.write");
   const owing = invoice.balance > 0;
   const voidable = manage && invoice.kind === "manual" && invoice.state !== "void" && invoice.paid === 0 && invoice.credited === 0;
@@ -74,8 +75,12 @@ export default async function InvoicePage({
           <section className="paper">
             <div className="paper-head">
               <div className="paper-brand">
+                {company.logo && <img src={company.logo} alt="" className="paper-logo" />}
                 <div>
-                  <div className="paper-company">{membership.orgName}</div>
+                  <div className="paper-company">{company.name}</div>
+                  {company.address && <div className="paper-muted address">{company.address}</div>}
+                  {(company.phone || company.email) && <div className="paper-muted">{[company.phone, company.email].filter(Boolean).join(" · ")}</div>}
+                  {company.taxNumber && <div className="paper-muted">{company.taxNumber}</div>}
                 </div>
               </div>
               <div className="paper-title">
@@ -87,7 +92,14 @@ export default async function InvoicePage({
               <div>
                 <div className="paper-label">Bill to</div>
                 <div className="paper-strong">{invoice.customerName}</div>
+                {billTo?.billingAddress && <div className="address">{billTo.billingAddress}</div>}
               </div>
+              {billTo?.shippingAddress && invoice.kind !== "deposit" && (
+                <div>
+                  <div className="paper-label">Ship to</div>
+                  <div className="address">{billTo.shippingAddress}</div>
+                </div>
+              )}
               <div>
                 <div className="paper-label">Issued</div>
                 <div>{day.format(invoice.issuedAt)}</div>
@@ -179,6 +191,7 @@ export default async function InvoicePage({
               )}
             </div>
             {invoice.notes && <p className="paper-note">{invoice.notes}</p>}
+            {company.invoiceFooter && <p className="paper-note paper-footer address">{company.invoiceFooter}</p>}
             {invoice.state === "void" ? (
               <div className="paper-stamp paper-stamp-void">Void</div>
             ) : invoice.state === "paid" ? (

@@ -23,7 +23,7 @@ export type Contact = {
   isPrimary: boolean;
 };
 
-export type CustomerDetail = CustomerSummary & { createdAt: Date; contacts: Contact[] };
+export type CustomerDetail = CustomerSummary & { createdAt: Date; contacts: Contact[]; billingAddress: string | null; shippingAddress: string | null };
 
 const SUMMARY_SQL = `
   select c.id, c.name, c.payment_terms as "paymentTerms", c.created_at as "createdAt",
@@ -54,7 +54,11 @@ export async function getCustomer(ctx: Ctx, id: string): Promise<CustomerDetail 
   requirePermission(ctx, "customer.read");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const customer = await tx.query<CustomerSummary & { createdAt: Date }>(`${SUMMARY_SQL} where c.id = $1`, [id]);
+    const customer = await tx.query<CustomerSummary & { createdAt: Date; billingAddress: string | null; shippingAddress: string | null }>(
+      `select q.*, a.billing_address as "billingAddress", a.shipping_address as "shippingAddress"
+         from (${SUMMARY_SQL} where c.id = $1) q join customers a on a.id = q.id`,
+      [id],
+    );
     const row = customer.rows[0];
     if (!row) return null;
     const contacts = await tx.query<Contact>(
@@ -122,7 +126,11 @@ export async function customerStatus(ctx: Ctx, id: string): Promise<"active" | "
   });
 }
 
-export async function updateCustomer(ctx: Ctx, id: string, input: { name: string; paymentTerms?: string }): Promise<void> {
+export async function updateCustomer(
+  ctx: Ctx,
+  id: string,
+  input: { name: string; paymentTerms?: string; billingAddress?: string; shippingAddress?: string },
+): Promise<void> {
   requirePermission(ctx, "customer.write");
   const name = input.name.trim();
   const paymentTerms = input.paymentTerms?.trim() || null;
@@ -131,7 +139,18 @@ export async function updateCustomer(ctx: Ctx, id: string, input: { name: string
   if (paymentTerms && paymentTerms.length > 50) throw new ValidationError("paymentTerms", "Keep payment terms under 50 characters.");
   if (!UUID.test(id)) throw new ValidationError("id", "Customer not found.");
   await withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const done = await tx.query("update customers set name = $2, payment_terms = $3, updated_at = now() where id = $1", [id, name, paymentTerms]);
+    // An address left out of the request is kept as it is; one sent blank is cleared.
+    const address = (value: string | undefined) => (value === undefined ? undefined : value.trim().slice(0, 500) || null);
+    const billing = address(input.billingAddress);
+    const shipping = address(input.shippingAddress);
+    const done = await tx.query(
+      `update customers set name = $2, payment_terms = $3,
+              billing_address = case when $4 then $5 else billing_address end,
+              shipping_address = case when $6 then $7 else shipping_address end,
+              updated_at = now()
+        where id = $1`,
+      [id, name, paymentTerms, billing !== undefined, billing ?? null, shipping !== undefined, shipping ?? null],
+    );
     if (done.rowCount === 0) throw new ValidationError("id", "Customer not found.");
     await audit(tx, ctx, "customer.updated", "customer", id, { name, paymentTerms });
   });
