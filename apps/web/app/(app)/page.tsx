@@ -1,8 +1,30 @@
 import Link from "next/link";
-import { can, overview } from "@bos/core";
-import { SparkIcon } from "../../components/icons";
-import { sampleBriefing, sampleSales } from "../../lib/sample";
+import { attention, can, overview, salesTrend } from "@bos/core";
 import { requireSession } from "../../lib/session";
+
+const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const shortDay = (iso: string) =>
+  new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/** A smooth line through the daily totals, scaled into the chart's 660 by 180 drawing area. */
+function chartPoints(days: { date: string; total: number }[]) {
+  const max = Math.max(...days.map((d) => d.total), 1);
+  return days.map((d, i) => ({
+    x: 30 + (i * 660) / Math.max(days.length - 1, 1),
+    y: 220 - (d.total / max) * 170,
+    ...d,
+  }));
+}
+function chartPath(points: { x: number; y: number }[]) {
+  return points
+    .map((p, i) => {
+      if (i === 0) return `M${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+      const prev = points[i - 1]!;
+      const mid = ((prev.x + p.x) / 2).toFixed(1);
+      return `C${mid},${prev.y.toFixed(1)} ${mid},${p.y.toFixed(1)} ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+    })
+    .join(" ");
+}
 
 function greeting(hour: number): string {
   if (hour < 12) return "Good morning";
@@ -12,7 +34,11 @@ function greeting(hour: number): string {
 
 export default async function HomePage() {
   const { ctx, membership } = await requireSession();
-  const counts = await overview(ctx);
+  const [counts, trend, needs] = await Promise.all([overview(ctx), salesTrend(ctx), attention(ctx)]);
+  const points = trend ? chartPoints(trend.days) : [];
+  const path = chartPath(points);
+  const peak = points.reduce<(typeof points)[number] | null>((best, p) => (p.total > 0 && (!best || p.total >= best.total) ? p : best), null);
+  const change = trend && trend.lastWeek > 0 ? Math.round(((trend.thisWeek - trend.lastWeek) / trend.lastWeek) * 100) : null;
   const now = new Date();
   const zone = "America/New_York";
   const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: zone }).format(now));
@@ -67,75 +93,71 @@ export default async function HomePage() {
       </div>
 
       <div className="split">
-        <section className="glass panel grow-3">
-          <div className="panel-head">
-            <div>
-              <h2 className="label">Sales this week</h2>
-              <div className="numeral-row">
-                <span className="numeral numeral-xl">{sampleSales.total}</span>
-                <span className="badge badge-ok">{sampleSales.change}</span>
+        {trend && (
+          <section className="glass panel grow-3">
+            <div className="panel-head">
+              <div>
+                <h2 className="label">Sales, last 7 days</h2>
+                <div className="numeral-row">
+                  <span className="numeral numeral-xl">{usd(trend.thisWeek)}</span>
+                  {change !== null && <span className={`badge ${change >= 0 ? "badge-ok" : "badge-warn"}`}>{change >= 0 ? "+" : ""}{change}%</span>}
+                </div>
+                <div className="muted">
+                  {trend.lastWeek > 0 ? `${usd(trend.lastWeek)} in the 7 days before` : "Orders confirmed, before tax"}
+                </div>
               </div>
-              <div className="muted">{sampleSales.note}</div>
             </div>
-            <span className="badge badge-sample">Sample data · real chart arrives with reports</span>
-          </div>
-          <svg viewBox="0 0 720 262" role="img" aria-label="Sample chart of daily sales over three weeks" className="chart">
-            <defs>
-              <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#A78BFA" stopOpacity="0.55" />
-                <stop offset="1" stopColor="#A78BFA" stopOpacity="0" />
-              </linearGradient>
-              <linearGradient id="chart-line" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0" stopColor="#7C4DFF" />
-                <stop offset="0.55" stopColor="#A78BFA" />
-                <stop offset="1" stopColor="#FFFFFF" />
-              </linearGradient>
-              <filter id="chart-glow" x="-10%" y="-40%" width="120%" height="180%">
-                <feGaussianBlur stdDeviation="9" />
-              </filter>
-            </defs>
-            <path d="M30 60H690M30 140H690M30 220H690" stroke="#FFFFFF" strokeOpacity="0.1" />
-            <path d={`${sampleSales.path} L690,232 L30,232 Z`} fill="url(#chart-fill)" />
-            <path d={sampleSales.path} fill="none" stroke="url(#chart-line)" strokeWidth="8" strokeLinecap="round" opacity="0.7" filter="url(#chart-glow)" />
-            <path d={sampleSales.path} fill="none" stroke="url(#chart-line)" strokeWidth="3.5" strokeLinecap="round" />
-            <circle cx="690" cy="51" r="13" fill="#FFFFFF" fillOpacity="0.28" />
-            <circle cx="690" cy="51" r="6" fill="#FFFFFF" />
-            <text x="676" y="28" textAnchor="end" fill="#FFFFFF" fontSize="15" fontWeight="600">
-              {sampleSales.peak}
-            </text>
-            {sampleSales.labels.map((label, index) => (
-              <text key={label} x={30 + index * 300} y="256" fill="#C9D0DB" fontSize="13">
-                {label}
-              </text>
-            ))}
-          </svg>
-        </section>
+            {peak ? (
+              <svg viewBox="0 0 720 262" role="img" aria-label={`Daily sales over the last 21 days. Highest day ${usd(peak.total)} on ${shortDay(peak.date)}.`} className="chart">
+                <defs>
+                  <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#A78BFA" stopOpacity="0.55" />
+                    <stop offset="1" stopColor="#A78BFA" stopOpacity="0" />
+                  </linearGradient>
+                  <linearGradient id="chart-line" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0" stopColor="#7C4DFF" />
+                    <stop offset="1" stopColor="#A78BFA" />
+                  </linearGradient>
+                </defs>
+                <path d="M30 50H690M30 135H690M30 220H690" stroke="currentColor" strokeOpacity="0.12" />
+                <path d={`${path} L690,220 L30,220 Z`} fill="url(#chart-fill)" />
+                <path d={path} fill="none" stroke="url(#chart-line)" strokeWidth="3.5" strokeLinecap="round" />
+                <circle cx={peak.x} cy={peak.y} r="6" fill="#A78BFA" />
+                <text x={Math.min(Math.max(peak.x, 80), 640)} y={Math.max(peak.y - 14, 16)} textAnchor="middle" fill="currentColor" fontSize="15" fontWeight="600">
+                  {usd(peak.total)} · {shortDay(peak.date)}
+                </text>
+                {[0, 10, 20].map((i) => (
+                  <text key={i} x={points[i]!.x} y="250" textAnchor={i === 0 ? "start" : i === 20 ? "end" : "middle"} fill="currentColor" fillOpacity="0.7" fontSize="13">
+                    {shortDay(points[i]!.date)}
+                  </text>
+                ))}
+              </svg>
+            ) : (
+              <p className="muted">No orders confirmed in the last three weeks. Confirm an order and it shows up here.</p>
+            )}
+          </section>
+        )}
 
         <section className="glass panel grow-2">
-          <div className="briefing-head">
-            <span className="spark" aria-hidden="true">
-              <SparkIcon />
-            </span>
-            <div>
-              <h2 className="title">Your briefing</h2>
-              <div className="muted">The assistant arrives in phase 2</div>
-            </div>
-          </div>
-          <span className="badge badge-sample">Sample data</span>
-          <div className="rows">
-            {sampleBriefing.map((item) => (
-              <div className="row" key={item.title}>
-                <span className={`dot dot-${item.tone}`} aria-hidden="true" />
-                <div className="row-text">
-                  <div className="row-title">{item.title}</div>
-                  <div className="muted">{item.detail}</div>
+          <h2 className="title">Needs attention</h2>
+          {needs.length === 0 ? (
+            <p className="muted">Nothing needs you right now.</p>
+          ) : (
+            <div className="rows">
+              {needs.map((item) => (
+                <div className="row" key={item.kind}>
+                  <span className={`dot dot-${item.tone}`} aria-hidden="true" />
+                  <div className="row-text">
+                    <div className="row-title">{item.title}</div>
+                    <div className="muted">{item.detail}</div>
+                  </div>
+                  <Link href={item.href} className="btn btn-glass btn-small">
+                    {item.action}
+                  </Link>
                 </div>
-                <button type="button" className="btn btn-glass btn-small" disabled>
-                  {item.action}
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </>
