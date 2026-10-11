@@ -13,7 +13,7 @@ export type SalesTrend = {
 };
 
 export type AttentionItem = {
-  kind: "low_stock" | "overdue_invoice" | "ready_to_ship" | "late_purchase_order" | "quiet_customer";
+  kind: "low_stock" | "overdue_invoice" | "ready_to_ship" | "late_purchase_order" | "quiet_customer" | "reminders";
   tone: "bad" | "warn" | "info";
   title: string;
   detail: string;
@@ -59,6 +59,26 @@ export async function attention(ctx: Ctx): Promise<AttentionItem[]> {
   const purchasing = featureOn(ctx.features, "purchasing");
   const items: AttentionItem[] = [];
   await withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    if (featureOn(ctx.features, "calendar")) {
+      const mine = await tx.query<{ n: number; late: number; first: string }>(
+        `select count(*)::int as n, count(*) filter (where due_on < (now() at time zone $2)::date)::int as late,
+                (array_agg(title order by due_on, created_at))[1] as first
+           from reminders where assigned_to = $1 and done_at is null and due_on <= (now() at time zone $2)::date`,
+        [ctx.userId, ZONE],
+      );
+      const r = mine.rows[0]!;
+      if (r.n > 0) {
+        items.push({
+          kind: "reminders",
+          tone: r.late > 0 ? "warn" : "info",
+          title: r.n === 1 ? r.first : `${r.n} reminders due`,
+          detail: r.n === 1 ? (r.late > 0 ? "Reminder overdue" : "Reminder for today") : `${r.first}${r.late > 0 ? ` · ${r.late} overdue` : ""}`,
+          href: "/calendar",
+          action: "Open",
+        });
+      }
+    }
+
     if (can(ctx, "sales_order.read")) {
       const overdue = await tx.query<{ n: number; owed: string; oldest: number }>(
         `select count(*)::int as n, coalesce(sum(b.balance), 0)::text as owed,

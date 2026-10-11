@@ -1,6 +1,7 @@
 import { customerStatement, listInvoices } from "../billing/invoices";
 import { listProducts } from "../catalog/products";
 import { listCustomers } from "../crm/customers";
+import { listReminders, listTeam } from "../crm/reminders";
 import type { Ctx } from "../platform/context";
 import { featureOn } from "../platform/features";
 import { attention } from "../platform/home";
@@ -112,6 +113,17 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     allowed: (ctx) => featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.read"),
     run: async (ctx) =>
       cap((await listPurchaseOrders(ctx)).map((po) => ({ number: po.number, supplier: po.supplierName, status: po.status, total: po.total, expected: po.expectedOn ?? null, link: `/purchasing/${po.id}` }))),
+  },
+  {
+    name: "list_reminders",
+    description: "Reminders on the calendar that are not done yet, with due date, customer and who each is for. Also returns the team, with ids, for assigning a reminder to someone.",
+    input_schema: { type: "object", properties: { customer_id: { type: "string" } } },
+    allowed: (ctx) => featureOn(ctx.features, "calendar"),
+    run: async (ctx, input) => ({
+      reminders: cap((await listReminders(ctx, { openOnly: true, customerId: text(input.customer_id) || undefined })).map((r) => ({ title: r.title, due: r.dueOn, customer: r.customerName, for: r.assignedName, overdue: r.overdue }))),
+      team: await listTeam(ctx),
+      link: "/calendar",
+    }),
   },
   {
     name: "find_suppliers",

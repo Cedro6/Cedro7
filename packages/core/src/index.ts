@@ -165,3 +165,14 @@ export {
 } from "./assistant/ask";
 export { ASSISTANT_TOOLS, toolsFor } from "./assistant/tools";
 export { ASSISTANT_ACTIONS, actionsFor, confirmProposal, dismissProposal, type Proposal } from "./assistant/actions";
+export {
+  calendarEntries,
+  createReminder,
+  listReminders,
+  listTeam,
+  removeReminder,
+  setReminderDone,
+  type CalendarEntry,
+  type Reminder,
+  type TeamMember,
+} from "./crm/reminders";
