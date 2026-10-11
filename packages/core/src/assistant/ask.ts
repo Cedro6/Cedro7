@@ -76,13 +76,13 @@ export async function assistantUsage(ctx: Ctx, limit: number): Promise<Assistant
  */
 export async function ask(
   ctx: Ctx,
-  input: { question: string; company: string; person: string; monthlyLimit: number; history?: AssistantTurn[] },
+  input: { question: string; company: string; person: string; monthlyLimit: number; history?: AssistantTurn[]; readOnly?: boolean },
   callModel: ModelCall,
 ): Promise<AssistantAnswer> {
   const question = input.question.trim().slice(0, MAX_QUESTION);
   if (!question) throw new ForbiddenError("customer.read");
   const tools = toolsFor(ctx);
-  const actions = actionsFor(ctx);
+  const actions = input.readOnly ? [] : actionsFor(ctx);
   const offered = [...tools, ...actions].map(({ name, description, input_schema }) => ({ name, description, input_schema }));
 
   const counted = await withTenant(ctx.pool, ctx.orgId, async (tx) => {
@@ -165,4 +165,37 @@ export async function ask(
     );
   }
   return { text: text || (proposals.length > 0 ? "I have prepared that for you to confirm." : "I could not work out an answer to that. Try asking it a different way."), lookups, proposals, inputTokens, outputTokens };
+}
+
+export type Briefing = { body: string; writtenAt: Date };
+
+const today = "(now() at time zone 'America/New_York')::date";
+const BRIEFING_REQUEST =
+  "Write my briefing for today. Check what needs attention, then look at anything else that matters for my job (open orders, unpaid invoices, stock, purchase orders, recent sales) with the lookups you have. " +
+  "Give me at most four short points, most urgent first. Each point is one line starting with a dash: say what is wrong or worth knowing, with the real figure, and what I should do about it, linking the record. " +
+  "If nothing needs me, say so in one line. No greeting, no heading, no closing line.";
+
+/** Today's briefing for this person, if one has been written. */
+export async function getBriefing(ctx: Ctx): Promise<Briefing | null> {
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const result = await tx.query<Briefing>(
+      `select body, written_at as "writtenAt" from assistant_briefings where user_id = $1 and day = ${today}`,
+      [ctx.userId],
+    );
+    return result.rows[0] ?? null;
+  });
+}
+
+/** Writes (or rewrites) today's briefing from the records this person can see. Counts as one question. */
+export async function writeBriefing(ctx: Ctx, input: { company: string; person: string; monthlyLimit: number }, callModel: ModelCall): Promise<Briefing> {
+  const answer = await ask(ctx, { ...input, question: BRIEFING_REQUEST, readOnly: true }, callModel);
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const result = await tx.query<Briefing>(
+      `insert into assistant_briefings (org_id, user_id, day, body) values ($1, $2, ${today}, $3)
+       on conflict (org_id, user_id, day) do update set body = excluded.body, written_at = now()
+       returning body, written_at as "writtenAt"`,
+      [ctx.orgId, ctx.userId, answer.text.slice(0, 4000)],
+    );
+    return result.rows[0]!;
+  });
 }

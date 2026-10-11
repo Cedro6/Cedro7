@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
-import { ask, AssistantLimitError, assistantUsage, toolsFor, type Ctx, type ModelCall, type ModelRequest, type Role } from "../src/index";
+import { ask, AssistantLimitError, assistantUsage, getBriefing, toolsFor, writeBriefing, type Ctx, type ModelCall, type ModelRequest, type Role } from "../src/index";
 
 let owner: Pool;
 let app: Pool;
@@ -99,5 +99,20 @@ describe("assistant", () => {
     const answer = await ask(as("owner"), { ...who, question: "loop" }, greedy);
     expect(n).toBe(5);
     expect(answer.text).toBe("done");
+  });
+
+  it("writes a briefing once for the day, read-only, per person", async () => {
+    expect(await getBriefing(as("owner"))).toBeNull();
+    const model = scripted([{ name: "needs_attention" }]);
+    const first = await writeBriefing(as("owner"), who, model.call);
+    expect(first.body).toContain("ANSWER");
+    expect(model.requests[0]!.tools.some((t) => t.name.startsWith("propose_"))).toBe(false);
+    expect(model.requests[0]!.system).toContain("You can only read");
+    expect((await getBriefing(as("owner")))!.body).toBe(first.body);
+    const again = await writeBriefing(as("owner"), who, scripted([]).call);
+    expect((await getBriefing(as("owner")))!.body).toBe(again.body);
+    expect((await owner.query("select count(*)::int as n from assistant_briefings")).rows[0].n).toBe(1);
+    await owner.query("update assistant_briefings set day = day - 1");
+    expect(await getBriefing(as("owner"))).toBeNull(); // yesterday's is not shown today
   });
 });

@@ -47,6 +47,7 @@ describe("migrations", () => {
       "0011_putaway.sql",
       "0012_assistant_usage.sql",
       "0013_assistant_proposals.sql",
+      "0014_assistant_briefings.sql",
     ]);
   });
 
