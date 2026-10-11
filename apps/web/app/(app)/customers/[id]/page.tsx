@@ -36,6 +36,11 @@ export default async function CustomerPage({
           </div>
           <h1>{customer.name}</h1>
         </div>
+        {can(ctx, "customer.write") && (
+          <Link href={`/customers/${customer.id}/edit`} className="btn btn-glass">
+            Edit
+          </Link>
+        )}
         {statement && (
           <Link href={`/customers/${customer.id}/statement`} className="btn btn-glass">
             Statement
@@ -114,7 +119,9 @@ export default async function CustomerPage({
       <section className="glass panel">
         <h2 className="title">Contacts</h2>
         {customer.contacts.length === 0 ? (
-          <p className="muted">No contacts yet.</p>
+          <p className="muted">
+            No contacts yet.{can(ctx, "customer.write") && <> <Link href={`/customers/${customer.id}/edit`}>Add one</Link></>}
+          </p>
         ) : (
           <div className="rows">
             {customer.contacts.map((contact) => (
@@ -156,7 +163,6 @@ export default async function CustomerPage({
           </div>
         )}
       </section>
-      <p className="muted footnote">Notes and reminders arrive in stage 6.</p>
     </>
   );
 }

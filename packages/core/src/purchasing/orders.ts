@@ -177,6 +177,81 @@ export async function createSupplier(
   });
 }
 
+export async function getSupplier(ctx: Ctx, id: string): Promise<(Supplier & { status: "active" | "archived" }) | null> {
+  requirePermission(ctx, "purchase_order.read");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const result = await tx.query<Supplier & { status: "active" | "archived" }>(
+      `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays", status
+       from suppliers where id = $1`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  });
+}
+
+export async function listArchivedSuppliers(ctx: Ctx): Promise<Supplier[]> {
+  requirePermission(ctx, "purchase_order.read");
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const result = await tx.query<Supplier>(
+      `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays"
+       from suppliers where status = 'archived' order by lower(name) limit 500`,
+    );
+    return result.rows;
+  });
+}
+
+export async function updateSupplier(
+  ctx: Ctx,
+  id: string,
+  input: { name: string; email?: string; phone?: string; paymentTerms?: string; leadTimeDays?: number },
+): Promise<void> {
+  requirePermission(ctx, "purchase_order.write");
+  const name = input.name.trim();
+  if (!name) throw new ValidationError("name", "Enter the supplier's name.");
+  if (name.length > 200) throw new ValidationError("name", "Keep the name under 200 characters.");
+  const lead = input.leadTimeDays;
+  if (lead !== undefined && (!Number.isInteger(lead) || lead < 0 || lead > 730)) {
+    throw new ValidationError("leadTimeDays", "Lead time must be a whole number of days.");
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ValidationError("id", "Supplier not found.");
+  await withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const done = await tx.query(
+      `update suppliers set name = $2, email = $3, phone = $4, payment_terms = $5, lead_time_days = $6, updated_at = now() where id = $1`,
+      [id, name, input.email?.trim().slice(0, 200) || null, input.phone?.trim().slice(0, 50) || null, input.paymentTerms?.trim().slice(0, 50) || null, lead ?? null],
+    );
+    if (done.rowCount === 0) throw new ValidationError("id", "Supplier not found.");
+    await tx.query(
+      `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, after)
+       values ($1, 'user', $2, 'supplier.updated', 'supplier', $3, $4)`,
+      [ctx.orgId, ctx.userId, id, JSON.stringify({ name })],
+    );
+  });
+}
+
+/** Archiving hides a supplier from new purchase orders. Past orders stay, and it can be restored. */
+export async function setSupplierArchived(ctx: Ctx, id: string, archived: boolean): Promise<void> {
+  requirePermission(ctx, "purchase_order.write");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ValidationError("id", "Supplier not found.");
+  await withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    if (archived) {
+      const open = await tx.query<{ n: number }>(
+        `select count(*)::int as n from purchase_orders
+          where supplier_id = $1 and status in ('pending_approval', 'approved', 'sent', 'partially_received')`,
+        [id],
+      );
+      if (open.rows[0]!.n > 0) throw new ValidationError("id", "This supplier has open purchase orders. Receive or cancel them before archiving.");
+    }
+    const done = await tx.query("update suppliers set status = $2, updated_at = now() where id = $1", [id, archived ? "archived" : "active"]);
+    if (done.rowCount === 0) throw new ValidationError("id", "Supplier not found.");
+    await tx.query(
+      `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, after)
+       values ($1, 'user', $2, $3, 'supplier', $4, '{}')`,
+      [ctx.orgId, ctx.userId, archived ? "supplier.archived" : "supplier.restored", id],
+    );
+  });
+}
+
 export async function createPurchaseOrder(
   ctx: Ctx,
   input: {

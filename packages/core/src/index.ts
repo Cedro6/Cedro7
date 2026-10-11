@@ -1,4 +1,14 @@
-export { getProduct, listProducts, type ProductSummary } from "./catalog/products";
+export {
+  createProduct,
+  getProduct,
+  listArchivedProducts,
+  listProducts,
+  productStatus,
+  setProductArchived,
+  updateProduct,
+  type ProductInput,
+  type ProductSummary,
+} from "./catalog/products";
 export {
   adjustStock,
   InsufficientStockError,
@@ -43,6 +53,15 @@ export {
   type Contact,
   type CustomerDetail,
   type CustomerSummary,
+} from "./crm/customers";
+export {
+  customerStatus,
+  listArchivedCustomers,
+  removeContact,
+  saveContact,
+  setCustomerArchived,
+  updateCustomer,
+  type ContactInput,
 } from "./crm/customers";
 export { currentMembership, membershipsByEmail, type Membership } from "./platform/auth";
 export type { Ctx } from "./platform/context";
@@ -115,3 +134,4 @@ export {
   type Receipt,
   type Supplier,
 } from "./purchasing/orders";
+export { getSupplier, listArchivedSuppliers, setSupplierArchived, updateSupplier } from "./purchasing/orders";
