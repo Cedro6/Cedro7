@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
-  actionsFor, ask, confirmProposal, dismissProposal, ForbiddenError, getCustomer, getOrder, listCustomers, listOrders, listProducts, listPurchaseOrders,
+  actionsFor, ask, confirmProposal, dismissProposal, ForbiddenError, getCustomer, getOrder, getProduct, listCustomers, listInvoices, listOrders, listProducts, listPurchaseOrders, reconcileStock,
   listSuppliers, StateError, type Ctx, type ModelCall, type ModelRequest, type Role,
 } from "../src/index";
 
@@ -80,15 +80,16 @@ describe("assistant actions", () => {
 
   it("offers each role only the changes it may make, and ignores one it may not", async () => {
     const names = (ctx: Ctx) => actionsFor(ctx).map((a) => a.name);
-    expect(names(as("owner"))).toEqual(["propose_quote", "propose_confirm_order", "propose_customer", "propose_contact", "propose_purchase_order"]);
+    expect(names(as("owner"))).toEqual(["propose_quote", "propose_confirm_order", "propose_customer", "propose_contact", "propose_purchase_order", "propose_ship_order", "propose_cancel_order", "propose_payment", "propose_stock_adjustment"]);
     expect(names(as("sales"))).not.toContain("propose_purchase_order");
-    expect(names(as("warehouse"))).toEqual([]);
+    expect(names(as("warehouse"))).toEqual(["propose_ship_order", "propose_stock_adjustment"]);
     expect(names(as("owner", { purchasing: false }))).not.toContain("propose_purchase_order");
     const before = await counts();
     const model = scripted([{ name: "propose_customer", input: { name: "Sneaky Co" } }]);
     const answer = await ask(as("warehouse"), { ...who, question: "add a customer" }, model.call);
     expect(answer.proposals).toHaveLength(0);
-    expect(model.requests[0]!.system).toContain("You can only read");
+    expect((await ask(as("viewer"), { ...who, question: "hi" }, model.call)).proposals).toHaveLength(0);
+    expect(model.requests.at(-1)!.system).toContain("You can only read");
     expect(await counts()).toEqual(before);
   });
 
@@ -142,6 +143,53 @@ describe("assistant actions", () => {
     expect(model.requests[0]!.messages.map((m) => [m.role, m.content])).toEqual([["user", "quote Bayside 20 gloves"], ["assistant", "Prepared."], ["user", "make it 30"]]);
     expect(answer.proposals).toHaveLength(3);
     expect(answer.text).toContain("enough changes for one request");
+  });
+
+  it("ships an order, records its payment and corrects stock, each only on confirm", async () => {
+    const customer = (await listCustomers(as("owner")))[0]!;
+    const product = (await listProducts(as("owner"))).find((p) => p.available >= 10 && p.reserved === 0)!;
+    const run = async (role: Role, name: string, input: Record<string, unknown>) => {
+      const answer = await ask(as(role), { ...who, question: "x" }, scripted([{ name, input }]).call);
+      expect(answer.proposals, answer.text).toHaveLength(1);
+      return { summary: answer.proposals[0]!.summary, ...(await confirmProposal(as(role), answer.proposals[0]!.id)) };
+    };
+    const quote = await run("sales", "propose_quote", { customer_id: customer.id, lines: [{ product_id: product.id, qty: 4 }] });
+    const orderId = quote.link.split("/").pop()!;
+    await run("sales", "propose_confirm_order", { order_id: orderId });
+    const shipped = await run("warehouse", "propose_ship_order", { order_id: orderId });
+    expect(shipped.summary).toMatch(/^Ship 4 units on SO-/);
+    expect(shipped.message).toMatch(/shipped with 4 units\. Invoice INV-\d+ raised/);
+    expect((await getOrder(as("owner"), orderId))!.status).toBe("shipped");
+
+    const invoice = (await listInvoices(as("owner"), { orderId }))[0]!;
+    const tooMuch = await ask(as("owner"), { ...who, question: "x" }, scripted([{ name: "propose_payment", input: { invoice_id: invoice.id, amount: invoice.balance + 1, method: "Check" } }]).call);
+    expect(tooMuch.proposals).toHaveLength(0);
+    expect(tooMuch.text).toContain("left to pay");
+    const paid = await run("owner", "propose_payment", { invoice_id: invoice.id, method: "Check" });
+    expect(paid.summary).toContain("This pays it in full");
+    expect((await listInvoices(as("owner"), { orderId }))[0]!.balance).toBe(0);
+    await expect(ask(as("sales"), { ...who, question: "x" }, scripted([{ name: "propose_payment", input: { invoice_id: invoice.id, method: "Check" } }]).call)).resolves.toMatchObject({ proposals: [] });
+
+    const before = (await getProduct(as("owner"), product.id))!.onHand;
+    const fixed = await run("warehouse", "propose_stock_adjustment", { product_id: product.id, change: -2, reason: "Two damaged" });
+    expect(fixed.summary).toContain(`from ${before} to ${before - 2} on hand`);
+    expect((await getProduct(as("owner"), product.id))!.onHand).toBe(before - 2);
+    expect(await reconcileStock(as("owner"))).toEqual([]);
+  });
+
+  it("cancels a quote on confirm and refuses to cancel a shipped order", async () => {
+    const customer = (await listCustomers(as("owner")))[0]!;
+    const product = (await listProducts(as("owner")))[0]!;
+    const made = await ask(as("owner"), { ...who, question: "x" }, scripted([{ name: "propose_quote", input: { customer_id: customer.id, lines: [{ product_id: product.id, qty: 1 }] } }]).call);
+    const orderId = (await confirmProposal(as("owner"), made.proposals[0]!.id)).link.split("/").pop()!;
+    const cancel = await ask(as("owner"), { ...who, question: "x" }, scripted([{ name: "propose_cancel_order", input: { order_id: orderId } }]).call);
+    expect(cancel.proposals[0]!.summary).toContain("cannot be undone");
+    expect((await getOrder(as("owner"), orderId))!.status).toBe("quote");
+    await confirmProposal(as("owner"), cancel.proposals[0]!.id);
+    expect((await getOrder(as("owner"), orderId))!.status).toBe("cancelled");
+    const shipped = (await listOrders(as("owner"), { status: "shipped" }))[0]!;
+    const refused = await ask(as("owner"), { ...who, question: "x" }, scripted([{ name: "propose_cancel_order", input: { order_id: shipped.id } }]).call);
+    expect(refused.proposals).toHaveLength(0);
   });
 
   it("never treats a forbidden error as anything but a refusal", async () => {

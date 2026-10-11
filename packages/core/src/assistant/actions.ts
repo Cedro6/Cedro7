@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { withTenant } from "@bos/db/runtime";
+import { getInvoice, PAYMENT_METHODS, recordPayment } from "../billing/invoices";
 import { getProduct } from "../catalog/products";
 import { createCustomer, getCustomer, saveContact } from "../crm/customers";
 import type { Ctx } from "../platform/context";
@@ -6,7 +8,8 @@ import { StateError, ValidationError } from "../platform/errors";
 import { featureOn } from "../platform/features";
 import { can } from "../platform/permissions";
 import { createPurchaseOrder, getSupplier } from "../purchasing/orders";
-import { confirmOrder, createQuote, getOrder } from "../sales/orders";
+import { adjustStock, StockInputError, InsufficientStockError } from "../inventory/ledger";
+import { cancelOrder, confirmOrder, createQuote, getOrder, shipOrder } from "../sales/orders";
 
 /**
  * Changes the assistant can prepare. The model never makes a change: calling one of these only
@@ -181,6 +184,112 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     apply: async (ctx, payload) => {
       const made = await createPurchaseOrder(ctx, payload as Parameters<typeof createPurchaseOrder>[1]);
       return { message: `Draft purchase order ${made.number} created.`, link: `/purchasing/${made.id}` };
+    },
+  },
+  {
+    name: "propose_ship_order",
+    description:
+      "Prepare to ship an open order (everything currently reserved for it goes out as one shipment and the invoice is raised), for the person to confirm. If stock is not tracked this completes the order. Needs the order id from list_orders.",
+    input_schema: { type: "object", properties: { order_id: { type: "string" } }, required: ["order_id"] },
+    allowed: (ctx) => can(ctx, "sales_order.ship") && can(ctx, "sales_order.read"),
+    describe: async (ctx, input) => {
+      const order = await getOrder(ctx, str(input.order_id, 36));
+      if (!order) throw bad("I could not find that order.");
+      if (order.status !== "confirmed" && order.status !== "partially_shipped") throw bad(`${order.number} is ${order.status.replace("_", " ")}, so it cannot be shipped.`);
+      const tracked = featureOn(ctx.features, "stock");
+      const ready = order.lines.reduce((sum, line) => sum + line.reserved, 0);
+      const short = order.lines.reduce((sum, line) => sum + line.backorder, 0);
+      if (tracked && ready <= 0) throw bad(`${order.number} has no stock reserved yet, so there is nothing to ship.`);
+      return {
+        payload: { orderId: order.id, key: randomUUID() },
+        summary: tracked
+          ? `Ship ${qtyText(ready)} units on ${order.number} for ${order.customerName} and raise the invoice.${short > 0 ? ` ${qtyText(short)} units have no stock yet and stay on the order.` : ""}`
+          : `Complete ${order.number} for ${order.customerName} (${money(order.total)}) and raise the invoice.`,
+      };
+    },
+    apply: async (ctx, payload) => {
+      const id = String(payload.orderId);
+      const done = await shipOrder(ctx, id, { idempotencyKey: String(payload.key) });
+      const billed = done.invoice ? ` Invoice ${done.invoice.number} raised for ${money(done.invoice.amount)}.` : "";
+      return { message: featureOn(ctx.features, "stock") ? `${done.shipmentNumber} shipped with ${qtyText(done.units)} units.${billed}` : `Order completed.${billed}`, link: `/sales/${id}` };
+    },
+  },
+  {
+    name: "propose_cancel_order",
+    description: "Prepare to cancel a quote or an order that has not shipped (reserved stock goes back on the shelf), for the person to confirm. Needs the order id from list_orders.",
+    input_schema: { type: "object", properties: { order_id: { type: "string" } }, required: ["order_id"] },
+    allowed: (ctx) => can(ctx, "sales_order.write"),
+    describe: async (ctx, input) => {
+      const order = await getOrder(ctx, str(input.order_id, 36));
+      if (!order) throw bad("I could not find that order.");
+      if (order.status !== "quote" && order.status !== "confirmed") throw bad(`${order.number} is ${order.status.replace("_", " ")}, so it cannot be cancelled.`);
+      return { payload: { orderId: order.id }, summary: `Cancel ${order.status === "quote" ? "quote" : "order"} ${order.number} for ${order.customerName} (${money(order.total)}). This cannot be undone.` };
+    },
+    apply: async (ctx, payload) => {
+      const id = String(payload.orderId);
+      const { released } = await cancelOrder(ctx, id);
+      return { message: `Order cancelled.${released > 0 ? ` ${qtyText(released)} units returned to stock.` : ""}`, link: `/sales/${id}` };
+    },
+  },
+  {
+    name: "propose_payment",
+    description: `Prepare to record a payment received against an invoice, for the person to confirm. Leave amount out to record the full balance. Method must be one of: ${PAYMENT_METHODS.join(", ")}. Needs the invoice id from list_invoices.`,
+    input_schema: {
+      type: "object",
+      properties: { invoice_id: { type: "string" }, amount: { type: "number" }, method: { type: "string", enum: [...PAYMENT_METHODS] }, reference: { type: "string" } },
+      required: ["invoice_id", "method"],
+    },
+    allowed: (ctx) => can(ctx, "invoice.write") && can(ctx, "sales_order.read"),
+    describe: async (ctx, input) => {
+      const invoice = await getInvoice(ctx, str(input.invoice_id, 36));
+      if (!invoice) throw bad("I could not find that invoice.");
+      if (invoice.balance <= 0) throw bad(`${invoice.number} has nothing left to pay.`);
+      const method = str(input.method, 30);
+      if (!(PAYMENT_METHODS as readonly string[]).includes(method)) throw bad(`Say how it was paid: ${PAYMENT_METHODS.join(", ")}.`);
+      const amount = input.amount === undefined || input.amount === null ? invoice.balance : Math.round(Number(input.amount) * 100) / 100;
+      if (!Number.isFinite(amount) || amount <= 0) throw bad("The amount must be more than zero.");
+      if (amount > invoice.balance) throw bad(`${invoice.number} only has ${money(invoice.balance)} left to pay.`);
+      const reference = str(input.reference, 80);
+      return {
+        payload: { invoiceId: invoice.id, amount, method, ...(reference ? { reference } : {}), key: randomUUID() },
+        summary: `Record a ${money(amount)} payment by ${method.toLowerCase()} from ${invoice.customerName} against ${invoice.number}${reference ? `, reference "${reference}"` : ""}. ${amount >= invoice.balance ? "This pays it in full." : `${money(invoice.balance - amount)} will still be owed.`}`,
+      };
+    },
+    apply: async (ctx, payload) => {
+      const id = String(payload.invoiceId);
+      const done = await recordPayment(ctx, id, { amount: Number(payload.amount), method: String(payload.method), reference: payload.reference ? String(payload.reference) : undefined, idempotencyKey: String(payload.key) });
+      return { message: `Payment recorded. ${done.balance > 0 ? `${money(done.balance)} still owed.` : "The invoice is paid in full."}`, link: `/invoices/${id}` };
+    },
+  },
+  {
+    name: "propose_stock_adjustment",
+    description: "Prepare a correction to a product's stock on hand (positive to add, negative to remove) with a reason, for the person to confirm. Needs the product id from find_products.",
+    input_schema: { type: "object", properties: { product_id: { type: "string" }, change: { type: "number", description: "Units to add (positive) or remove (negative)." }, reason: { type: "string" } }, required: ["product_id", "change", "reason"] },
+    allowed: (ctx) => featureOn(ctx.features, "stock") && can(ctx, "stock.adjust") && can(ctx, "product.read"),
+    describe: async (ctx, input) => {
+      const product = await getProduct(ctx, str(input.product_id, 36));
+      if (!product) throw bad("I could not find that product.");
+      const change = Number(input.change);
+      if (!Number.isFinite(change) || change === 0) throw bad("Say how many units to add or remove.");
+      const reason = str(input.reason);
+      if (!reason) throw bad("Give a reason for the correction.");
+      if (product.onHand + change < product.reserved) throw bad(`Only ${qtyText(product.available)} of ${product.name} can be removed; the rest is reserved for orders.`);
+      return {
+        payload: { productId: product.id, qtyDelta: change, reason, key: randomUUID() },
+        summary: `${change > 0 ? "Add" : "Remove"} ${qtyText(Math.abs(change))} ${change > 0 ? "to" : "from"} the stock of ${product.name}, taking it from ${qtyText(product.onHand)} to ${qtyText(product.onHand + change)} on hand. Reason: "${reason}".`,
+      };
+    },
+    apply: async (ctx, payload) => {
+      const id = String(payload.productId);
+      try {
+        await adjustStock(ctx, { productId: id, qtyDelta: Number(payload.qtyDelta), reason: String(payload.reason), idempotencyKey: String(payload.key) });
+      } catch (error) {
+        if (error instanceof InsufficientStockError) throw bad("Stock has changed since this was prepared, and that many can no longer be removed. Ask again.");
+        if (error instanceof StockInputError) throw bad(error.message);
+        throw error;
+      }
+      const product = await getProduct(ctx, id);
+      return { message: `Stock corrected.${product ? ` ${product.name} now has ${qtyText(product.onHand)} on hand.` : ""}`, link: `/products/${id}` };
     },
   },
 ];

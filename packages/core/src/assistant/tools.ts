@@ -102,7 +102,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     run: async (ctx, input) => {
       const state = ["open", "overdue", "paid"].includes(String(input.state)) ? (input.state as "open" | "overdue" | "paid") : undefined;
       const rows = await listInvoices(ctx, { state });
-      return cap(rows.map((i) => ({ number: i.number, customer: i.customerName, amount: i.amount, balance: i.balance, due: day(i.dueAt), state: i.state, link: `/invoices/${i.id}` })));
+      return cap(rows.map((i) => ({ id: i.id, number: i.number, customer: i.customerName, amount: i.amount, balance: i.balance, due: day(i.dueAt), state: i.state, link: `/invoices/${i.id}` })));
     },
   },
   {
