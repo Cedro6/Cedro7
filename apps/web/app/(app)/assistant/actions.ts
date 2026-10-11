@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { ask, AssistantLimitError, confirmProposal, dismissProposal, ForbiddenError, StateError, ValidationError, type AssistantTurn } from "@bos/core";
+import { ask, AssistantLimitError, writeBriefing, confirmProposal, dismissProposal, ForbiddenError, StateError, ValidationError, type AssistantTurn } from "@bos/core";
 import { assistantConfigured, callModel, monthlyLimit } from "../../../lib/assistant";
 import { requireSession } from "../../../lib/session";
 
@@ -48,4 +48,21 @@ export async function confirmChange(proposalId: string): Promise<ConfirmResult> 
 export async function dismissChange(proposalId: string): Promise<void> {
   const { ctx } = await requireSession();
   await dismissProposal(ctx, String(proposalId));
+}
+
+export type BriefingResult = { body: string; error: string };
+
+/** Writes today's briefing for the signed-in person. One question against the monthly limit. */
+export async function writeMyBriefing(): Promise<BriefingResult> {
+  const { ctx, membership } = await requireSession();
+  if (!assistantConfigured()) return { body: "", error: "The assistant has not been switched on for this site yet." };
+  try {
+    const briefing = await writeBriefing(ctx, { company: membership.orgName, person: membership.userName, monthlyLimit: monthlyLimit() }, callModel);
+    revalidatePath("/");
+    return { body: briefing.body, error: "" };
+  } catch (error) {
+    if (error instanceof AssistantLimitError) return { body: "", error: `Your company has used all ${error.limit} assistant questions for this month.` };
+    console.error("assistant: briefing failed", error);
+    return { body: "", error: "The briefing could not be written just now. Try again in a moment." };
+  }
 }

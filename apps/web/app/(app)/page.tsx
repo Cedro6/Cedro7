@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { attention, can, overview, salesTrend } from "@bos/core";
+import { attention, can, getBriefing, overview, salesTrend } from "@bos/core";
+import { BriefingPanel } from "../../components/BriefingPanel";
+import { assistantConfigured } from "../../lib/assistant";
 import { requireSession } from "../../lib/session";
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -34,7 +36,7 @@ function greeting(hour: number): string {
 
 export default async function HomePage() {
   const { ctx, membership } = await requireSession();
-  const [counts, trend, needs] = await Promise.all([overview(ctx), salesTrend(ctx), attention(ctx)]);
+  const [counts, trend, needs, briefing] = await Promise.all([overview(ctx), salesTrend(ctx), attention(ctx), assistantConfigured() ? getBriefing(ctx) : null]);
   const points = trend ? chartPoints(trend.days) : [];
   const path = chartPath(points);
   const peak = points.reduce<(typeof points)[number] | null>((best, p) => (p.total > 0 && (!best || p.total >= best.total) ? p : best), null);
@@ -91,6 +93,13 @@ export default async function HomePage() {
           </Link>
         )}
       </div>
+
+      {assistantConfigured() && (
+        <BriefingPanel
+          initial={briefing?.body ?? ""}
+          writtenAt={briefing ? `at ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone }).format(briefing.writtenAt)}` : ""}
+        />
+      )}
 
       <div className="split">
         {trend && (
