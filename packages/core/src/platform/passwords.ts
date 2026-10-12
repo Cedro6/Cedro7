@@ -193,3 +193,27 @@ export async function updateMember(ctx: Ctx, userId: string, change: { role?: st
     );
   });
 }
+
+/**
+ * Replaces the signed-in person's own password after checking the current one. Wrong guesses
+ * count toward the same lock as sign-in. Returns the new session version for this device to carry;
+ * every other session ends.
+ */
+export async function changeOwnPassword(ctx: Ctx, input: { current: string; next: string }): Promise<{ sessionVersion: number }> {
+  const email = await withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const found = await tx.query<{ email: string }>("select email from users where id = $1", [ctx.userId]);
+    return found.rows[0]?.email ?? null;
+  });
+  if (!email) throw new ValidationError("current", "Your account was not found.");
+  const cred = await ctx.pool.query<{ user_id: string; password_hash: string; locked: boolean }>("select * from auth_credential($1)", [email]);
+  const row = cred.rows[0];
+  if (!row || row.user_id !== ctx.userId) throw new ValidationError("current", "You do not have a password yet. Ask an owner for a sign-in link.");
+  if (row.locked) throw new ValidationError("current", "Too many wrong passwords. Try again in 15 minutes.");
+  const ok = await verifyPassword(input.current.slice(0, 200), row.password_hash);
+  await ctx.pool.query("select auth_record_attempt($1, $2)", [ctx.userId, ok]);
+  if (!ok) throw new ValidationError("current", "Your current password is not right.");
+  checkNewPassword(input.next, email);
+  if (input.next === input.current) throw new ValidationError("next", "Choose a password different from your current one.");
+  const changed = await ctx.pool.query<{ v: number }>("select auth_change_password($1, $2) as v", [ctx.userId, await hashPassword(input.next)]);
+  return { sessionVersion: changed.rows[0]!.v };
+}
