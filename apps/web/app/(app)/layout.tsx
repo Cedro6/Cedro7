@@ -48,19 +48,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               <div className="muted">{role}</div>
             </div>
             <ModeSwitch />
-            {can(ctx, "settings.manage") && (
-              <Link href="/settings" className="link-button">
-                Settings
-              </Link>
-            )}
-            <Link href="/account" className="link-button">
-              Password
-            </Link>
-            <form action={signOut}>
-              <button type="submit" className="link-button">
-                Sign out
-              </button>
-            </form>
+            <div className="account-links">
+              {can(ctx, "settings.manage") && <Link href="/settings">Settings</Link>}
+              <Link href="/account">Password</Link>
+              <form action={signOut}>
+                <button type="submit">Sign out</button>
+              </form>
+            </div>
           </div>
         }
       />

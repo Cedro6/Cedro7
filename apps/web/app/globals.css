@@ -2108,3 +2108,13 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .scan-row { align-items: flex-end; }
 .scan-row .grow { flex: 2 1 220px; }
 .scan-video { display: block; width: 100%; max-width: 480px; margin-top: 12px; border-radius: 16px; background: #000; }
+.widget-add { text-decoration: none; }
+
+/* Menu footer: the three account links sit in one tidy row under the name. */
+.account-links { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.account .account-links form { flex: none; }
+.account-links a, .account-links button {
+  min-height: 32px; display: inline-flex; align-items: center; padding: 0; border: 0; background: none;
+  color: var(--link); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none;
+}
+.account-links a:hover, .account-links button:hover { text-decoration: underline; }
