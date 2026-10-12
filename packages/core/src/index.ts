@@ -179,6 +179,7 @@ export {
 export { getCompanyProfile, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, type CompanyProfile } from "./platform/company";
 export { getPackingSlip, type PackingSlip } from "./sales/orders";
 export {
+  changeOwnPassword,
   checkNewPassword,
   createPasswordLink,
   hashPassword,

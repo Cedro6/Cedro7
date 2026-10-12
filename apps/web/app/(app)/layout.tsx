@@ -41,7 +41,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <div className="account">
             <Avatar name={membership.userName} />
             <div className="account-text">
-              <div className="account-name">{membership.userName}</div>
+              <Link href="/account" className="account-name account-link">
+                {membership.userName}
+              </Link>
               <div className="muted">{role}</div>
             </div>
             <ModeSwitch />
@@ -50,6 +52,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
                 Settings
               </Link>
             )}
+            <Link href="/account" className="link-button">
+              Password
+            </Link>
             <form action={signOut}>
               <button type="submit" className="link-button">
                 Sign out

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
-  createPasswordLink, ForbiddenError, hashPassword, inviteMember, listMembers, passwordLinkOwner, sessionVersion, setPasswordWithLink,
+  changeOwnPassword, createPasswordLink, ForbiddenError, hashPassword, inviteMember, listMembers, passwordLinkOwner, sessionVersion, setPasswordWithLink,
   signInWithPassword, updateMember, ValidationError, verifyPassword, type Ctx, type Role,
 } from "../src/index";
 
@@ -105,6 +105,28 @@ describe("invites and sign-in", () => {
     await expect(createPasswordLink(as("owner"), invited)).rejects.toThrow(/not an active member/);
     await updateMember(as("owner"), invited, { status: "active" });
     expect((await signInWithPassword(app, "dana@harbor.test", "a brand new passphrase")).ok).toBe(true);
+  });
+});
+
+describe("changing your own password", () => {
+  it("needs the current password, then signs out other sessions and accepts only the new one", async () => {
+    const invite = await inviteMember(as("owner"), { name: "Sam Ortiz", email: "sam@harbor.test", role: "warehouse" });
+    await setPasswordWithLink(app, invite.token, GOOD);
+    const sam = as("warehouse", invite.userId);
+    await expect(changeOwnPassword(sam, { current: "not my password", next: "a different passphrase" })).rejects.toThrow(/current password is not right/);
+    await expect(changeOwnPassword(sam, { current: GOOD, next: "short" })).rejects.toThrow(/at least 10/);
+    await expect(changeOwnPassword(sam, { current: GOOD, next: GOOD })).rejects.toThrow(/different from your current/);
+    expect(await sessionVersion(app, invite.userId)).toBe(1);
+    expect(await changeOwnPassword(sam, { current: GOOD, next: "a different passphrase" })).toEqual({ sessionVersion: 2 });
+    expect((await signInWithPassword(app, "sam@harbor.test", GOOD)).ok).toBe(false);
+    expect((await signInWithPassword(app, "sam@harbor.test", "a different passphrase")).ok).toBe(true);
+  });
+
+  it("locks after five wrong current passwords and tells a demo person they have none", async () => {
+    const sam = as("warehouse", (await listMembers(as("owner"))).find((m) => m.email === "sam@harbor.test")!.userId);
+    for (let i = 0; i < 5; i++) await changeOwnPassword(sam, { current: "wrong wrong wrong", next: "whatever long enough" }).catch(() => undefined);
+    await expect(changeOwnPassword(sam, { current: "a different passphrase", next: "whatever long enough" })).rejects.toThrow(/Too many wrong/);
+    await expect(changeOwnPassword(as("owner"), { current: "x", next: "whatever long enough" })).rejects.toThrow(/do not have a password yet/);
   });
 });
 
