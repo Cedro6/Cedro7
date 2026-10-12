@@ -58,6 +58,7 @@ function productInput(form: FormData): ProductInput {
     sku: text(form, "sku"), name: text(form, "name"), category: text(form, "category"),
     price: Number(text(form, "price") || "0"), cost: optionalNumber(form, "cost"),
     shelfLocation: text(form, "shelfLocation"), reorderPoint: reorder === undefined ? null : reorder,
+    barcode: text(form, "barcode"),
   };
 }
 

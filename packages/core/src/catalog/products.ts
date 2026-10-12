@@ -9,6 +9,7 @@ export type ProductSummary = {
   name: string;
   category: string | null;
   shelfLocation: string | null;
+  barcode: string | null;
   price: number;
   /** Null when the role may not see cost. */
   cost: number | null;
@@ -25,7 +26,7 @@ export type ProductSummary = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const PRODUCT_SQL = `
-  select p.id, p.sku, p.name, p.category, p.shelf_location as "shelfLocation",
+  select p.id, p.sku, p.name, p.category, p.shelf_location as "shelfLocation", p.barcode,
          p.price::float8 as price,
          case when $1 then p.cost::float8 end as cost,
          p.reorder_point::float8 as "reorderPoint",
@@ -82,6 +83,8 @@ export type ProductInput = {
   cost?: number;
   shelfLocation?: string;
   reorderPoint?: number | null;
+  /** Left out, the barcode is kept as it is; blank clears it. */
+  barcode?: string;
 };
 
 function cleanProduct(input: ProductInput) {
@@ -95,10 +98,16 @@ function cleanProduct(input: ProductInput) {
   if (input.cost !== undefined && (!Number.isFinite(input.cost) || input.cost < 0)) throw new ValidationError("cost", "Enter a cost of zero or more.");
   const reorder = input.reorderPoint ?? null;
   if (reorder !== null && (!Number.isFinite(reorder) || reorder < 0)) throw new ValidationError("reorderPoint", "Enter a reorder point of zero or more.");
-  return { sku, name, category: input.category?.trim().slice(0, 100) || null, price: input.price, cost: input.cost, shelfLocation: input.shelfLocation?.trim().slice(0, 50) || null, reorder };
+  const barcode = input.barcode === undefined ? undefined : input.barcode.replace(/\s+/g, "") || null;
+  if (barcode && !/^[A-Za-z0-9._\-]{3,64}$/.test(barcode)) throw new ValidationError("barcode", "A barcode is 3 to 64 letters and digits.");
+  return { barcode, sku, name, category: input.category?.trim().slice(0, 100) || null, price: input.price, cost: input.cost, shelfLocation: input.shelfLocation?.trim().slice(0, 50) || null, reorder };
 }
 
 const isDuplicate = (error: unknown) => typeof error === "object" && error !== null && (error as { code?: string }).code === "23505";
+const duplicateOf = (error: unknown, p: { sku: string; barcode?: string | null }) =>
+  String((error as { constraint?: string }).constraint).includes("barcode")
+    ? new ValidationError("barcode", `Another product already has the barcode ${p.barcode}.`)
+    : new ValidationError("sku", `Another product already uses the code ${p.sku}.`);
 
 export async function createProduct(ctx: Ctx, input: ProductInput): Promise<{ id: string }> {
   requirePermission(ctx, "product.write");
@@ -106,9 +115,9 @@ export async function createProduct(ctx: Ctx, input: ProductInput): Promise<{ id
   try {
     return await withTenant(ctx.pool, ctx.orgId, async (tx) => {
       const created = await tx.query<{ id: string }>(
-        `insert into products (org_id, sku, name, category, price, cost, shelf_location, reorder_point)
-         values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
-        [ctx.orgId, p.sku, p.name, p.category, p.price, can(ctx, "product.cost.view") ? (p.cost ?? 0) : 0, p.shelfLocation, p.reorder],
+        `insert into products (org_id, sku, name, category, price, cost, shelf_location, reorder_point, barcode)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+        [ctx.orgId, p.sku, p.name, p.category, p.price, can(ctx, "product.cost.view") ? (p.cost ?? 0) : 0, p.shelfLocation, p.reorder, p.barcode ?? null],
       );
       const id = created.rows[0]!.id;
       await tx.query(
@@ -119,7 +128,7 @@ export async function createProduct(ctx: Ctx, input: ProductInput): Promise<{ id
       return { id };
     });
   } catch (error) {
-    if (isDuplicate(error)) throw new ValidationError("sku", `Another product already uses the code ${p.sku}.`);
+    if (isDuplicate(error)) throw duplicateOf(error, p);
     throw error;
   }
 }
@@ -134,9 +143,10 @@ export async function updateProduct(ctx: Ctx, id: string, input: ProductInput): 
       const done = await tx.query(
         `update products set sku = $2, name = $3, category = $4, price = $5,
                 cost = case when $9 then $6 else cost end,
-                shelf_location = $7, reorder_point = $8, updated_at = now()
+                shelf_location = $7, reorder_point = $8,
+                barcode = case when $10 then $11 else barcode end, updated_at = now()
           where id = $1`,
-        [id, p.sku, p.name, p.category, p.price, p.cost ?? 0, p.shelfLocation, p.reorder, can(ctx, "product.cost.view") && p.cost !== undefined],
+        [id, p.sku, p.name, p.category, p.price, p.cost ?? 0, p.shelfLocation, p.reorder, can(ctx, "product.cost.view") && p.cost !== undefined, p.barcode !== undefined, p.barcode ?? null],
       );
       if (done.rowCount === 0) throw new ValidationError("id", "Product not found.");
       await tx.query(
@@ -146,7 +156,7 @@ export async function updateProduct(ctx: Ctx, id: string, input: ProductInput): 
       );
     });
   } catch (error) {
-    if (isDuplicate(error)) throw new ValidationError("sku", `Another product already uses the code ${p.sku}.`);
+    if (isDuplicate(error)) throw duplicateOf(error, p);
     throw error;
   }
 }
@@ -190,5 +200,32 @@ export async function productStatus(ctx: Ctx, id: string): Promise<"active" | "a
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<{ status: "active" | "archived" }>("select status from products where id = $1", [id]);
     return result.rows[0]?.status ?? null;
+  });
+}
+
+export type Lookup = { match: "barcode" | "sku" | "name" | "none"; products: ProductSummary[] };
+
+/**
+ * Finds what a scan or a typed code refers to: an exact barcode first, then an exact product
+ * code, then anything whose name or code contains the text. Archived products are left out.
+ */
+export async function lookupProduct(ctx: Ctx, code: string): Promise<Lookup> {
+  requirePermission(ctx, "product.read");
+  const text = code.trim().slice(0, 100);
+  if (!text) return { match: "none", products: [] };
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const seeCost = can(ctx, "product.cost.view");
+    const exact = async (column: "barcode" | "sku") =>
+      (await tx.query<ProductSummary>(`${PRODUCT_SQL} where p.status = 'active' and lower(p.${column}) = lower($2)`, [seeCost, column === "barcode" ? text.replace(/\s+/g, "") : text])).rows;
+    const byBarcode = await exact("barcode");
+    if (byBarcode.length) return { match: "barcode", products: byBarcode };
+    const bySku = await exact("sku");
+    if (bySku.length) return { match: "sku", products: bySku };
+    const escaped = text.replace(/[\\%_]/g, "\\$&");
+    const loose = await tx.query<ProductSummary>(
+      `${PRODUCT_SQL} where p.status = 'active' and (p.name ilike '%' || $2 || '%' or p.sku ilike '%' || $2 || '%') order by p.sku limit 8`,
+      [seeCost, escaped],
+    );
+    return { match: loose.rows.length ? "name" : "none", products: loose.rows };
   });
 }
