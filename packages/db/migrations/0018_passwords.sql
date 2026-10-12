@@ -128,3 +128,19 @@ begin
     execute format('grant execute on function %s to bos_app', f);
   end loop;
 end $$;
+
+-- Some hosts (Supabase) add public-facing roles that are granted every new table and function by
+-- default. These must never reach credentials, so their access is taken away where they exist.
+do $$
+declare r text;
+begin
+  foreach r in array array['anon', 'authenticated'] loop
+    if exists (select 1 from pg_roles where rolname = r) then
+      execute format('revoke all on user_credentials, auth_tokens from %I', r);
+      execute format(
+        'revoke all on function auth_credential(text), auth_record_attempt(uuid, boolean), auth_session_version(uuid),
+           auth_upsert_user(text, text), auth_issue_token(uuid, uuid, text, text, uuid), auth_token_owner(text),
+           auth_set_password(text, text), auth_has_password(uuid[]) from %I', r);
+    end if;
+  end loop;
+end $$;
