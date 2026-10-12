@@ -27,6 +27,9 @@ create table auth_tokens (
 create index auth_tokens_user_idx on auth_tokens (user_id);
 
 revoke all on user_credentials, auth_tokens from public;
+-- Row-level security with no policy: closed to everyone but the functions below, which run as the owner.
+alter table user_credentials enable row level security;
+alter table auth_tokens enable row level security;
 
 -- What sign-in needs to check a password: nothing unless the person has an active membership.
 create function auth_credential(p_email text)
