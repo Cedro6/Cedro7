@@ -3,9 +3,11 @@ export {
   getProduct,
   listArchivedProducts,
   listProducts,
+  lookupProduct,
   productStatus,
   setProductArchived,
   updateProduct,
+  type Lookup,
   type ProductInput,
   type ProductSummary,
 } from "./catalog/products";

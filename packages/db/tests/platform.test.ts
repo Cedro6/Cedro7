@@ -53,6 +53,7 @@ describe("migrations", () => {
       "0017_invoice_addresses.sql",
       "0018_passwords.sql",
       "0019_change_password.sql",
+      "0020_barcodes.sql",
     ]);
   });
 

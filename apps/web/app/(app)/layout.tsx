@@ -26,7 +26,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     stock &&
     ((featureOn(ctx.features, "picking") && can(ctx, "sales_order.ship")) ||
       (featureOn(ctx.features, "putaway") && can(ctx, "purchase_order.receive")) ||
-      (featureOn(ctx.features, "counts") && can(ctx, "stock.adjust")));
+      (featureOn(ctx.features, "counts") && can(ctx, "stock.adjust")) ||
+      (featureOn(ctx.features, "warehouse") && can(ctx, "product.read")));
   if (warehouseJobs) items.push({ href: "/warehouse", label: "Warehouse" });
   if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
   if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });

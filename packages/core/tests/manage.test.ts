@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
   confirmOrder, createProduct, createQuote, createSupplier, ForbiddenError, getCustomer, getProduct, getSupplier,
-  listArchivedCustomers, listArchivedProducts, listCustomers, listProducts, listSuppliers, removeContact, saveContact,
+  listArchivedCustomers, listArchivedProducts, listCustomers, listProducts, lookupProduct, listSuppliers, removeContact, saveContact,
   setCustomerArchived, setProductArchived, setSupplierArchived, updateCustomer, updateProduct, updateSupplier,
   ValidationError, type Ctx, type Role,
 } from "../src/index";
@@ -84,6 +84,31 @@ describe("products", () => {
   it("will not archive a product reserved for an open order", async () => {
     const reserved = await owner.query<{ product_id: string }>("select product_id from stock_levels where reserved > 0 limit 1");
     if (reserved.rowCount) await expect(setProductArchived(as("owner"), reserved.rows[0]!.product_id, true)).rejects.toThrow(/reserved/);
+  });
+});
+
+describe("barcodes", () => {
+  it("finds a product by an exact scan, then by code, then by name, and never an archived one", async () => {
+    const { id } = await createProduct(as("owner"), { sku: "BC-1", name: "Scannable widget", price: 3, barcode: " 0123 4567 8905 " });
+    expect((await getProduct(as("owner"), id))!.barcode).toBe("012345678905");
+    expect(await lookupProduct(as("warehouse"), "012345678905")).toMatchObject({ match: "barcode", products: [{ id }] });
+    expect(await lookupProduct(as("warehouse"), "bc-1")).toMatchObject({ match: "sku", products: [{ id }] });
+    expect((await lookupProduct(as("warehouse"), "scannable")).match).toBe("name");
+    expect(await lookupProduct(as("warehouse"), "no-such-thing-xyz")).toEqual({ match: "none", products: [] });
+    expect((await lookupProduct(as("warehouse"), "%")).match).toBe("none"); // a wildcard is just text
+    expect((await lookupProduct(as("warehouse"), "012345678905")).products[0]!.cost).toBeNull(); // cost stays hidden
+    await setProductArchived(as("owner"), id, true);
+    expect((await lookupProduct(as("warehouse"), "012345678905")).match).toBe("none");
+  });
+
+  it("refuses a barcode another product has, keeps it when not sent, and clears it when blank", async () => {
+    const a = await createProduct(as("owner"), { sku: "BC-2", name: "First", price: 1, barcode: "999000111" });
+    await expect(createProduct(as("owner"), { sku: "BC-3", name: "Second", price: 1, barcode: "999000111" })).rejects.toThrow(/already has the barcode/);
+    await expect(createProduct(as("owner"), { sku: "BC-4", name: "Bad", price: 1, barcode: "a b" })).rejects.toThrow(/3 to 64/);
+    await updateProduct(as("owner"), a.id, { sku: "BC-2", name: "First renamed", price: 2 });
+    expect((await getProduct(as("owner"), a.id))!.barcode).toBe("999000111");
+    await updateProduct(as("owner"), a.id, { sku: "BC-2", name: "First renamed", price: 2, barcode: "" });
+    expect((await getProduct(as("owner"), a.id))!.barcode).toBeNull();
   });
 });
 

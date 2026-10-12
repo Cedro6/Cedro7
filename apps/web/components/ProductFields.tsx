@@ -18,6 +18,10 @@ export function ProductFields({ product, showCost, tracked }: { product?: Produc
           <input name="category" maxLength={100} defaultValue={product?.category ?? ""} />
         </label>
       </div>
+      <label className="field">
+        <span>Barcode</span>
+        <input name="barcode" maxLength={64} inputMode="text" autoComplete="off" defaultValue={product?.barcode ?? ""} placeholder="Scan or type the number under the bars" />
+      </label>
       <div className="form-row">
         <label className="field">
           <span>Price</span>

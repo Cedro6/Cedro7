@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { can, countCategories, countSheet, featureOn, pickQueue, putawayList } from "@bos/core";
+import { can, countCategories, countSheet, featureOn, lookupProduct, pickQueue, putawayList } from "@bos/core";
+import { ScanBox } from "../../../components/ScanBox";
 import { PickList } from "../../../components/PickList";
 import { formatQty } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
@@ -13,7 +14,7 @@ const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", t
 export default async function WarehousePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; order?: string; category?: string; shelf?: string; error?: string; notice?: string }>;
+  searchParams: Promise<{ tab?: string; order?: string; category?: string; shelf?: string; code?: string; error?: string; notice?: string }>;
 }) {
   const { ctx } = await requireSession();
   const stock = featureOn(ctx.features, "stock");
@@ -21,6 +22,7 @@ export default async function WarehousePage({
     { key: "pick", label: "Pick", on: stock && featureOn(ctx.features, "picking") && can(ctx, "sales_order.ship") },
     { key: "putaway", label: "Put away", on: stock && featureOn(ctx.features, "putaway") && can(ctx, "purchase_order.receive") },
     { key: "count", label: "Count", on: stock && featureOn(ctx.features, "counts") && can(ctx, "stock.adjust") },
+    { key: "lookup", label: "Look up", on: stock && featureOn(ctx.features, "warehouse") && can(ctx, "product.read") },
   ].filter((tab) => tab.on);
   if (tabs.length === 0) redirect("/");
   const params = await searchParams;
@@ -31,7 +33,7 @@ export default async function WarehousePage({
       <header className="page-head">
         <div>
           <div className="eyebrow">Warehouse</div>
-          <h1>{tab.key === "pick" ? "Pick and ship" : tab.key === "putaway" ? "Put away" : "Stock count"}</h1>
+          <h1>{tab.key === "pick" ? "Pick and ship" : tab.key === "putaway" ? "Put away" : tab.key === "count" ? "Stock count" : "Look up a product"}</h1>
         </div>
         {tabs.length > 1 && (
           <div className="segmented" role="group" aria-label="Warehouse job">
@@ -48,6 +50,7 @@ export default async function WarehousePage({
       {tab.key === "pick" && <Pick orderId={params.order} />}
       {tab.key === "putaway" && <Putaway />}
       {tab.key === "count" && <Count category={params.category ?? ""} shelf={params.shelf ?? ""} />}
+      {tab.key === "lookup" && <Lookup code={params.code ?? ""} />}
     </>
   );
 }
@@ -250,6 +253,88 @@ async function Count({ category, shelf }: { category: string; shelf: string }) {
           </form>
         )}
       </section>
+    </>
+  );
+}
+
+async function Lookup({ code }: { code: string }) {
+  const { ctx } = await requireSession();
+  const found = code ? await lookupProduct(ctx, code) : null;
+  const one = found && found.products.length === 1 ? found.products[0]! : null;
+  return (
+    <>
+      <section className="glass panel">
+        <ScanBox initial={code} />
+        <p className="muted footnote">A handheld scanner types the code and presses Enter for you, so just scan. You can also type a barcode, a product code or part of a name.</p>
+      </section>
+      {found && found.products.length === 0 && (
+        <section className="glass panel empty">
+          <div className="empty-title">Nothing matches “{code}”</div>
+          <p>
+            If this is a product you stock, open it under Products, choose Edit, and scan this code into its Barcode box. After that a scan finds it.
+          </p>
+        </section>
+      )}
+      {one && (
+        <section className="glass panel">
+          <div className="panel-head">
+            <div>
+              <h2 className="title">
+                <Link href={`/products/${one.id}`} className="row-link">
+                  {one.name}
+                </Link>
+              </h2>
+              <div className="muted mono">
+                {one.sku}
+                {one.barcode ? ` · ${one.barcode}` : ""}
+              </div>
+            </div>
+            {one.lowStock && <span className="badge badge-warn badge-large">Low stock</span>}
+          </div>
+          <div className="tiles">
+            <div className="glass panel tile">
+              <h3 className="label">Shelf</h3>
+              <div className="numeral numeral-md mono">{one.shelfLocation ?? "None"}</div>
+            </div>
+            <div className="glass panel tile">
+              <h3 className="label">Available</h3>
+              <div className="numeral">{formatQty(one.available)}</div>
+              <div className="muted">
+                {formatQty(one.onHand)} on hand · {formatQty(one.reserved)} reserved
+              </div>
+            </div>
+            <div className="glass panel tile">
+              <h3 className="label">On order</h3>
+              <div className="numeral">{formatQty(one.onOrder)}</div>
+              <div className="muted">{one.reorderPoint === null ? "No reorder point" : `Reorder at ${formatQty(one.reorderPoint)}`}</div>
+            </div>
+          </div>
+          {!one.barcode && found?.match !== "barcode" && can(ctx, "product.write") && (
+            <p className="muted footnote">
+              This product has no barcode saved. <Link href={`/products/${one.id}/edit`}>Add one</Link> so a scan finds it.
+            </p>
+          )}
+        </section>
+      )}
+      {found && found.products.length > 1 && (
+        <section className="glass panel">
+          <div className="muted">{found.products.length} products match “{code}”</div>
+          <div className="rows">
+            {found.products.map((product) => (
+              <Link key={product.id} href={`/warehouse?tab=lookup&code=${encodeURIComponent(product.sku)}`} className="row row-pick">
+                <div className="row-text">
+                  <div className="row-title">{product.name}</div>
+                  <div className="muted mono">{product.sku}</div>
+                </div>
+                <div className="muted pick-meta">
+                  <span>{formatQty(product.available)} available</span>
+                  <span className="mono">{product.shelfLocation ?? ""}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </>
   );
 }
