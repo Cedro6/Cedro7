@@ -99,7 +99,7 @@ function cleanProduct(input: ProductInput) {
   const reorder = input.reorderPoint ?? null;
   if (reorder !== null && (!Number.isFinite(reorder) || reorder < 0)) throw new ValidationError("reorderPoint", "Enter a reorder point of zero or more.");
   const barcode = input.barcode === undefined ? undefined : input.barcode.replace(/\s+/g, "") || null;
-  if (barcode && !/^[A-Za-z0-9._\-]{3,64}$/.test(barcode)) throw new ValidationError("barcode", "A barcode is 3 to 64 letters and digits.");
+  if (barcode && !/^[A-Za-z0-9._-]{3,64}$/.test(barcode)) throw new ValidationError("barcode", "A barcode is 3 to 64 letters and digits.");
   return { barcode, sku, name, category: input.category?.trim().slice(0, 100) || null, price: input.price, cost: input.cost, shelfLocation: input.shelfLocation?.trim().slice(0, 50) || null, reorder };
 }
 
