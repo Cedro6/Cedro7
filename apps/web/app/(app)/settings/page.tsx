@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { BUSINESS_TYPES, can, FEATURES, getCompanyProfile, getSettings, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
+import { BUSINESS_TYPES, can, FEATURES, getCompanyProfile, getSettings, listMembers, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
+import { TeamPanel } from "../../../components/TeamPanel";
 import { BUILT, FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
 import { chooseType, saveCompany, saveLogo, switchFeature } from "./actions";
@@ -8,7 +9,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { ctx, membership } = await requireSession();
   if (!can(ctx, "settings.manage")) redirect("/");
   const { error, notice } = await searchParams;
-  const [settings, company] = await Promise.all([getSettings(ctx), getCompanyProfile(ctx)]);
+  const [settings, company, members] = await Promise.all([getSettings(ctx), getCompanyProfile(ctx), listMembers(ctx)]);
   const starting = TYPE_FEATURES[settings.businessType];
   const customized = FEATURES.some((id) => settings.features[id] !== starting.includes(id));
   const onCount = FEATURES.filter((id) => settings.features[id]).length;
@@ -90,6 +91,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             )}
           </div>
         </div>
+      </section>
+
+      <section className="glass panel">
+        <h2 className="title">Team</h2>
+        <div className="muted">Everyone who can sign in to {company.name}, and what their role lets them do.</div>
+        <TeamPanel members={members} canMakeOwners={ctx.role === "owner"} />
       </section>
 
       <section className="glass panel">

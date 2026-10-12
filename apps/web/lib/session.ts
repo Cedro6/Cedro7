@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { currentMembership, type Ctx, type Membership } from "@bos/core";
+import { currentMembership, sessionVersion, type Ctx, type Membership } from "@bos/core";
 import { pool } from "./pool";
 
 const COOKIE = "bos_session";
@@ -47,8 +47,12 @@ function sign(payload: string): string {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-export async function startSession(userId: string, orgId: string): Promise<void> {
-  const payload = `${userId}.${orgId}`;
+/**
+ * The version is the person's password version at sign-in (zero for a demo person with no
+ * password). Changing the password raises it, which ends every session started before.
+ */
+export async function startSession(userId: string, orgId: string, version = 0): Promise<void> {
+  const payload = `${userId}.${orgId}.${version}`;
   (await cookies()).set(COOKIE, `${payload}.${sign(payload)}`, {
     httpOnly: true,
     sameSite: "lax",
@@ -67,12 +71,12 @@ export type Session = { ctx: Ctx; membership: Membership };
 /** The signed-in person and their company, or a redirect to sign-in. */
 export async function requireSession(): Promise<Session> {
   const raw = (await cookies()).get(COOKIE)?.value;
-  const [userId, orgId, signature] = raw?.split(".") ?? [];
-  if (!userId || !orgId || !signature) redirect("/sign-in");
-  const expected = Buffer.from(sign(`${userId}.${orgId}`));
+  const [userId, orgId, version, signature] = raw?.split(".") ?? [];
+  if (!userId || !orgId || !version || !signature) redirect("/sign-in");
+  const expected = Buffer.from(sign(`${userId}.${orgId}.${version}`));
   const given = Buffer.from(signature);
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) redirect("/sign-in");
-  const membership = await currentMembership(pool, orgId, userId).catch(() => null);
-  if (!membership) redirect("/sign-in");
+  const [membership, current] = await Promise.all([currentMembership(pool, orgId, userId).catch(() => null), sessionVersion(pool, userId).catch(() => -1)]);
+  if (!membership || String(current) !== version) redirect("/sign-in");
   return { ctx: { pool, orgId, userId, role: membership.role, features: membership.features }, membership };
 }
