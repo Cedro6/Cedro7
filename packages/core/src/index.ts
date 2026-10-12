@@ -178,3 +178,20 @@ export {
 } from "./crm/reminders";
 export { getCompanyProfile, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, type CompanyProfile } from "./platform/company";
 export { getPackingSlip, type PackingSlip } from "./sales/orders";
+export {
+  checkNewPassword,
+  createPasswordLink,
+  hashPassword,
+  inviteMember,
+  listMembers,
+  passwordLinkOwner,
+  sessionVersion,
+  setPasswordWithLink,
+  signInWithPassword,
+  updateMember,
+  verifyPassword,
+  type LinkOwner,
+  type SignedIn,
+  type SignInResult,
+  type TeamMemberDetail,
+} from "./platform/passwords";

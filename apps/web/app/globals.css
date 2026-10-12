@@ -2095,3 +2095,8 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .paper-footer { border-top: 1px solid #d9dccf; padding-top: 14px; }
 .company-split { margin-top: 14px; align-items: flex-start; }
 .field input[type="file"] { padding: 10px; }
+
+/* Sign-in and team */
+.rule { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+.link-box { margin-bottom: 14px; }
+.link-field { width: 100%; min-height: 44px; margin: 6px 0 10px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(var(--k), 0.3); color: var(--ink); font-size: 13px; }

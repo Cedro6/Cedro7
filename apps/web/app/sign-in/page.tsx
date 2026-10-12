@@ -1,5 +1,5 @@
 import { devSignInEnabled, previewPasswordRequired } from "../../lib/session";
-import { signIn } from "./actions";
+import { signIn, signInWithEmail } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,24 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
           Cedro Terminal
         </div>
         <h1>Sign in</h1>
+        <form action={signInWithEmail} className="stack">
+          {error === "wrong" && <p className="error">That email or password is not right.</p>}
+          {error === "locked" && <p className="error">Too many wrong passwords. Try again in 15 minutes, or ask your company&apos;s owner for a new sign-in link.</p>}
+          {error === "has-password" && <p className="error">That person now has their own password. Sign in with their email and password.</p>}
+          <label className="field">
+            <span>Email</span>
+            <input type="email" name="email" required autoComplete="username" maxLength={200} />
+          </label>
+          <label className="field">
+            <span>Password</span>
+            <input type="password" name="password" required autoComplete="current-password" maxLength={200} />
+          </label>
+          <button type="submit" className="btn btn-primary">
+            Sign in
+          </button>
+          <p className="muted">Forgotten it, or new here? Ask your company&apos;s owner for a sign-in link.</p>
+        </form>
+        {enabled && <hr className="rule" />}
         {enabled ? (
           <form action={signIn} className="stack">
             <p className="muted">
@@ -32,7 +50,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
             {needsPassword && (
               <label className="field">
                 <span>Preview password</span>
-                <input type="password" name="previewPassword" required autoComplete="current-password" />
+                <input type="password" name="previewPassword" required autoComplete="off" />
               </label>
             )}
             <div className="stack">
@@ -44,9 +62,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
               ))}
             </div>
           </form>
-        ) : (
-          <p className="muted">Sign-in is not available yet on this deployment.</p>
-        )}
+        ) : null}
       </section>
     </main>
   );

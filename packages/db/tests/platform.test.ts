@@ -51,6 +51,7 @@ describe("migrations", () => {
       "0015_reminders.sql",
       "0016_company_and_addresses.sql",
       "0017_invoice_addresses.sql",
+      "0018_passwords.sql",
     ]);
   });
 
