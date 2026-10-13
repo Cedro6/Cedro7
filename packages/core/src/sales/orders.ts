@@ -277,6 +277,11 @@ export async function confirmOrder(ctx: Ctx, orderId: string): Promise<{ reserve
       "update sales_orders set status = 'confirmed', confirmed_at = now(), updated_at = now() where id = $1",
       [orderId],
     );
+    // The cost of each line is fixed now, so later cost changes do not rewrite this order's margin.
+    await tx.query(
+      "update sales_order_lines l set unit_cost = p.cost from products p where p.id = l.product_id and l.order_id = $1",
+      [orderId],
+    );
     await audit(tx, ctx, "sales_order.confirmed", orderId, { reserved });
     return { reserved };
   });

@@ -109,7 +109,7 @@ export type Analysis = {
     customers: Pair;
     /** Of those, the ones whose first ever order falls in the dates. */
     newCustomers: Pair;
-    /** Sales less each product's current cost. Null when the role may not see cost. */
+    /** Sales less what each product cost on the day its order was confirmed. Null when the role may not see cost. */
     margin: Pair | null;
   };
   /** One step per day, week or month. `was` lines up step for step with the comparison dates. */
@@ -191,7 +191,7 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
   const EITHER = (column: string) => `(${NOW(column)} or ${WAS(column)})`;
   // One row per line of an order confirmed in either set of dates.
   const LINES = `
-    select o.id as order_id, o.customer_id, o.owner_user_id, l.product_id, l.qty, l.qty * l.unit_price as amount,
+    select o.id as order_id, o.customer_id, o.owner_user_id, l.product_id, l.qty, l.qty * l.unit_price as amount, l.unit_cost,
            ${local("o.confirmed_at")} as day, ${NOW("o.confirmed_at")} as cur
       from sales_orders o join sales_order_lines l on l.order_id = o.id
      where o.status <> 'cancelled' and o.confirmed_at is not null and ${EITHER("o.confirmed_at")}`;
@@ -202,8 +202,8 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
               count(distinct order_id) filter (where cur)::int as orders, count(distinct order_id) filter (where not cur)::int as orders0,
               coalesce(sum(x.qty) filter (where cur), 0)::float8 as units, coalesce(sum(x.qty) filter (where not cur), 0)::float8 as units0,
               count(distinct customer_id) filter (where cur)::int as cust, count(distinct customer_id) filter (where not cur)::int as cust0,
-              coalesce(sum(x.amount - x.qty * p.cost) filter (where cur), 0)::float8 as margin,
-              coalesce(sum(x.amount - x.qty * p.cost) filter (where not cur), 0)::float8 as margin0
+              coalesce(sum(x.amount - x.qty * coalesce(x.unit_cost, p.cost)) filter (where cur), 0)::float8 as margin,
+              coalesce(sum(x.amount - x.qty * coalesce(x.unit_cost, p.cost)) filter (where not cur), 0)::float8 as margin0
          from (${LINES}) x join products p on p.id = x.product_id`,
       dates,
     );
@@ -228,8 +228,8 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
       `select p.id, p.sku, p.name, p.category,
               coalesce(sum(x.qty) filter (where cur), 0)::float8 as units, coalesce(sum(x.qty) filter (where not cur), 0)::float8 as units0,
               coalesce(sum(x.amount) filter (where cur), 0)::float8 as rev, coalesce(sum(x.amount) filter (where not cur), 0)::float8 as rev0,
-              coalesce(sum(x.amount - x.qty * p.cost) filter (where cur), 0)::float8 as margin,
-              coalesce(sum(x.amount - x.qty * p.cost) filter (where not cur), 0)::float8 as margin0
+              coalesce(sum(x.amount - x.qty * coalesce(x.unit_cost, p.cost)) filter (where cur), 0)::float8 as margin,
+              coalesce(sum(x.amount - x.qty * coalesce(x.unit_cost, p.cost)) filter (where not cur), 0)::float8 as margin0
          from (${LINES}) x join products p on p.id = x.product_id
         group by p.id, p.sku, p.name, p.category order by 7 desc, 8 desc, p.sku`,
       dates,

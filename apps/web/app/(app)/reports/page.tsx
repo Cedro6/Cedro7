@@ -140,7 +140,7 @@ function Overview({ data, view }: { data: Analysis; view: ReportView }) {
         <Tile label="Orders" pair={s.orders} format={count} />
         <Tile label="Average order" pair={s.average} format={whole} />
         <Tile label="Units sold" pair={s.units} format={formatQty} />
-        {s.margin && <Tile label="Margin" pair={s.margin} format={whole} note="Sales less current cost" />}
+        {s.margin && <Tile label="Margin" pair={s.margin} format={whole} note="Sales less cost of goods" />}
         <Tile label="Customers buying" pair={s.customers} format={count} />
         <Tile label="New customers" pair={s.newCustomers} format={count} />
       </div>
@@ -283,7 +283,7 @@ function Profit({ data, costs, view }: { data: Analysis; costs: NonNullable<Anal
               </tbody>
             </table>
           </div>
-          <p className="muted footnote">Cost of goods uses each product&apos;s current cost. Costs count by the date of the bill or purchase, paid or not. This is a working figure, not a tax return.</p>
+          <p className="muted footnote">Cost of goods is what each product cost on the day its order was confirmed. Costs count by the date of the bill or purchase, paid or not. This is a working figure, not a tax return.</p>
         </section>
       )}
       <PairTable
@@ -426,7 +426,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       {view.tab === "products" && (
         <PairTable
           view={view} table="products" title="Every product sold" first="Product"
-          note={`Sales are orders confirmed, before tax.${showMargin ? " Margin is sales less each product's current cost." : ""}`}
+          note={`Sales are orders confirmed, before tax.${showMargin ? " Margin is sales less what each product cost on the day its order was confirmed." : ""}`}
           rows={data.products.map((p) => ({
             key: p.id,
             label: <><Link href={`/products/${p.id}`} className="row-link">{p.name}</Link> <span className="muted">{p.sku}</span></>,

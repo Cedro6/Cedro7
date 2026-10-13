@@ -12,7 +12,7 @@ export type Report = {
   sales: { orders: number; revenue: number; average: number; previousRevenue: number };
   /** Revenue per calendar month, oldest first, covering the period. */
   byMonth: { month: string; revenue: number; orders: number }[];
-  /** Margin is null when the role may not see cost. */
+  /** Margin uses each product's cost on the day the order was confirmed. Null when the role may not see cost. */
   topProducts: { id: string; sku: string; name: string; units: number; revenue: number; margin: number | null }[];
   topCustomers: { id: string; name: string; orders: number; revenue: number }[];
   /** What customers owe today, by how late it is. Not tied to the period. */
@@ -36,7 +36,7 @@ export async function report(ctx: Ctx, days: ReportPeriod = 30): Promise<Report>
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     // One row per order line confirmed in this period or the one before it.
     const LINES = `
-      select o.id as order_id, o.customer_id, o.confirmed_at, l.product_id, l.qty, l.qty * l.unit_price as amount
+      select o.id as order_id, o.customer_id, o.confirmed_at, l.product_id, l.qty, l.qty * l.unit_price as amount, l.unit_cost
         from sales_orders o join sales_order_lines l on l.order_id = o.id
        where o.status <> 'cancelled' and o.confirmed_at is not null`;
     const sales = await tx.query<{ orders: number; revenue: number; previous: number }>(
@@ -62,7 +62,7 @@ export async function report(ctx: Ctx, days: ReportPeriod = 30): Promise<Report>
     );
     const topProducts = await tx.query<{ id: string; sku: string; name: string; units: number; revenue: number; margin: number | null }>(
       `select p.id, p.sku, p.name, sum(x.qty)::float8 as units, sum(x.amount)::float8 as revenue,
-              case when $2 then (sum(x.amount) - sum(x.qty * p.cost))::float8 end as margin
+              case when $2 then (sum(x.amount) - sum(x.qty * coalesce(x.unit_cost, p.cost)))::float8 end as margin
          from (${LINES}) x join products p on p.id = x.product_id
         where x.confirmed_at >= now() - make_interval(days => $1)
         group by p.id, p.sku, p.name order by sum(x.amount) desc, p.sku limit 8`,
