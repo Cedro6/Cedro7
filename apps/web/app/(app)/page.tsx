@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { can, getBriefing, productOf, getHomeLayout, HERO_RANGES, isChartPeriod, isWidget, type HeroRange, type WidgetId } from "@bos/core";
+import { can, getBriefing, isDealerPeriod, productOf, getHomeLayout, HERO_RANGES, isChartPeriod, isWidget, type HeroRange, type WidgetId } from "@bos/core";
 import { ModeSwitch } from "../../components/ModeSwitch";
 import { DealerHome } from "../../components/DealerHome";
 import { BriefingPanel } from "../../components/BriefingPanel";
@@ -49,7 +49,7 @@ function WidgetMenu({ options, replacing }: { options: WidgetId[]; replacing: Wi
   );
 }
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<{ edit?: string; add?: string; replace?: string; range?: string; chart?: string; error?: string }> }) {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ edit?: string; add?: string; replace?: string; range?: string; chart?: string; deals?: string; error?: string }> }) {
   const { ctx, membership } = await requireSession();
   const params = await searchParams;
   const dealer = productOf(membership.businessType ?? "distributor") === "dealer";
@@ -121,7 +121,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       )}
 
       {dealer ? (
-        <DealerHome ctx={ctx} period={view.chart} />
+        <DealerHome ctx={ctx} sales={params.chart && isDealerPeriod(params.chart) ? params.chart : "30d"} deals={params.deals && isDealerPeriod(params.deals) ? params.deals : "30d"} />
       ) : (
       <div className="dash">
         {layout.widgets.map((id, index) => {

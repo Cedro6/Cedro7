@@ -428,43 +428,79 @@ export async function updateDealerSettings(ctx: Ctx, input: Partial<DealerSettin
   );
 }
 
+/** The periods the dealer's Home charts offer. */
+export const DEALER_PERIODS = ["7d", "30d", "quarter", "ytd", "12m"] as const;
+export type DealerPeriod = (typeof DEALER_PERIODS)[number];
+export const isDealerPeriod = (value: string): value is DealerPeriod => (DEALER_PERIODS as readonly string[]).includes(value);
+
+export type DealSeries = {
+  period: DealerPeriod;
+  bucket: "day" | "week" | "month";
+  /** One point per day, week or month. `total` is sales, `deals` deals written, `delivered` cars delivered. */
+  points: { date: string; total: number; deals: number; delivered: number }[];
+  total: number;
+  /** Cars delivered in the period. */
+  cars: number;
+  /** Deals written in the period (open or delivered, cancelled left out). */
+  deals: number;
+  /** Of the deals written in the period, how many are still open. */
+  open: number;
+  from: string;
+  to: string;
+};
+
 /**
- * Sales for the dealer's Home chart: the last 30 days, this quarter, or this year so far. A sale counts
- * on the day its deal was delivered, at the sale price (before tax, fees and trade-in), cancelled deals left out.
+ * The dealer's Home charts. A sale counts on the day its deal was delivered, at the sale price (before
+ * tax, fees and trade-in). A deal counts on the day it was written. Cancelled deals are left out of both.
+ * Every day, week or month in the period gets a point, so the chart draws even when nothing has sold.
  */
-export async function dealSalesSeries(ctx: Ctx, period: "30d" | "quarter" | "ytd"): Promise<{ period: "30d" | "quarter" | "ytd"; bucket: "day" | "week"; points: { date: string; total: number }[]; total: number; cars: number; from: string; to: string } | null> {
+export async function dealSeries(ctx: Ctx, period: DealerPeriod): Promise<DealSeries | null> {
   if (!featureOn(ctx.features, "dealer")) return null;
   requirePermission(ctx, "vehicle.read");
   const zone = (await withTenant(ctx.pool, ctx.orgId, (tx) => tx.query<{ tz: string }>("select timezone as tz from organizations where id = $1", [ctx.orgId]))).rows[0]?.tz ?? "UTC";
   const start =
-    period === "30d" ? "(now() at time zone $1)::date - 29"
+    period === "7d" ? "(now() at time zone $1)::date - 6"
+    : period === "30d" ? "(now() at time zone $1)::date - 29"
     : period === "quarter" ? "date_trunc('quarter', now() at time zone $1)::date"
-    : "date_trunc('year', now() at time zone $1)::date";
-  const weekly = period === "ytd";
+    : period === "ytd" ? "date_trunc('year', now() at time zone $1)::date"
+    : "(date_trunc('month', now() at time zone $1) - interval '11 months')::date";
+  const bucket = period === "12m" ? "month" : period === "ytd" ? "week" : "day";
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const result = await tx.query<{ date: string; total: number; cars: number; first: string; last: string }>(
+    const result = await tx.query<{ date: string; total: number; deals: number; delivered: number; open: number; first: string; last: string }>(
       `with span as (select ${start} as first, (now() at time zone $1)::date as last),
             days as (select generate_series(first, last, interval '1 day')::date as day from span),
             daily as (select d.day,
                              coalesce((select sum(sale_price) from deals x where x.status = 'delivered' and x.delivered_on = d.day), 0) as total,
-                             (select count(*) from deals x where x.status = 'delivered' and x.delivered_on = d.day) as cars
+                             (select count(*) from deals x where x.status = 'delivered' and x.delivered_on = d.day) as delivered,
+                             (select count(*) from deals x where x.status <> 'cancelled' and (x.created_at at time zone $1)::date = d.day) as deals,
+                             (select count(*) from deals x where x.status = 'open' and (x.created_at at time zone $1)::date = d.day) as open
                         from days d)
-       select to_char(min(day), 'YYYY-MM-DD') as date, sum(total)::float8 as total, sum(cars)::int as cars,
+       select to_char(min(day), 'YYYY-MM-DD') as date, sum(total)::float8 as total, sum(deals)::int as deals,
+              sum(delivered)::int as delivered, sum(open)::int as open,
               to_char((select first from span), 'YYYY-MM-DD') as first, to_char((select last from span), 'YYYY-MM-DD') as last
          from daily
-        group by ${weekly ? "date_trunc('week', day)" : "day"}
+        group by ${bucket === "day" ? "day" : `date_trunc('${bucket}', day)`}
         order by 1`,
       [zone],
     );
-    const points = result.rows.map(({ date, total }) => ({ date, total }));
+    const points = result.rows.map(({ date, total, deals, delivered }) => ({ date, total, deals, delivered }));
+    const sum = (k: "total" | "deals" | "delivered") => points.reduce((n, p) => n + p[k], 0);
     return {
       period,
-      bucket: weekly ? "week" : "day",
+      bucket,
       points,
-      total: points.reduce((sum, p) => sum + p.total, 0),
-      cars: result.rows.reduce((sum, r) => sum + r.cars, 0),
+      total: sum("total"),
+      cars: sum("delivered"),
+      deals: sum("deals"),
+      open: result.rows.reduce((n, r) => n + r.open, 0),
       from: result.rows[0]!.first,
       to: result.rows[0]!.last,
     };
   });
+}
+
+/** Sales for Ava and older callers: the same figures as the Home chart. */
+export async function dealSalesSeries(ctx: Ctx, period: "30d" | "quarter" | "ytd") {
+  const s = await dealSeries(ctx, period);
+  return s && { ...s, period, bucket: s.bucket as "day" | "week", points: s.points.map(({ date, total }) => ({ date, total })) };
 }
