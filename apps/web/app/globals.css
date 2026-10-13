@@ -2294,3 +2294,70 @@ a.account-card:hover .account-name { text-decoration: underline; }
   a.account-card .avatar { display: flex; }
   .sidebar { position: relative; }
 }
+
+/* Today's briefing: a picture behind the words, and a sheet of glass over it once the briefing is written.
+   The picture is dark in both colour modes, so this panel keeps its own light-on-dark colours. */
+.briefing-art {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  color: #f4f4f8;
+  background: #07040f url("/briefing.jpg") right center / cover no-repeat;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.briefing-art::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(6, 3, 14, 0.82) 0%, rgba(6, 3, 14, 0.5) 45%, rgba(6, 3, 14, 0.05) 100%); }
+.briefing-art .panel-head { align-items: center; }
+.briefing-title { margin: 0; font-size: 22px; line-height: 26px; font-weight: 800; letter-spacing: -0.01em; color: #fff; }
+.briefing-sub { margin-top: 1px; color: rgba(244, 244, 248, 0.78); }
+.briefing-art .btn-glass { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.3); color: #fff; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.briefing-art .btn-glass:hover { background: rgba(255, 255, 255, 0.24); }
+.briefing-art .error { color: #ffb4b4; }
+.briefing-glass {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 40%, rgba(160, 120, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(255, 255, 255, 0.06), 0 18px 50px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  animation: briefing-glass-in 0.6s ease both;
+}
+.briefing-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.briefing-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(8, 5, 18, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: briefing-point-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.briefing-num {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0b0614;
+  background: linear-gradient(135deg, #c6f432, #8fe01f);
+  box-shadow: 0 0 14px rgba(190, 244, 50, 0.45);
+}
+.briefing-point { min-width: 0; font-size: 15px; line-height: 1.55; color: #fff; overflow-wrap: anywhere; }
+.briefing-point strong { color: #d9ff6a; font-weight: 700; }
+.briefing-point .row-link { color: #cdb4ff; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.briefing-foot { margin-top: 12px; padding: 0 4px; font-size: 13px; color: rgba(244, 244, 248, 0.8); }
+.briefing-foot .link-button { color: #d9ff6a; padding: 0; font-size: 13px; }
+@keyframes briefing-glass-in { from { opacity: 0; backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); } }
+@keyframes briefing-point-in { from { opacity: 0; transform: translateY(10px); } }
+@media (prefers-reduced-motion: reduce) { .briefing-glass, .briefing-points li { animation: none; } }
+/* Before the briefing is written the panel is exactly the height it always was. */
+.briefing-art:not(.is-written) { min-height: 100.78px; display: flex; flex-direction: column; justify-content: center; }
+:root[data-mode="light"] .briefing-art { background: #07040f url("/briefing.jpg") right center / cover no-repeat; color: #f4f4f8; border-color: rgba(255, 255, 255, 0.14); box-shadow: 0 18px 50px rgba(30, 20, 70, 0.25); }
+:root[data-mode="light"] .briefing-art .btn-glass { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.3); color: #fff; }
+:root[data-mode="light"] .briefing-art .briefing-title { color: #fff; }
