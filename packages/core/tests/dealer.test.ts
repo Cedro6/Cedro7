@@ -214,3 +214,14 @@ describe("deals", () => {
     expect((await getVehicle(as("owner"), car.id))!.status).toBe("on_lot");
   });
 });
+
+describe("a car added without a VIN", () => {
+  it("can be given its VIN later, once, and not one already on the lot", async () => {
+    const car = await createVehicle(as("owner"), { specs: { make: "Honda", model: "Civic", year: 2016 } });
+    expect((await getVehicle(as("owner"), car.id))!.vin).toBeNull();
+    await expect(updateVehicle(as("owner"), car.id, { vin: "1FTFW1ET9DFC10312" })).rejects.toThrow(/already on the lot/);
+    await expect(updateVehicle(as("owner"), car.id, { vin: "1HGCM82633A00435" })).rejects.toThrow(/17 characters/);
+    await updateVehicle(as("owner"), car.id, { vin: "1hgcm82633a004352" });
+    expect((await getVehicle(as("owner"), car.id))!.vin).toBe("1HGCM82633A004352");
+  });
+});

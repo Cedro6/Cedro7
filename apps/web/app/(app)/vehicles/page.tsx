@@ -32,6 +32,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
         </form>
         {write && (
           <>
+            <Link href="/vehicles/new?manual=1" className="btn btn-glass">Add without a VIN</Link>
             <Link href="/vehicles/import" className="btn btn-glass">Bulk import VINs</Link>
             <Link href="/vehicles/new" className="btn btn-primary">Add vehicle by VIN</Link>
           </>

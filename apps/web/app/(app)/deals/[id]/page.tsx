@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { can, featureOn, getDeal, PAYMENT_METHODS } from "@bos/core";
-import { DealFields } from "../../../../components/DealFields";
+import { DealForm } from "../../../../components/DealForm";
 import { currency, todayHere, whole } from "../../../../lib/locale";
 import { formatMoney } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
@@ -45,6 +45,7 @@ export default async function DealPage({ params, searchParams }: { params: Promi
         <div className="glass panel tile"><h2 className="label">Status</h2><div className="numeral numeral-small">{deal.status === "open" ? (paid ? "Ready to deliver" : "Open") : deal.status === "delivered" ? "Delivered" : "Cancelled"}</div><div className="muted">{deal.odometer === null ? "Odometer reading needed" : `${deal.odometer.toLocaleString("en-US")} mi at sale`}</div></div>
       </div>
 
+      {deal.status !== "open" && (
       <section className="glass panel">
         <h2 className="title">How the total is made up</h2>
         <div className="deal-sum">
@@ -61,6 +62,7 @@ export default async function DealPage({ params, searchParams }: { params: Promi
           <div className="deal-total"><span>Balance</span><span>{formatMoney(deal.balance)}</span></div>
         </div>
       </section>
+      )}
 
       {deal.status !== "cancelled" && (
         <section className="glass panel">
@@ -118,11 +120,11 @@ export default async function DealPage({ params, searchParams }: { params: Promi
         </section>
       )}
 
-      <form action={saveDeal.bind(null, deal.id)} className="stack-panels">
-        <input type="hidden" name="vehicleId" value={deal.vehicleId} />
-        <DealFields v={deal} currency={currency()} locked={!write} />
-        {write && <div className="actions"><button type="submit" className="btn btn-primary">Save changes</button></div>}
-      </form>
+      <DealForm
+        action={saveDeal.bind(null, deal.id)} submitLabel="Save changes" locked={!write} currency={currency()} paid={deal.paid}
+        chosen={{ id: deal.vehicleId, stockNumber: deal.stockNumber, name: deal.vehicleName, vin: deal.vin, askingPrice: null, mileage: deal.odometer, status: "on_lot" }}
+        v={deal}
+      />
 
       {write && (
         <section className="glass panel">
