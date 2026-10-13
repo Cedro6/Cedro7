@@ -266,6 +266,6 @@ export {
 } from "./dealer/vehicles";
 export {
   DEAL_STATUSES, ODOMETER_BRANDS, ODOMETER_TEXT, dealMoney, createDeal, updateDeal, recordDealPayment, deliverDeal, cancelDeal, getDeal, listDeals, openDealFor,
-  getDealerSettings, updateDealerSettings,
+  getDealerSettings, updateDealerSettings, dealSalesSeries,
   type DealStatus, type OdometerBrand, type DealInput, type DealMoney, type Deal, type DealPayment, type DealSummary, type DealerSettings,
 } from "./dealer/deals";

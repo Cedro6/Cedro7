@@ -121,7 +121,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       )}
 
       {dealer ? (
-        <DealerHome ctx={ctx} />
+        <DealerHome ctx={ctx} period={view.chart} />
       ) : (
       <div className="dash">
         {layout.widgets.map((id, index) => {

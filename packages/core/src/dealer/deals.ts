@@ -427,3 +427,44 @@ export async function updateDealerSettings(ctx: Ctx, input: Partial<DealerSettin
     ),
   );
 }
+
+/**
+ * Sales for the dealer's Home chart: the last 30 days, this quarter, or this year so far. A sale counts
+ * on the day its deal was delivered, at the sale price (before tax, fees and trade-in), cancelled deals left out.
+ */
+export async function dealSalesSeries(ctx: Ctx, period: "30d" | "quarter" | "ytd"): Promise<{ period: "30d" | "quarter" | "ytd"; bucket: "day" | "week"; points: { date: string; total: number }[]; total: number; cars: number; from: string; to: string } | null> {
+  if (!featureOn(ctx.features, "dealer")) return null;
+  requirePermission(ctx, "vehicle.read");
+  const zone = (await withTenant(ctx.pool, ctx.orgId, (tx) => tx.query<{ tz: string }>("select timezone as tz from organizations where id = $1", [ctx.orgId]))).rows[0]?.tz ?? "UTC";
+  const start =
+    period === "30d" ? "(now() at time zone $1)::date - 29"
+    : period === "quarter" ? "date_trunc('quarter', now() at time zone $1)::date"
+    : "date_trunc('year', now() at time zone $1)::date";
+  const weekly = period === "ytd";
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const result = await tx.query<{ date: string; total: number; cars: number; first: string; last: string }>(
+      `with span as (select ${start} as first, (now() at time zone $1)::date as last),
+            days as (select generate_series(first, last, interval '1 day')::date as day from span),
+            daily as (select d.day,
+                             coalesce((select sum(sale_price) from deals x where x.status = 'delivered' and x.delivered_on = d.day), 0) as total,
+                             (select count(*) from deals x where x.status = 'delivered' and x.delivered_on = d.day) as cars
+                        from days d)
+       select to_char(min(day), 'YYYY-MM-DD') as date, sum(total)::float8 as total, sum(cars)::int as cars,
+              to_char((select first from span), 'YYYY-MM-DD') as first, to_char((select last from span), 'YYYY-MM-DD') as last
+         from daily
+        group by ${weekly ? "date_trunc('week', day)" : "day"}
+        order by 1`,
+      [zone],
+    );
+    const points = result.rows.map(({ date, total }) => ({ date, total }));
+    return {
+      period,
+      bucket: weekly ? "week" : "day",
+      points,
+      total: points.reduce((sum, p) => sum + p.total, 0),
+      cars: result.rows.reduce((sum, r) => sum + r.cars, 0),
+      from: result.rows[0]!.first,
+      to: result.rows[0]!.last,
+    };
+  });
+}
