@@ -10,6 +10,8 @@ export type Reminder = {
   title: string;
   /** YYYY-MM-DD */
   dueOn: string;
+  /** HH:MM on a 24-hour clock, or null for any time that day. */
+  dueTime: string | null;
   customerId: string | null;
   /** Null when there is no customer or the role may not see customers. */
   customerName: string | null;
@@ -29,6 +31,12 @@ export type CalendarEntry = {
   reminderId?: string;
 };
 
+/** "14:30" as "2:30 pm". */
+export function clock(time: string): string {
+  const [h = 0, m = 0] = time.split(":").map(Number);
+  return `${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "am" : "pm"}`;
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TODAY = (ctx: Ctx) => `(now() at time zone '${zoneOf(ctx)}')::date`;
@@ -45,7 +53,7 @@ function validDate(value: string): boolean {
 }
 
 const SELECT = (ctx: Ctx) => `
-  select r.id, r.title, to_char(r.due_on, 'YYYY-MM-DD') as "dueOn", r.customer_id as "customerId",
+  select r.id, r.title, to_char(r.due_on, 'YYYY-MM-DD') as "dueOn", to_char(r.due_time, 'HH24:MI') as "dueTime", r.customer_id as "customerId",
          ${can(ctx, "customer.read") ? "c.name" : "null"} as "customerName",
          r.assigned_to as "assignedTo", u.name as "assignedName",
          (r.done_at is not null) as done, (r.done_at is null and r.due_on < ${TODAY(ctx)}) as overdue
@@ -67,7 +75,7 @@ export async function listReminders(
         where ($1::uuid is null or r.customer_id = $1)
           and ($2::date is null or r.due_on >= $2) and ($3::date is null or r.due_on <= $3)
           and (not $4 or r.done_at is null) and (not $5 or r.assigned_to = $6)
-        order by (r.done_at is not null), r.due_on, r.created_at
+        order by (r.done_at is not null), r.due_on, r.due_time nulls first, r.created_at
         limit 500`,
       [options.customerId ?? null, from, to, options.openOnly ?? false, options.mineOnly ?? false, ctx.userId],
     );
@@ -77,13 +85,15 @@ export async function listReminders(
 
 export async function createReminder(
   ctx: Ctx,
-  input: { title: string; dueOn: string; customerId?: string; assignedTo?: string },
+  input: { title: string; dueOn: string; dueTime?: string; customerId?: string; assignedTo?: string },
 ): Promise<{ id: string }> {
   requireCalendar(ctx);
   const title = input.title.trim();
   if (!title) throw new ValidationError("title", "Say what the reminder is for.");
   if (title.length > 200) throw new ValidationError("title", "Keep the reminder under 200 characters.");
   if (!validDate(input.dueOn)) throw new ValidationError("dueOn", "Choose a date.");
+  const dueTime = input.dueTime?.trim() || null;
+  if (dueTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(dueTime)) throw new ValidationError("dueTime", "Enter the time as hours and minutes, such as 14:30.");
   const customerId = input.customerId || null;
   if (customerId && (!UUID.test(customerId) || !can(ctx, "customer.read"))) throw new ValidationError("customerId", "Customer not found.");
   const assignedTo = input.assignedTo || ctx.userId;
@@ -96,8 +106,8 @@ export async function createReminder(
       throw new ValidationError("assignedTo", "That person is not on the team.");
     }
     const made = await tx.query<{ id: string }>(
-      "insert into reminders (org_id, title, due_on, customer_id, assigned_to, created_by) values ($1, $2, $3, $4, $5, $6) returning id",
-      [ctx.orgId, title, input.dueOn, customerId, assignedTo, ctx.userId],
+      "insert into reminders (org_id, title, due_on, due_time, customer_id, assigned_to, created_by) values ($1, $2, $3, $4, $5, $6, $7) returning id",
+      [ctx.orgId, title, input.dueOn, dueTime, customerId, assignedTo, ctx.userId],
     );
     return { id: made.rows[0]!.id };
   });
@@ -137,7 +147,7 @@ export async function calendarEntries(ctx: Ctx, from: string, to: string): Promi
   const entries: CalendarEntry[] = (await listReminders(ctx, { from, to })).map((r) => ({
     date: r.dueOn,
     kind: "reminder",
-    title: r.customerName ? `${r.title} · ${r.customerName}` : r.title,
+    title: `${r.dueTime ? `${clock(r.dueTime)} ` : ""}${r.customerName ? `${r.title} · ${r.customerName}` : r.title}`,
     href: r.customerId && can(ctx, "customer.read") ? `/customers/${r.customerId}` : `/calendar?day=${r.dueOn}`,
     done: r.done,
     reminderId: r.id,

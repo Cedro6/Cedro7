@@ -51,6 +51,7 @@ export default async function PurchaseOrderPage({
             <PoStatusBadge status={order.status} large />
           </div>
         </div>
+        <Link href={`/purchasing/${order.id}/print`} className="btn btn-glass">Print or save as PDF</Link>
         {canWrite && cancellable && (
           <form action={cancel}>
             <input type="hidden" name="orderId" value={order.id} />

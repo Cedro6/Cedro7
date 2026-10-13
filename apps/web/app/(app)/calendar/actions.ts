@@ -28,7 +28,7 @@ async function run(form: FormData, notice: string, change: () => Promise<unknown
 export async function addReminder(form: FormData): Promise<void> {
   const { ctx } = await requireSession();
   await run(form, "Reminder added.", () =>
-    createReminder(ctx, { title: text(form, "title"), dueOn: text(form, "dueOn"), customerId: text(form, "customerId") || undefined, assignedTo: text(form, "assignedTo") || undefined }),
+    createReminder(ctx, { title: text(form, "title"), dueOn: text(form, "dueOn"), dueTime: text(form, "dueTime") || undefined, customerId: text(form, "customerId") || undefined, assignedTo: text(form, "assignedTo") || undefined }),
   );
 }
 
