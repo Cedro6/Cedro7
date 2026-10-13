@@ -225,3 +225,18 @@ describe("a car added without a VIN", () => {
     expect((await getVehicle(as("owner"), car.id))!.vin).toBe("1HGCM82633A004352");
   });
 });
+
+describe("the dealer's sales chart", () => {
+  it("counts delivered deals by the day they were delivered, at the sale price", async () => {
+    const { dealSalesSeries } = await import("../src/index");
+    // The earlier tests delivered on a fixed date; move it to today so this holds whenever it runs.
+    await owner.query("update deals set delivered_on = (now() at time zone 'America/New_York')::date where status = 'delivered'");
+    const s = (await dealSalesSeries(as("owner"), "30d"))!;
+    expect(s.points).toHaveLength(30);
+    // Earlier tests delivered one deal (the Accord at 6,000) and cancelled another.
+    expect(s.total).toBe(6000);
+    expect(s.cars).toBe(1);
+    expect((await dealSalesSeries(as("owner"), "ytd"))!.bucket).toBe("week");
+    expect(await dealSalesSeries(as("owner", { dealer: false }), "30d")).toBeNull();
+  });
+});

@@ -1,9 +1,49 @@
 import Link from "next/link";
-import { listReminders, listVehicles, lotSummary, VEHICLE_STATUS_TEXT, type Ctx } from "@bos/core";
+import { dealSalesSeries, listReminders, listVehicles, lotSummary, VEHICLE_STATUS_TEXT, type ChartPeriod, type Ctx } from "@bos/core";
+import { AreaChart } from "./home/charts";
 import { todayHere, whole } from "../lib/locale";
 
+const CHART: Record<ChartPeriod, { tab: string; title: string; empty: string }> = {
+  "30d": { tab: "30 days", title: "Sales, last 30 days", empty: "No cars delivered in the last 30 days." },
+  quarter: { tab: "Quarter", title: "Sales, this quarter", empty: "No cars delivered this quarter yet." },
+  ytd: { tab: "Year to date", title: "Sales, year to date", empty: "No cars delivered this year yet." },
+};
+const shortDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/** The same chart as Cedro's Home, counting delivered deals. */
+async function DealerSalesChart({ ctx, period }: { ctx: Ctx; period: ChartPeriod }) {
+  const data = await dealSalesSeries(ctx, period);
+  if (!data) return null;
+  const text = CHART[data.period];
+  const last = data.points.at(-1)?.total ?? 0;
+  return (
+    <section className="glass panel">
+      <div className="panel-head">
+        <div>
+          <h2 className="title">{text.title}</h2>
+          <div className="muted">{shortDay(data.from)} to {shortDay(data.to)} · deals delivered, sale price before tax and fees{data.bucket === "week" ? " · by week" : ""}</div>
+        </div>
+        <div className="segmented" role="group" aria-label="Chart period">
+          {(["30d", "quarter", "ytd"] as const).map((p) => (
+            <Link key={p} href={p === "30d" ? "/" : `/?chart=${p}`} aria-current={p === data.period ? "true" : undefined} scroll={false}>{CHART[p].tab}</Link>
+          ))}
+        </div>
+      </div>
+      <div className="chart-total">
+        <span className="numeral numeral-md">{whole(data.total)}</span>
+        <span className="muted">total · {data.cars} {data.cars === 1 ? "car" : "cars"} sold · {whole(last)} {data.bucket === "week" ? "this week" : "today"}</span>
+      </div>
+      {data.total > 0 && data.points.length > 1 ? (
+        <AreaChart animate={data.period} series={data.points} label={`${text.title}: ${whole(data.total)} from ${data.cars} cars, shown ${data.bucket === "week" ? "week by week" : "day by day"}`} />
+      ) : (
+        <p className="muted">{text.empty}</p>
+      )}
+    </section>
+  );
+}
+
 /** Home for a Dealer Terminal company: the lot at a glance, what is getting old, and what is due. */
-export async function DealerHome({ ctx }: { ctx: Ctx }) {
+export async function DealerHome({ ctx, period = "30d" }: { ctx: Ctx; period?: ChartPeriod }) {
   const [lot, vehicles, due] = await Promise.all([lotSummary(ctx), listVehicles(ctx, { status: "live" }), listReminders(ctx, { to: todayHere(), openOnly: true })]);
   const aged = vehicles.filter((v) => v.daysHeld >= 60).sort((a, b) => b.daysHeld - a.daysHeld).slice(0, 5);
   const newest = vehicles.slice(0, 6);
@@ -16,11 +56,12 @@ export async function DealerHome({ ctx }: { ctx: Ctx }) {
         {lot.invested !== null && <div className="glass panel tile"><h2 className="label">Invested in stock</h2><div className="numeral">{whole(lot.invested)}</div><div className="muted">What you paid for the {lot.live} on hand</div></div>}
         <Link href="/calendar" className="glass panel tile"><h2 className="label">Due today</h2><div className="numeral">{due.length}</div><div className="muted">{due.length === 0 ? "No reminders due" : `${due.filter((r) => r.overdue).length} overdue`}</div></Link>
       </div>
+      <DealerSalesChart ctx={ctx} period={period} />
       <div className="dash">
         <section className="glass panel dash-item dash-wide">
           <div className="panel-head">
             <h2 className="title">Newest on the lot</h2>
-            <Link href="/vehicles/new" className="btn btn-primary btn-small">Add vehicle by VIN</Link>
+            <Link href="/vehicles" className="row-link">All vehicles</Link>
           </div>
           {newest.length === 0 ? (
             <p className="muted">No vehicles yet. Add the first one by its VIN.</p>
