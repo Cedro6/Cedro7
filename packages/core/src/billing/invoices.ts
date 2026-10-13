@@ -485,7 +485,9 @@ async function applyCreditInTx(
  * Raises a credit note for a customer. Given an invoice, the credit is used against it first;
  * anything beyond that invoice's balance stays on the customer's account for later.
  */
-export async function raiseCredit(
+/** The same as raiseCredit, inside a transaction the caller already has open. */
+export async function raiseCreditInTx(
+  tx: PoolClient,
   ctx: Ctx,
   input: { customerId?: string; invoiceId?: string; amount: number; reason: string },
 ): Promise<{ id: string; number: string; applied: number; onAccount: number }> {
@@ -499,36 +501,42 @@ export async function raiseCredit(
   if (!input.invoiceId && !(input.customerId && UUID.test(input.customerId))) {
     throw new ValidationError("customerId", "Choose a customer.");
   }
-  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    let customerId = input.customerId ?? "";
-    if (input.invoiceId) {
-      const owner = UUID.test(input.invoiceId)
-        ? await tx.query<{ customer_id: string }>("select customer_id from invoices where id = $1", [input.invoiceId])
-        : { rows: [] };
-      if (!owner.rows[0]) throw new StateError("Invoice not found.");
-      customerId = owner.rows[0].customer_id;
-    }
-    const customer = await tx.query("select 1 from customers where id = $1 for update", [customerId]);
-    if (!customer.rowCount) throw new ValidationError("customerId", "Choose a customer.");
-    const invoice = input.invoiceId ? await lockInvoice(tx, input.invoiceId) : null;
-    if (invoice?.voided) throw new StateError("That invoice has been voided.");
-    const amount = cents(input.amount);
-    const number = await nextNumber(tx, ctx.orgId, "credit_note", "CN");
-    const created = await tx.query<{ id: string }>(
-      "insert into credit_notes (org_id, number, customer_id, amount, reason, created_by) values ($1, $2, $3, $4, $5, $6) returning id",
-      [ctx.orgId, number, customerId, amount, reason, ctx.userId],
-    );
-    const id = created.rows[0]!.id;
-    const applied =
-      invoice && invoice.balance > 0 ? await applyCreditInTx(tx, ctx, input.invoiceId!, customerId, invoice.balance, id) : 0;
-    await audit(tx, ctx, "credit_note.raised", "credit_note", id, {
-      number,
-      amount,
-      applied,
-      invoiceId: input.invoiceId ?? null,
-    });
-    return { id, number, applied, onAccount: cents(amount - applied) };
+  let customerId = input.customerId ?? "";
+  if (input.invoiceId) {
+    const owner = UUID.test(input.invoiceId)
+      ? await tx.query<{ customer_id: string }>("select customer_id from invoices where id = $1", [input.invoiceId])
+      : { rows: [] };
+    if (!owner.rows[0]) throw new StateError("Invoice not found.");
+    customerId = owner.rows[0].customer_id;
+  }
+  const customer = await tx.query("select 1 from customers where id = $1 for update", [customerId]);
+  if (!customer.rowCount) throw new ValidationError("customerId", "Choose a customer.");
+  const invoice = input.invoiceId ? await lockInvoice(tx, input.invoiceId) : null;
+  if (invoice?.voided) throw new StateError("That invoice has been voided.");
+  const amount = cents(input.amount);
+  const number = await nextNumber(tx, ctx.orgId, "credit_note", "CN");
+  const created = await tx.query<{ id: string }>(
+    "insert into credit_notes (org_id, number, customer_id, amount, reason, created_by) values ($1, $2, $3, $4, $5, $6) returning id",
+    [ctx.orgId, number, customerId, amount, reason, ctx.userId],
+  );
+  const id = created.rows[0]!.id;
+  const applied =
+    invoice && invoice.balance > 0 ? await applyCreditInTx(tx, ctx, input.invoiceId!, customerId, invoice.balance, id) : 0;
+  await audit(tx, ctx, "credit_note.raised", "credit_note", id, {
+    number,
+    amount,
+    applied,
+    invoiceId: input.invoiceId ?? null,
   });
+  return { id, number, applied, onAccount: cents(amount - applied) };
+}
+
+export async function raiseCredit(
+  ctx: Ctx,
+  input: { customerId?: string; invoiceId?: string; amount: number; reason: string },
+): Promise<{ id: string; number: string; applied: number; onAccount: number }> {
+  requirePermission(ctx, "invoice.write");
+  return withTenant(ctx.pool, ctx.orgId, (tx) => raiseCreditInTx(tx, ctx, input));
 }
 
 /** Uses credit already on the customer's account against one of their invoices, oldest credit first. */

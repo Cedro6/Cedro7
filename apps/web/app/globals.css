@@ -2175,3 +2175,10 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .bill-inline .btn { height: 48px; }
 .rpt-sum { min-width: 0; max-width: 560px; }
 .rpt-total th, .rpt-total td { font-weight: 700; border-top: 2px solid var(--line); }
+
+/* Returns on an order */
+.return-form { margin-top: 14px; }
+.return-form > summary { list-style: none; cursor: pointer; display: inline-flex; }
+.return-form > summary::-webkit-details-marker { display: none; }
+.return-form[open] > summary { margin-bottom: 14px; }
+.return-qty { width: 96px; height: 40px; padding: 0 10px; border: 1px solid rgba(var(--w), 0.24); border-radius: 12px; background: rgba(var(--k), 0.32); color: var(--ink); font: inherit; text-align: right; }

@@ -17,7 +17,7 @@ export const FEATURE_TEXT: Record<FeatureId, { name: string; about: string }> = 
 };
 
 /** Features that change something you can see in this build. The rest can be switched, but their screens come later. */
-export const BUILT: readonly FeatureId[] = ["stock", "purchasing", "calendar", "reports", "expenses"];
+export const BUILT: readonly FeatureId[] = ["stock", "purchasing", "calendar", "reports", "expenses", "returns"];
 
 export const TYPE_TEXT: Record<BusinessType, { name: string; about: string }> = {
   distributor: { name: "Wholesale distributor", about: "Buys in bulk, stores it and ships to business customers. Everything is on." },

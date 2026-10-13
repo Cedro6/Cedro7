@@ -9,6 +9,8 @@ import {
   setCustomerPriceList,
   confirmOrder,
   createQuote,
+  createReturn,
+  moneyText,
   ForbiddenError,
   InsufficientStockError,
   reserveAvailable,
@@ -143,4 +145,22 @@ export async function assignPriceList(formData: FormData): Promise<void> {
     query = `error=${encodeURIComponent(friendly(error))}`;
   }
   redirect(`/customers/${encodeURIComponent(customerId)}?${query}`);
+}
+
+export async function takeReturn(formData: FormData): Promise<void> {
+  const { ctx } = await requireSession();
+  await act(formData, async (orderId) => {
+    const ids = formData.getAll("orderLineId").map(String);
+    const quantities = formData.getAll("returnQty").map((v) => Number(String(v).trim() || "0"));
+    const done = await createReturn(ctx, orderId, {
+      lines: ids.map((orderLineId, i) => ({ orderLineId, qty: quantities[i] ?? 0 })),
+      reason: String(formData.get("reason") ?? ""),
+      restock: formData.get("restock") === "1",
+      credit: formData.get("credit") === "1",
+      idempotencyKey: String(formData.get("requestId") ?? ""),
+    });
+    const stock = done.restocked ? " The goods are back in stock." : "";
+    const credit = done.creditNoteNumber ? ` Credit note ${done.creditNoteNumber} raised for ${moneyText(done.creditAmount, ctx.currency)}.` : "";
+    return `${done.number} recorded: ${done.units} ${done.units === 1 ? "unit" : "units"} returned.${stock}${credit}`;
+  });
 }

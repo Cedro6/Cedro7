@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, featureOn, getOrder, listInvoices } from "@bos/core";
+import { can, featureOn, getOrder, listInvoices, listReturnable, listReturns } from "@bos/core";
 import { InvoiceBadge } from "../../../../components/InvoiceBadge";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 import { deposit } from "../../invoices/actions";
-import { cancel, confirm, reserve, ship } from "../actions";
+import { cancel, confirm, reserve, ship, takeReturn } from "../actions";
 import { zone } from "../../../../lib/locale";
 
 const when = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", {
@@ -40,6 +40,9 @@ export default async function OrderPage({
     can(ctx, "invoice.write") &&
     (order.status === "quote" || order.status === "confirmed") &&
     !invoices.some((invoice) => invoice.kind === "deposit" && invoice.state !== "void");
+  const returnsOn = featureOn(ctx.features, "returns") && order.unitsShipped > 0;
+  const [returns, returnable] = returnsOn ? await Promise.all([listReturns(ctx, order.id), listReturnable(ctx, order.id)]) : [[], []];
+  const canReturn = returnsOn && canWrite && returnable.some((l) => l.left > 0);
   const couldReserve = order.lines.reduce((sum, line) => sum + Math.min(line.backorder, line.availableNow), 0);
 
   return (
@@ -309,6 +312,78 @@ export default async function OrderPage({
           </section>
         </aside>
       </div>
+
+      {returnsOn && (returns.length > 0 || canReturn) && (
+        <section className="glass panel" id="returns">
+          <h2 className="title">Returns</h2>
+          {returns.length > 0 && (
+            <div className="rows">
+              {returns.map((r) => (
+                <div className="row" key={r.id}>
+                  <span className="dot" aria-hidden="true" />
+                  <div className="row-text">
+                    <div className="row-title">
+                      <span className="mono">{r.number}</span> · {r.lines.map((l) => `${formatQty(l.qty)} × ${l.name}`).join(", ")}
+                    </div>
+                    <div className="muted">
+                      {when.format(r.returnedAt)} · {r.byName ?? "System"} · {r.reason} · {r.restocked ? "back in stock" : "not restocked"}
+                      {r.creditNoteNumber ? ` · credit note ${r.creditNoteNumber} for ${formatMoney(r.creditAmount ?? 0)}` : " · no credit raised"}
+                    </div>
+                  </div>
+                  <span className="strong">{formatMoney(r.value)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {canReturn && (
+            <details className="return-form">
+              <summary className="btn btn-glass btn-small">Take a return</summary>
+              <form action={takeReturn} className="stack">
+                <input type="hidden" name="orderId" value={order.id} />
+                <input type="hidden" name="requestId" value={randomUUID()} />
+                <div className="table-wrap">
+                  <table className="compact">
+                    <thead>
+                      <tr><th>Product</th><th className="num">Shipped</th><th className="num">Already returned</th><th className="num">Coming back now</th></tr>
+                    </thead>
+                    <tbody>
+                      {returnable.filter((l) => l.left > 0).map((l) => (
+                        <tr key={l.orderLineId}>
+                          <td>{l.name} <span className="muted mono">{l.sku}</span></td>
+                          <td className="num">{formatQty(l.shipped)}</td>
+                          <td className="num">{formatQty(l.returned)}</td>
+                          <td className="num">
+                            <input type="hidden" name="orderLineId" value={l.orderLineId} />
+                            <input className="return-qty" name="returnQty" type="number" min="0" max={l.left} step="any" inputMode="decimal" placeholder="0" aria-label={`How many ${l.name} came back, up to ${formatQty(l.left)}`} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <label className="field">
+                  <span>Why did it come back?</span>
+                  <input name="reason" required maxLength={200} placeholder="Wrong size, damaged, changed their mind" />
+                </label>
+                {tracked && (
+                  <label className="bill-choice">
+                    <input type="checkbox" name="restock" value="1" defaultChecked /> <span>Put it back in stock (untick for damaged goods)</span>
+                  </label>
+                )}
+                {can(ctx, "invoice.write") && (
+                  <label className="bill-choice">
+                    <input type="checkbox" name="credit" value="1" defaultChecked /> <span>Raise a credit note for its value, tax included</span>
+                  </label>
+                )}
+                <p className="muted">The credit comes off this order&apos;s unpaid invoice if there is one. Otherwise it stays on the customer&apos;s account for their next invoice.</p>
+                <div className="actions">
+                  <button type="submit" className="btn btn-primary">Record return</button>
+                </div>
+              </form>
+            </details>
+          )}
+        </section>
+      )}
     </>
   );
 }

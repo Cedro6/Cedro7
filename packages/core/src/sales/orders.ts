@@ -87,7 +87,7 @@ const SUMMARY_SQL = `
     from sales_order_lines l where l.order_id = o.id
   ) t on true`;
 
-async function nextNumber(tx: PoolClient, orgId: string, docType: string, prefix: string): Promise<string> {
+export async function nextNumber(tx: PoolClient, orgId: string, docType: string, prefix: string): Promise<string> {
   const result = await tx.query<{ n: number }>(
     `insert into document_counters (org_id, doc_type, last_number) values ($1, $2, 1)
      on conflict (org_id, doc_type) do update set last_number = document_counters.last_number + 1
