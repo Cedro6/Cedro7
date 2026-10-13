@@ -15,6 +15,7 @@ export const FEATURES = [
   "putaway",
   "counts",
   "reports",
+  "expenses",
 ] as const;
 export type FeatureId = (typeof FEATURES)[number];
 
@@ -27,10 +28,10 @@ export type BusinessType = (typeof BUSINESS_TYPES)[number];
 /** What each business type starts with. */
 export const TYPE_FEATURES: Record<BusinessType, readonly FeatureId[]> = {
   distributor: FEATURES,
-  retail: ["stock", "calendar", "purchasing", "returns", "counts", "reports"],
+  retail: ["stock", "calendar", "purchasing", "returns", "counts", "reports", "expenses"],
   warehouse: ["stock", "purchasing", "picking", "returns", "warehouse", "putaway", "counts", "calendar"],
-  sales: ["activity", "board", "calendar", "reports"],
-  contractor: ["activity", "board", "calendar", "purchasing", "reports"],
+  sales: ["activity", "board", "calendar", "reports", "expenses"],
+  contractor: ["activity", "board", "calendar", "purchasing", "reports", "expenses"],
 };
 
 /** These do nothing unless stock is tracked, so they count as off while "stock" is off. */

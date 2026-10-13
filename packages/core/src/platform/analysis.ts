@@ -144,6 +144,22 @@ export type Analysis = {
     idle: { id: string; sku: string; name: string; onHand: number; value: number }[];
     idleValue: number;
   } | null;
+  /**
+   * Running costs and profit. Null when bills and expenses are off or the role may not see them.
+   * Costs count by the date of the bill or purchase, voided ones left out.
+   */
+  costs: {
+    /** Everything except stock purchases. */
+    running: Pair;
+    /** Paid or billed for goods to resell. Not taken off profit again: the cost of goods sold covers it. */
+    stockPurchases: Pair;
+    categories: { name: string; amount: Pair }[];
+    /** Margin less running costs. Null when the role may not see cost. */
+    profit: Pair | null;
+    /** Unpaid bills today. */
+    owed: number;
+    overdue: number;
+  } | null;
   /** Null when purchasing is off or the role may not see purchase orders. */
   purchasing: {
     /** Purchase orders approved in the dates, cancelled ones left out, at ordered cost. */
@@ -340,6 +356,33 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
       };
     }
 
+    let costs: Analysis["costs"] = null;
+    if (can(ctx, "expense.read")) {
+      const byCategory = await tx.query<{ name: string; now: number; was: number }>(
+        `select category as name, coalesce(sum(amount) filter (where incurred_on between $1::date and $2::date), 0)::float8 as now,
+                coalesce(sum(amount) filter (where incurred_on between $3::date and $4::date), 0)::float8 as was
+           from expenses where voided_at is null and (incurred_on between $1::date and $2::date or incurred_on between $3::date and $4::date)
+          group by category order by 2 desc, 3 desc, 1`,
+        dates,
+      );
+      const unpaid = await tx.query<{ owed: number; overdue: number }>(
+        `select coalesce(sum(amount), 0)::float8 as owed,
+                coalesce(sum(amount) filter (where due_on < (now() at time zone '${ZONE}')::date), 0)::float8 as overdue
+           from expenses where voided_at is null and paid_on is null`,
+      );
+      const isStock = (name: string) => name === "Stock purchases";
+      const total = (key: "now" | "was", stockOnly: boolean) => byCategory.rows.filter((r) => isStock(r.name) === stockOnly).reduce((n, r) => n + r[key], 0);
+      const running = pair(total("now", false), total("was", false));
+      costs = {
+        running,
+        stockPurchases: pair(total("now", true), total("was", true)),
+        categories: byCategory.rows.map((r) => ({ name: r.name, amount: pair(r.now, r.was) })),
+        profit: seeCost ? pair(t.margin - running.now, t.margin0 - (running.was ?? 0)) : null,
+        owed: unpaid.rows[0]!.owed,
+        overdue: unpaid.rows[0]!.overdue,
+      };
+    }
+
     return {
       range,
       compare,
@@ -371,6 +414,7 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
         debtors: debtors.rows,
       },
       stock,
+      costs,
       purchasing,
     };
   });

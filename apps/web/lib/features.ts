@@ -13,10 +13,11 @@ export const FEATURE_TEXT: Record<FeatureId, { name: string; about: string }> = 
   putaway: { name: "Putaway", about: "A checklist for moving received stock from the dock to its shelves" },
   counts: { name: "Stock counts", about: "Count an aisle or category and correct the stock from the differences" },
   reports: { name: "Reports and sales charts", about: "Sales, margin, top products and customers, money owed and stock value" },
+  expenses: { name: "Bills and expenses", about: "Record supplier bills and running costs, see what you owe and what the business really made" },
 };
 
 /** Features that change something you can see in this build. The rest can be switched, but their screens come later. */
-export const BUILT: readonly FeatureId[] = ["stock", "purchasing", "calendar", "reports"];
+export const BUILT: readonly FeatureId[] = ["stock", "purchasing", "calendar", "reports", "expenses"];
 
 export const TYPE_TEXT: Record<BusinessType, { name: string; about: string }> = {
   distributor: { name: "Wholesale distributor", about: "Buys in bulk, stores it and ships to business customers. Everything is on." },

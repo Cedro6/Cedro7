@@ -20,6 +20,8 @@ export const PERMISSIONS = [
   "purchase_order.receive",
   "invoice.write",
   "report.view",
+  "expense.read",
+  "expense.write",
   "settings.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -50,6 +52,8 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "purchase_order.write",
     "purchase_order.receive",
     "report.view",
+    "expense.read",
+    "expense.write",
   ],
   warehouse: [
     "product.read",
@@ -82,6 +86,8 @@ const PERMISSION_FEATURE: Partial<Record<Permission, FeatureId>> = {
   "purchase_order.approve": "purchasing",
   "purchase_order.receive": "purchasing",
   "report.view": "reports",
+  "expense.read": "expenses",
+  "expense.write": "expenses",
 };
 
 /** Either a bare role, or the acting person with their company's feature switches. */

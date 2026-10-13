@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
   AssistantIcon,
+  BillsIcon,
   CalendarIcon,
   CustomersIcon,
   HomeIcon,
@@ -23,6 +24,7 @@ const ICONS: Record<string, ReactNode> = {
   "/sales": <SalesIcon />,
   "/invoices": <InvoicesIcon />,
   "/purchasing": <PurchasingIcon />,
+  "/bills": <BillsIcon />,
   "/warehouse": <WarehouseIcon />,
   "/calendar": <CalendarIcon />,
   "/reports": <ReportsIcon />,

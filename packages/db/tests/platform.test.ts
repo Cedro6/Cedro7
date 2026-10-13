@@ -55,6 +55,7 @@ describe("migrations", () => {
       "0019_change_password.sql",
       "0020_barcodes.sql",
       "0021_home_layouts.sql",
+      "0022_expenses.sql",
     ]);
   });
 

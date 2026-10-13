@@ -13,7 +13,7 @@ export type SalesTrend = {
 };
 
 export type AttentionItem = {
-  kind: "low_stock" | "overdue_invoice" | "ready_to_ship" | "late_purchase_order" | "quiet_customer" | "reminders";
+  kind: "low_stock" | "overdue_invoice" | "ready_to_ship" | "late_purchase_order" | "overdue_bill" | "quiet_customer" | "reminders";
   tone: "bad" | "warn" | "info";
   title: string;
   detail: string;
@@ -170,6 +170,26 @@ export async function attention(ctx: Ctx): Promise<AttentionItem[]> {
           title: `${p.supplier} is ${plural(p.late, "day", "days")} late`,
           detail: p.number + (p.n > 1 ? ` · ${plural(p.n - 1, "other late order", "other late orders")}` : ""),
           href: "/purchasing?show=open",
+          action: "Open",
+        });
+      }
+    }
+
+    if (can(ctx, "expense.read")) {
+      const bills = await tx.query<{ n: number; owed: string; oldest: number }>(
+        `select count(*)::int as n, coalesce(sum(amount), 0)::text as owed,
+                coalesce(max((now() at time zone $1)::date - due_on), 0)::int as oldest
+           from expenses where voided_at is null and paid_on is null and due_on < (now() at time zone $1)::date`,
+        [ZONE],
+      );
+      const b = bills.rows[0]!;
+      if (b.n > 0) {
+        items.push({
+          kind: "overdue_bill",
+          tone: "warn",
+          title: `${plural(b.n, "bill", "bills")} to pay overdue`,
+          detail: `${money(Number(b.owed))} owed · oldest ${plural(b.oldest, "day", "days")} late`,
+          href: "/bills",
           action: "Open",
         });
       }

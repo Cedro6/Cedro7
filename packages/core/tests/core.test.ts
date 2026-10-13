@@ -74,6 +74,8 @@ it("matches the documented table for the other roles", () => {
       "purchase_order.write",
       "purchase_order.receive",
       "report.view",
+      "expense.read",
+      "expense.write",
     ]);
     expect(allowed.warehouse).toEqual([
       "product.read",
