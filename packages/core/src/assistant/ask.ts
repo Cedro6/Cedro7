@@ -194,23 +194,69 @@ export function finished(text: string): string {
   return [...lines, kept].join("\n").trim();
 }
 
-export type Briefing = { body: string; writtenAt: Date };
+/** `done` lists the links of points whose record has since been dealt with, so they can be crossed off. */
+export type Briefing = { body: string; writtenAt: Date; done: string[] };
+type Check = { path: string; was: string };
+type Tx = { query: <T extends object>(sql: string, values?: unknown[]) => Promise<{ rows: T[] }> };
 
 const todayOf = (ctx: Ctx) => `(now() at time zone '${zoneOf(ctx)}')::date`;
 const BRIEFING_REQUEST =
   "Write my briefing for today. Check what needs attention and anything else that matters for my job (open orders, unpaid invoices, stock, purchase orders, recent sales). Ask for every lookup you need at once, in one go, then write. " +
-  "Give me at most four points, most urgent first. Format every point exactly like this, each on its own line starting with a dash: " +
+  "My Home screen already shows the counts: how many orders are ready to ship, how many products are low, what is unpaid and overdue, and the sales totals. Do not repeat a count. " +
+  "Tell me what those numbers cannot: which one record matters most and why, how long it has waited, what is unusual, what is about to go wrong, and the one thing to do about it. " +
+  "Give me at most four points, most urgent first. Each point is about ONE record and links that record's own page (an order, a purchase order, an invoice or a product, never a list), so it can be crossed off when that record is dealt with. " +
+  "Format every point exactly like this, each on its own line starting with a dash: " +
   "- **Short headline of a few words.** One or two complete sentences, 35 words at most, with the real figure and what I should do about it. [Open](/link-to-the-record) " +
   "Finish every sentence. If nothing needs me, say so in one such line. No greeting, no heading, no closing line, nothing before or after the points.";
 
-/** Today's briefing for this person, if one has been written. */
+const LINKED = /\]\((\/(sales|purchasing|invoices|products)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))\)/g;
+
+/** Where a linked record stands right now, in one word. Null when it cannot be found. */
+async function stateOf(tx: Tx, kind: string, id: string): Promise<string | null> {
+  const sql =
+    kind === "sales" ? "select status as state from sales_orders where id = $1"
+    : kind === "purchasing" ? "select status as state from purchase_orders where id = $1"
+    : kind === "invoices"
+      ? `select case when i.voided_at is not null then 'void'
+                     when i.amount <= coalesce((select sum(p.amount) from payments p where p.invoice_id = i.id), 0)
+                                    + coalesce((select sum(a.amount) from credit_applications a where a.invoice_id = i.id), 0) then 'paid'
+                     else 'open' end as state
+         from invoices i where i.id = $1`
+      : `select case when p.reorder_point is not null
+                      and coalesce((select sum(on_hand - reserved) from stock_levels s where s.product_id = p.id), 0) <= p.reorder_point
+                     then 'low' else 'ok' end as state
+         from products p where p.id = $1`;
+  const result = await tx.query<{ state: string }>(sql, [id]);
+  return result.rows[0]?.state ?? null;
+}
+
+/** True when the record has been dealt with since the briefing was written. */
+export function dealtWith(kind: string, was: string, now: string | null): boolean {
+  if (now === null || now === was) return false;
+  if (kind === "sales") return now === "shipped" || now === "cancelled" || was === "quote";
+  if (kind === "invoices") return was === "open";
+  if (kind === "products") return was === "low" && now === "ok";
+  // Purchase orders only move forward: sending a draft, or receiving what was on its way, settles the point.
+  return true;
+}
+
+const linksIn = (body: string) => [...new Map([...body.matchAll(LINKED)].map((m) => [m[1]!, { path: m[1]!, kind: m[2]!, id: m[3]! }])).values()];
+
+/** Today's briefing for this person, if one has been written, with the points that have since been dealt with. */
 export async function getBriefing(ctx: Ctx): Promise<Briefing | null> {
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const result = await tx.query<Briefing>(
-      `select body, written_at as "writtenAt" from assistant_briefings where user_id = $1 and day = ${todayOf(ctx)}`,
+    const result = await tx.query<{ body: string; writtenAt: Date; checks: Check[] }>(
+      `select body, written_at as "writtenAt", checks from assistant_briefings where user_id = $1 and day = ${todayOf(ctx)}`,
       [ctx.userId],
     );
-    return result.rows[0] ?? null;
+    const row = result.rows[0];
+    if (!row) return null;
+    const done: string[] = [];
+    for (const link of linksIn(row.body)) {
+      const was = row.checks.find((c) => c.path === link.path)?.was;
+      if (was !== undefined && dealtWith(link.kind, was, await stateOf(tx, link.kind, link.id))) done.push(link.path);
+    }
+    return { body: row.body, writtenAt: row.writtenAt, done };
   });
 }
 
@@ -219,13 +265,20 @@ export async function writeBriefing(ctx: Ctx, input: { company: string; person: 
   const answer = await ask(ctx, { ...input, question: BRIEFING_REQUEST, readOnly: true, maxTokens: 6000 }, callModel);
   // A briefing with nothing finished in it is not worth keeping; the person is asked to try again instead.
   if (!answer.answered) throw new Error("The briefing came back empty or unfinished.");
+  const body = answer.text.slice(0, 4000);
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const result = await tx.query<Briefing>(
-      `insert into assistant_briefings (org_id, user_id, day, body) values ($1, $2, ${todayOf(ctx)}, $3)
-       on conflict (org_id, user_id, day) do update set body = excluded.body, written_at = now()
+    // Note where each linked record stands now, to tell later whether it has been dealt with.
+    const checks: Check[] = [];
+    for (const link of linksIn(body)) {
+      const was = await stateOf(tx, link.kind, link.id);
+      if (was !== null) checks.push({ path: link.path, was });
+    }
+    const result = await tx.query<{ body: string; writtenAt: Date }>(
+      `insert into assistant_briefings (org_id, user_id, day, body, checks) values ($1, $2, ${todayOf(ctx)}, $3, $4::jsonb)
+       on conflict (org_id, user_id, day) do update set body = excluded.body, checks = excluded.checks, written_at = now()
        returning body, written_at as "writtenAt"`,
-      [ctx.orgId, ctx.userId, answer.text.slice(0, 4000)],
+      [ctx.orgId, ctx.userId, body, JSON.stringify(checks)],
     );
-    return result.rows[0]!;
+    return { ...result.rows[0]!, done: [] };
   });
 }

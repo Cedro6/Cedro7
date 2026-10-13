@@ -128,4 +128,19 @@ describe("assistant", () => {
     await owner.query("update assistant_briefings set day = day - 1");
     expect(await getBriefing(as("owner"))).toBeNull(); // yesterday's is not shown today
   });
+
+  it("crosses a point off by itself once its record has been dealt with", async () => {
+    const product = (await owner.query("select id from products where reorder_point is not null order by sku limit 1")).rows[0].id as string;
+    const supplier = (await owner.query("select id from suppliers limit 1")).rows[0].id as string;
+    const po = (await owner.query("insert into purchase_orders (org_id, number, supplier_id, status) values ($1, 'PO-TICK', $2, 'draft') returning id", [orgId, supplier])).rows[0].id as string;
+    await owner.query("update stock_levels set on_hand = 0, reserved = 0 where product_id = $1", [product]);
+    const text = `- **Out of stock.** Reorder it. [Open](/products/${product})\n- **Draft not sent.** Send it. [Open](/purchasing/${po})`;
+    const model: ModelCall = async () => ({ stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text }] });
+    expect((await writeBriefing(as("owner"), who, model)).done).toEqual([]);
+    expect((await getBriefing(as("owner")))!.done).toEqual([]);
+    await owner.query("update purchase_orders set status = 'sent' where id = $1", [po]);
+    expect((await getBriefing(as("owner")))!.done).toEqual([`/purchasing/${po}`]);
+    await owner.query("update stock_levels set on_hand = 100000 where product_id = $1", [product]);
+    expect((await getBriefing(as("owner")))!.done.sort()).toEqual([`/products/${product}`, `/purchasing/${po}`].sort());
+  });
 });
