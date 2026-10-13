@@ -198,7 +198,7 @@ export type Briefing = { body: string; writtenAt: Date };
 
 const todayOf = (ctx: Ctx) => `(now() at time zone '${zoneOf(ctx)}')::date`;
 const BRIEFING_REQUEST =
-  "Write my briefing for today. Check what needs attention, then look at anything else that matters for my job (open orders, unpaid invoices, stock, purchase orders, recent sales) with the lookups you have. " +
+  "Write my briefing for today. Check what needs attention and anything else that matters for my job (open orders, unpaid invoices, stock, purchase orders, recent sales). Ask for every lookup you need at once, in one go, then write. " +
   "Give me at most four points, most urgent first. Format every point exactly like this, each on its own line starting with a dash: " +
   "- **Short headline of a few words.** One or two complete sentences, 35 words at most, with the real figure and what I should do about it. [Open](/link-to-the-record) " +
   "Finish every sentence. If nothing needs me, say so in one such line. No greeting, no heading, no closing line, nothing before or after the points.";
