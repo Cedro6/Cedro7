@@ -90,7 +90,7 @@ export async function assistantUsage(ctx: Ctx, limit: number): Promise<Assistant
  */
 export async function ask(
   ctx: Ctx,
-  input: { question: string; company: string; person: string; monthlyLimit: number; history?: AssistantTurn[]; readOnly?: boolean; screen?: Screen },
+  input: { question: string; company: string; person: string; monthlyLimit: number; history?: AssistantTurn[]; readOnly?: boolean; screen?: Screen; maxTokens?: number },
   callModel: ModelCall,
 ): Promise<AssistantAnswer> {
   const question = input.question.trim().slice(0, MAX_QUESTION);
@@ -133,12 +133,14 @@ export async function ask(
         messages,
         // On the last round no tools are offered, so the model has to answer with what it has.
         tools: round === MAX_ROUNDS - 1 ? [] : offered,
-        max_tokens: 900,
+        max_tokens: input.maxTokens ?? 900,
       });
       inputTokens += response.usage.input_tokens;
       outputTokens += response.usage.output_tokens;
       const calls = response.content.filter((block): block is Extract<ModelBlock, { type: "tool_use" }> => block.type === "tool_use");
       text = response.content.filter((block): block is Extract<ModelBlock, { type: "text" }> => block.type === "text").map((b) => b.text).join("\n").trim();
+      // An answer that ran out of room stops mid-sentence; keep only what was finished.
+      if (response.stop_reason === "max_tokens") text = finished(text);
       if (response.stop_reason !== "tool_use" || calls.length === 0) break;
       messages.push({ role: "assistant", content: response.content });
       const results: ModelBlock[] = [];
@@ -181,13 +183,23 @@ export async function ask(
   return { text: text || (proposals.length > 0 ? "I have prepared that for you to confirm." : "I could not work out an answer to that. Try asking it a different way."), lookups, proposals, inputTokens, outputTokens };
 }
 
+/** Drops a trailing half-written line or sentence from text that was cut short. */
+export function finished(text: string): string {
+  const lines = text.split("\n");
+  const last = lines.pop() ?? "";
+  const end = Math.max(last.lastIndexOf(". "), last.lastIndexOf(".)"), /[.!?)]$/.test(last.trim()) ? last.length : -1);
+  const kept = end >= last.length ? last : end > 0 ? last.slice(0, end + 1) : "";
+  return [...lines, kept].join("\n").trim();
+}
+
 export type Briefing = { body: string; writtenAt: Date };
 
 const todayOf = (ctx: Ctx) => `(now() at time zone '${zoneOf(ctx)}')::date`;
 const BRIEFING_REQUEST =
   "Write my briefing for today. Check what needs attention, then look at anything else that matters for my job (open orders, unpaid invoices, stock, purchase orders, recent sales) with the lookups you have. " +
-  "Give me at most four short points, most urgent first. Each point is one line starting with a dash: say what is wrong or worth knowing, with the real figure, and what I should do about it, linking the record. " +
-  "If nothing needs me, say so in one line. No greeting, no heading, no closing line.";
+  "Give me at most four points, most urgent first. Format every point exactly like this, each on its own line starting with a dash: " +
+  "- **Short headline of a few words.** One or two complete sentences, 35 words at most, with the real figure and what I should do about it. [Open](/link-to-the-record) " +
+  "Finish every sentence. If nothing needs me, say so in one such line. No greeting, no heading, no closing line, nothing before or after the points.";
 
 /** Today's briefing for this person, if one has been written. */
 export async function getBriefing(ctx: Ctx): Promise<Briefing | null> {
@@ -202,7 +214,7 @@ export async function getBriefing(ctx: Ctx): Promise<Briefing | null> {
 
 /** Writes (or rewrites) today's briefing from the records this person can see. Counts as one question. */
 export async function writeBriefing(ctx: Ctx, input: { company: string; person: string; monthlyLimit: number }, callModel: ModelCall): Promise<Briefing> {
-  const answer = await ask(ctx, { ...input, question: BRIEFING_REQUEST, readOnly: true }, callModel);
+  const answer = await ask(ctx, { ...input, question: BRIEFING_REQUEST, readOnly: true, maxTokens: 1500 }, callModel);
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<Briefing>(
       `insert into assistant_briefings (org_id, user_id, day, body) values ($1, $2, ${todayOf(ctx)}, $3)

@@ -4,15 +4,22 @@ import { useState, useTransition } from "react";
 import { writeMyBriefing } from "../app/(app)/assistant/actions";
 import { RichLine } from "./AssistantText";
 
-/** Splits the briefing into its separate points. A line that is not a bullet stays with the point above it. */
+/** Splits the briefing into its separate points: one per bullet, or one per paragraph or sentence when Ava wrote prose. */
 function pointsOf(body: string): string[] {
+  const marker = /^([-*•]|\d+[.)])\s+/;
+  const lines = body.split("\n").map((l) => l.replace(/^#+\s*/, "").trim());
   const points: string[] = [];
-  for (const raw of body.split("\n")) {
-    const line = raw.replace(/^#+\s*/, "").trim();
-    if (!line) continue;
-    const bullet = /^([-*•]|\d+[.)])\s+/.test(line);
-    if (bullet || points.length === 0) points.push(line.replace(/^([-*•]|\d+[.)])\s+/, ""));
+  let fresh = true;
+  for (const line of lines) {
+    if (!line) { fresh = true; continue; }
+    if (marker.test(line) || fresh || points.length === 0) points.push(line.replace(marker, ""));
     else points[points.length - 1] += " " + line;
+    fresh = false;
+  }
+  // One long block of prose reads badly, so it is split into its sentences.
+  if (points.length === 1 && points[0]!.length > 220) {
+    const sentences = points[0]!.match(/[^.!?]+[.!?]+(?:\s*\[[^\]]+\]\([^)]*\))?(?:\s|$)|[^.!?]+$/g);
+    if (sentences && sentences.length > 1) return sentences.map((x) => x.trim()).filter(Boolean);
   }
   return points;
 }
@@ -52,19 +59,21 @@ export function BriefingPanel({ initial, writtenAt }: { initial: string; written
       {error && <p className="error">{error}</p>}
       {body && (
         // The key restarts the reveal each time the briefing is written again.
-        <div className="briefing-glass" key={when + body.length}>
+        <div className="briefing-open" key={when + body.length}>
+        <div className="briefing-glass">
           <ol className="briefing-points">
             {points.map((point, i) => (
-              <li key={i} style={{ animationDelay: `${0.25 + i * 0.22}s` }}>
+              <li key={i} style={{ animationDelay: `${1.1 + i * 0.75}s` }}>
                 <span className="briefing-num" aria-hidden="true">{i + 1}</span>
                 <span className="briefing-point"><RichLine text={point} /></span>
               </li>
             ))}
           </ol>
-          <div className="briefing-foot">
+          <div className="briefing-foot" style={{ animationDelay: `${1.1 + points.length * 0.75}s` }}>
             Ava can be wrong, so check before acting.{" "}
             <button type="button" className="link-button" onClick={() => window.dispatchEvent(new Event("ava:open"))}>Ask a follow-up</button>
           </div>
+        </div>
         </div>
       )}
     </section>
