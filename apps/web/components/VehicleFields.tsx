@@ -46,7 +46,7 @@ export function SpecFields({ values, provenance, missing }: { values: Partial<Ve
 }
 
 /** What only the dealer knows about this particular car. */
-export function OwnFields({ values, showCost, currency }: { values: Partial<VehicleOwnInput>; showCost: boolean; currency: string }) {
+export function OwnFields({ values, showCost, currency }: { values: Partial<VehicleOwnInput> & { vin?: string | null }; showCost: boolean; currency: string }) {
   return (
     <>
       <div className="veh-grid">
@@ -71,6 +71,7 @@ export function OwnFields({ values, showCost, currency }: { values: Partial<Vehi
         <label className="field"><span>Asking price ({currency})</span><input name="askingPrice" inputMode="decimal" defaultValue={values.askingPrice ?? ""} /></label>
       </div>
       <div className="veh-grid">
+        {values.vin === null && <label className="field"><span>VIN (if known)</span><input name="vin" maxLength={20} className="mono" defaultValue="" /></label>}
         <label className="field"><span>Title number</span><input name="titleNumber" maxLength={40} defaultValue={values.titleNumber ?? ""} /></label>
         <label className="field"><span>Title state</span><input name="titleState" maxLength={2} defaultValue={values.titleState ?? "FL"} /></label>
         <label className="field"><span>Title issued on</span><input name="titleIssuedOn" type="date" defaultValue={values.titleIssuedOn ?? ""} /></label>

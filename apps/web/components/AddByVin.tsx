@@ -111,7 +111,7 @@ export function AddByVin({ showCost, currency, manual }: { showCost: boolean; cu
               <button type="submit" className="btn btn-primary" disabled={busy || vin.trim().length < 11}>{busy ? "Decoding…" : "Decode VIN"}</button>
               {canScan && <button type="button" className="btn btn-glass" onClick={() => { setError(""); setScanning((s) => !s); }}>{scanning ? "Stop camera" : "Scan VIN"}</button>}
               <Link href="/vehicles/import" className="btn btn-glass">Bulk import VINs</Link>
-              <button type="button" className="link-button" onClick={() => setTyping(true)}>Enter by hand instead</button>
+              <button type="button" className="btn btn-glass" onClick={() => setTyping(true)}>Add without a VIN</button>
             </div>
             {scanning && <video ref={video} className="scan-video" muted playsInline aria-label="Camera view for scanning" />}
           </form>
@@ -130,7 +130,7 @@ export function AddByVin({ showCost, currency, manual }: { showCost: boolean; cu
                     ? `${lookup.vin}: decoded by ${decoded.provider === "vpic" ? "the NHTSA vPIC service" : decoded.provider}. Check it, and fill anything it could not say.`
                     : lookup
                       ? `${lookup.vin}: the VIN could not be decoded, so type the details.`
-                      : "No VIN. Type what you know; you can add the VIN later."}
+                      : "No VIN needed: type what you know. Make and model are enough to start, and a VIN can be added later on the vehicle's page."}
                 </p>
               </div>
               {lookup && <button type="button" className="btn btn-glass btn-small" onClick={() => { setLookup(null); setTyping(false); setError(""); }}>Different VIN</button>}

@@ -280,19 +280,29 @@ export async function getVehicle(ctx: Ctx, id: string): Promise<Vehicle | null> 
   return result.rows[0] ?? null;
 }
 
-/** Changes the dealer's own fields and, when given, the specifications (which then count as typed by hand). */
-export async function updateVehicle(ctx: Ctx, id: string, input: { own?: VehicleOwnInput; specs?: Partial<VehicleSpecs> }): Promise<void> {
+/** Changes the dealer's own fields and, when given, the specifications (which then count as typed by hand). A VIN can be added to a car that had none. */
+export async function updateVehicle(ctx: Ctx, id: string, input: { own?: VehicleOwnInput; specs?: Partial<VehicleSpecs>; vin?: string }): Promise<void> {
   requireDealer(ctx, true);
   if (!UUID.test(id)) throw new StateError("Vehicle not found.");
   const own = cleanOwn(input.own ?? {});
   const specs = input.specs ? cleanSpecs(input.specs) : undefined;
+  const vin = input.vin?.trim() ? cleanVin(input.vin) : null;
+  if (vin) {
+    const problem = vinProblem(vin);
+    if (problem) throw new ValidationError("vin", problem);
+  }
   await withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const current = await tx.query<{ status: VehicleStatus; provenance: Record<string, string> }>("select status, provenance from vehicles where id = $1 for update", [id]);
+    const current = await tx.query<{ status: VehicleStatus; provenance: Record<string, string>; vin: string | null }>("select status, provenance, vin from vehicles where id = $1 for update", [id]);
     const row = current.rows[0];
     if (!row) throw new StateError("Vehicle not found.");
     const sets: string[] = ["updated_at = now()"];
     const values: unknown[] = [id];
     const set = (column: string, value: unknown) => { values.push(value); sets.push(`${column} = $${values.length}`); };
+    if (vin && !row.vin) {
+      const dup = await tx.query<{ stock_number: string }>("select stock_number from vehicles where vin = $1 and status not in ('sold', 'removed') and id <> $2", [vin, id]);
+      if (dup.rows[0]) throw new StateError(`That VIN is already on the lot as ${dup.rows[0].stock_number}.`);
+      set("vin", vin);
+    }
     for (const [field, column] of Object.entries(OWN_COLUMN) as [keyof VehicleOwnInput, string][]) {
       if (!(field in (input.own ?? {}))) continue;
       set(column, own[field] ?? null);

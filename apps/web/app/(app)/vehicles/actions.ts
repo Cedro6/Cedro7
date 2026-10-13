@@ -66,7 +66,7 @@ export async function saveNewVehicle(form: FormData): Promise<SaveResult> {
 export async function saveVehicle(id: string, form: FormData): Promise<void> {
   const { ctx } = await requireSession();
   try {
-    await updateVehicle(ctx, id, { own: readOwn(form), specs: readSpecs(form) });
+    await updateVehicle(ctx, id, { own: readOwn(form), specs: readSpecs(form), vin: text(form.get("vin")) });
   } catch (error) {
     redirect(`/vehicles/${id}?error=${encodeURIComponent(plain(error))}`);
   }
