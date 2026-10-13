@@ -12,7 +12,7 @@ import { signOut } from "./actions";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const { ctx, membership } = await requireSession();
+  const { ctx, membership } = await requireSession({ setupAllowed: true });
   const counts = await overview(ctx);
   const stock = featureOn(ctx.features, "stock");
   // The menu lists only what this person may open and this company has switched on.
@@ -54,6 +54,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               {can(ctx, "settings.manage") && <Link href="/settings">Settings</Link>}
               {isPlatformAdmin(membership.userEmail) && <Link href="/platform">Platform</Link>}
               <Link href="/account">Password</Link>
+              {can(ctx, "settings.manage") && <Link href="/welcome">Setup guide</Link>}
               <form action={signOut}>
                 <button type="submit">Sign out</button>
               </form>

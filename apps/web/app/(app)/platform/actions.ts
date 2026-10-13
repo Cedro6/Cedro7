@@ -2,7 +2,8 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createSignupLink, revokeSignupLink } from "@bos/core";
+import { redirect } from "next/navigation";
+import { createSignupLink, platformResetTwoStep, revokeSignupLink, setCompanySuspended } from "@bos/core";
 import { isPlatformAdmin } from "../../../lib/platform";
 import { pool } from "../../../lib/pool";
 import { requireSession } from "../../../lib/session";
@@ -32,4 +33,22 @@ export async function cancelLink(form: FormData): Promise<void> {
   await admin();
   await revokeSignupLink(pool, String(form.get("id") ?? ""));
   revalidatePath("/platform");
+}
+
+export async function suspendCompany(form: FormData): Promise<void> {
+  const { ctx } = await admin();
+  const orgId = String(form.get("orgId") ?? "");
+  const suspend = form.get("suspend") === "1";
+  // Suspending the company you are signed in to would lock you out of this screen.
+  if (suspend && orgId === ctx.orgId) redirect(`/platform?error=${encodeURIComponent("That is the company you are signed in to. Suspending it would lock you out.")}`);
+  await setCompanySuspended(pool, orgId, suspend);
+  revalidatePath("/platform");
+  redirect(`/platform?notice=${encodeURIComponent(suspend ? "Suspended. Its people can no longer sign in. Nothing was deleted." : "Switched back on.")}`);
+}
+
+export async function resetOwnerTwoStep(form: FormData): Promise<void> {
+  await admin();
+  const email = String(form.get("email") ?? "").trim();
+  const done = await platformResetTwoStep(pool, email);
+  redirect(`/platform?${done ? "notice" : "error"}=${encodeURIComponent(done ? `Two-step verification is off for ${email}. They sign in with their password and can set it up again.` : "No login with that email has two-step verification on.")}`);
 }

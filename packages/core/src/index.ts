@@ -185,7 +185,7 @@ export { clock,
   type Reminder,
   type TeamMember,
 } from "./crm/reminders";
-export { getCompanyProfile, getRegion, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, updateRegion, type CompanyProfile, type Region } from "./platform/company";
+export { getCompanyProfile, getRegion, MAX_LOGO_LENGTH, setCompanyLogo, setRequireTwoStep, updateCompanyProfile, updateRegion, type CompanyProfile, type Region } from "./platform/company";
 export { CURRENCIES, currencyOf, DEFAULT_CURRENCY, DEFAULT_TIME_ZONE, isCurrency, isTimeZone, moneyText, timeZones, todayIn, zoneOf, type Currency } from "./platform/locale";
 export { getPackingSlip, type PackingSlip } from "./sales/orders";
 export {
@@ -244,6 +244,6 @@ export { search, SEARCH_MIN, type SearchGroup, type SearchHit } from "./platform
 export { HISTORY_AREAS, HISTORY_PAGE, isHistoryArea, listHistory, type HistoryArea, type HistoryEntry } from "./platform/history";
 export { beginTwoStep, confirmTwoStep, disableTwoStep, pendingTwoStep, resetMemberTwoStep, totpCode, totpStep, twoStepStatus, verifyTwoStep, type TwoStepCheck, type TwoStepStatus } from "./platform/twostep";
 export {
-  checkSignup, createSignupLink, listCompanies, listSignupLinks, revokeSignupLink, signUp, signupLinkValid,
+  checkSignup, createSignupLink, listCompanies, listSignupLinks, platformResetTwoStep, revokeSignupLink, setCompanySuspended, signUp, signupLinkValid,
   type PlatformCompany, type SignupInput, type SignupLink,
 } from "./platform/signup";

@@ -90,6 +90,8 @@ const WHAT: Record<string, string> = {
   "settings.feature_changed": "switched a feature",
   "settings.business_type_changed": "changed the business type",
   "company.updated": "edited the company details",
+  "company.two_step_rule": "changed whether two-step verification is required",
+  "company.created": "created the company",
   "company.region_updated": "changed the time zone, currency or tax rate",
   "member.invited": "invited",
   "member.updated": "changed the role or access of",

@@ -23,6 +23,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
         <form action={signInWithEmail} className="stack">
           {error === "wrong" && <p className="error">That email or password is not right.</p>}
           {error === "expired" && <p className="error">That took too long. Sign in again.</p>}
+          {error === "suspended" && <p className="error">This company&apos;s account has been suspended. Contact whoever provides Cedro Terminal to you.</p>}
           {error === "locked" && <p className="error">Too many wrong passwords. Try again in 15 minutes, or ask your company&apos;s owner for a new sign-in link.</p>}
           {error === "has-password" && <p className="error">That person now has their own password. Sign in with their email and password.</p>}
           <label className="field">
