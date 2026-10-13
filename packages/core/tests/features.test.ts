@@ -9,6 +9,7 @@ import {
   featureOn,
   FEATURES,
   featuresFor,
+  ADD_ONS,
   ForbiddenError,
   getSettings,
   listCustomers,
@@ -53,9 +54,9 @@ afterAll(async () => {
 });
 
 describe("feature rules", () => {
-  it("treats a missing switch as on, so existing companies keep everything", () => {
-    for (const id of FEATURES) expect(featureOn({}, id)).toBe(true);
-    for (const id of FEATURES) expect(featureOn(undefined, id)).toBe(true);
+  it("treats a missing switch as on, so existing companies keep everything (add-ons excepted)", () => {
+    for (const id of FEATURES) expect(featureOn({}, id)).toBe(!ADD_ONS.includes(id));
+    for (const id of FEATURES) expect(featureOn(undefined, id)).toBe(!ADD_ONS.includes(id));
   });
 
   it("turns off everything that needs stock when stock is off", () => {
@@ -98,7 +99,7 @@ describe("company settings", () => {
   it("starts a company as a distributor with everything on", async () => {
     const settings = await getSettings(await as("sales"));
     expect(settings.businessType).toBe("distributor");
-    expect(Object.values(settings.features).every(Boolean)).toBe(true);
+    expect(Object.entries(settings.features).filter(([, on]) => !on).map(([id]) => id)).toEqual(["dealer"]);
   });
 
   it("lets only someone who manages settings change them", async () => {
