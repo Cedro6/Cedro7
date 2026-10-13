@@ -26,7 +26,8 @@ function pointsOf(body: string): string[] {
 
 /** Today's briefing on Home. It is written when asked for, then kept for the day. */
 export function BriefingPanel({ initial, writtenAt }: { initial: string; writtenAt: string }) {
-  const [body, setBody] = useState(initial);
+  // A saved briefing that stops mid-sentence (from before this was fixed) is ignored, so asking writes a fresh one.
+  const [body, setBody] = useState(/[.!?)]\s*$/.test(initial) ? initial : "");
   const [when, setWhen] = useState(writtenAt);
   const [error, setError] = useState("");
   // The briefing stays closed until it is asked for, even when today's has already been written.
