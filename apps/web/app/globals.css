@@ -2190,3 +2190,8 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .side-search svg { flex: none; }
 .search-hit { color: var(--ink); }
 .search-hit:hover .row-title { text-decoration: underline; }
+
+/* Activity history */
+.hist-who { display: flex; align-items: flex-end; gap: 10px; }
+.hist-who .btn { height: 48px; }
+.hist-time { flex: none; width: 78px; font-variant-numeric: tabular-nums; }
