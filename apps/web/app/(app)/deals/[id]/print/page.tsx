@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can, getCompanyProfile, getDeal, getDealerSettings, ODOMETER_TEXT } from "@bos/core";
 import { PaperBrand } from "../../../../../components/PaperBrand";
+import { BackToDeal } from "../../../../../components/BackToDeal";
 import { PrintButton } from "../../../../../components/PrintButton";
 import { formatMoney } from "../../../../../lib/format";
 import { zone } from "../../../../../lib/locale";
@@ -23,6 +24,7 @@ export default async function BuyersOrderPage({ params }: { params: Promise<{ id
           <div className="eyebrow"><Link href="/deals">Deals</Link> / <Link href={`/deals/${id}`}>{deal.number}</Link></div>
           <h1>Buyer&apos;s order</h1>
         </div>
+        <BackToDeal id={id} number={deal.number} />
         <PrintButton />
       </header>
       {deal.status === "cancelled" && <p className="error no-print">This deal was cancelled.</p>}
