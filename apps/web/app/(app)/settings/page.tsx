@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BUSINESS_TYPES, can, FEATURES, CURRENCIES, getCompanyProfile, getRegion, getSettings, timeZones, listMembers, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
+import { ADD_ONS, CEDRO_TYPES, can, FEATURES, productOf, CURRENCIES, getCompanyProfile, getRegion, getSettings, timeZones, listMembers, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
 import { TeamPanel } from "../../../components/TeamPanel";
 import { BUILT, FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
@@ -11,9 +11,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   if (!can(ctx, "settings.manage")) redirect("/");
   const { error, notice } = await searchParams;
   const [settings, company, members, region] = await Promise.all([getSettings(ctx), getCompanyProfile(ctx), listMembers(ctx), getRegion(ctx)]);
+  const dealer = productOf(settings.businessType) === "dealer";
   const starting = TYPE_FEATURES[settings.businessType];
   const customized = FEATURES.some((id) => settings.features[id] !== starting.includes(id));
-  const onCount = FEATURES.filter((id) => settings.features[id]).length;
+  const onCount = FEATURES.filter((id) => !ADD_ONS.includes(id) && settings.features[id]).length;
   return (
     <>
       <header className="page-head">
@@ -146,6 +147,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <TeamPanel members={members} canMakeOwners={ctx.role === "owner"} />
       </section>
 
+      {dealer ? (
+        <section className="glass panel">
+          <h2 className="title">Dealer Terminal membership</h2>
+          <p className="muted">Your tools are set by the membership: vehicles, deals, compliance paperwork, customers, calendar, reports, bills and Ava. There is nothing to switch on or off. To change the membership, contact support.</p>
+        </section>
+      ) : (
+        <>
       <section className="glass panel">
         <div className="panel-head">
           <div>
@@ -157,7 +165,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {customized && <span className="badge badge-info">Customized</span>}
         </div>
         <form action={chooseType} className="type-grid">
-          {BUSINESS_TYPES.map((type) => (
+          {CEDRO_TYPES.map((type) => (
             <button
               key={type}
               type="submit"
@@ -169,7 +177,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <span className="type-name">{TYPE_TEXT[type].name}</span>
               <span className="muted">{TYPE_TEXT[type].about}</span>
               <span className="type-count">
-                {TYPE_FEATURES[type].length} of {FEATURES.length} tools
+                {TYPE_FEATURES[type].length} of {FEATURES.length - ADD_ONS.length} tools
               </span>
             </button>
           ))}
@@ -187,11 +195,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
           </div>
           <span className="muted">
-            {onCount} of {FEATURES.length} on
+            {onCount} of {FEATURES.length - ADD_ONS.length} on
           </span>
         </div>
         <div className="feature-grid">
-          {FEATURES.map((id) => {
+          {FEATURES.filter((id) => !ADD_ONS.includes(id)).map((id) => {
             const on = settings.features[id];
             const locked = NEEDS_STOCK.includes(id) && !settings.features.stock;
             return (
@@ -214,6 +222,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           })}
         </div>
       </section>
+        </>
+      )}
     </>
   );
 }

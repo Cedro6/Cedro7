@@ -1,14 +1,15 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { createCompany, type SignUpState } from "../app/sign-up/actions";
 
-type Kind = { id: string; name: string; about: string; tools: string[] };
+type Kind = { id: string; name: string; about: string; product: "cedro" | "dealer"; tools: string[] };
 const START: SignUpState = { error: "", field: "", values: {} };
 
 /** Three short steps on one page: the company, where it is, and the owner's own login. */
 export function SignUpForm({ token, kinds, zones, currencies }: { token: string; kinds: Kind[]; zones: string[]; currencies: { code: string; label: string }[] }) {
   const [state, action, busy] = useActionState(createCompany, START);
+  const [product, setProduct] = useState<"cedro" | "dealer">(START.values?.businessType === "dealer" ? "dealer" : "cedro");
   const v = state.values;
   const zone = useRef<HTMLSelectElement>(null);
   // Start on the visitor's own time zone when their browser reports one we know.
@@ -28,19 +29,41 @@ export function SignUpForm({ token, kinds, zones, currencies }: { token: string;
           <input name="company" required maxLength={200} autoFocus autoComplete="organization" defaultValue={v.company ?? ""} />
         </label>
         <div className="field">
-          <span id="kind-label">What kind of business is it?</span>
-          <div className="signup-kinds" role="radiogroup" aria-labelledby="kind-label">
-            {kinds.map((k, i) => (
+          <span id="product-label">Which product?</span>
+          <div className="signup-kinds signup-products" role="radiogroup" aria-labelledby="product-label">
+            <label className="signup-kind">
+              <input type="radio" name="product" value="cedro" checked={product === "cedro"} onChange={() => setProduct("cedro")} />
+              <span className="type-name">Cedro Terminal</span>
+              <span className="muted">Customers, orders, invoices, stock, purchasing and reports for a product business.</span>
+            </label>
+            {kinds.filter((k) => k.product === "dealer").map((k) => (
               <label key={k.id} className="signup-kind">
-                <input type="radio" name="businessType" value={k.id} required defaultChecked={v.businessType ? v.businessType === k.id : i === 0} />
+                <input type="radio" name="product" value="dealer" checked={product === "dealer"} onChange={() => setProduct("dealer")} />
                 <span className="type-name">{k.name}</span>
                 <span className="muted">{k.about}</span>
-                <span className="signup-tools">Starts with: {k.tools.join(", ")}</span>
+                <span className="signup-tools">Includes: {k.tools.join(", ")}</span>
               </label>
             ))}
           </div>
-          <span className="muted">This only decides which tools are switched on to begin with. You can turn any of them on or off later in Settings.</span>
         </div>
+        {product === "dealer" ? (
+          <input type="hidden" name="businessType" value="dealer" />
+        ) : (
+          <div className="field">
+            <span id="kind-label">What kind of business is it?</span>
+            <div className="signup-kinds" role="radiogroup" aria-labelledby="kind-label">
+              {kinds.filter((k) => k.product === "cedro").map((k, i) => (
+                <label key={k.id} className="signup-kind">
+                  <input type="radio" name="businessType" value={k.id} required defaultChecked={v.businessType ? v.businessType === k.id : i === 0} />
+                  <span className="type-name">{k.name}</span>
+                  <span className="muted">{k.about}</span>
+                  <span className="signup-tools">Starts with: {k.tools.join(", ")}</span>
+                </label>
+              ))}
+            </div>
+            <span className="muted">This only decides which tools are switched on to begin with. You can turn any of them on or off later in Settings.</span>
+          </div>
+        )}
       </fieldset>
 
       <fieldset className="signup-step">

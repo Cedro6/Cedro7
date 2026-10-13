@@ -2423,3 +2423,5 @@ a.account-card:hover .account-name { text-decoration: underline; }
 .numeral-small { font-size: 22px; }
 :root[data-mode="light"] .veh-from { background: rgba(124, 92, 255, 0.14); color: #5b3fd6; }
 :root[data-mode="light"] .veh-from-missing { background: rgba(200, 120, 20, 0.14); color: #9a5b00; }
+.dash-half { flex: 1 1 300px; }
+.plain-list { margin: 8px 0 0; padding-left: 18px; line-height: 1.8; }

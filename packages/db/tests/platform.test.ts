@@ -68,6 +68,7 @@ describe("migrations", () => {
       "0032_service_controls.sql",
       "0033_briefing_checks.sql",
       "0034_dealer.sql",
+      "0035_dealer_product.sql",
     ]);
   });
 

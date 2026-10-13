@@ -182,3 +182,27 @@ describe("add-ons", () => {
     expect(featuresFor("dealer").dealer).toBe(true);
   });
 });
+
+describe("Dealer Terminal is a separate product", () => {
+  it("fixes a dealer company's tools whatever is stored, and keeps vehicles away from Cedro companies", async () => {
+    const { effectiveFeatures, featureOn, productOf } = await import("../src/index");
+    expect(productOf("dealer")).toBe("dealer");
+    expect(productOf("retail")).toBe("cedro");
+    const dealer = effectiveFeatures("dealer", { dealer: false, stock: true, calendar: false });
+    expect(dealer.dealer).toBe(true);
+    expect(dealer.stock).toBe(false);
+    expect(dealer.calendar).toBe(true);
+    // A Cedro company with the switch stored on still does not get the add-on.
+    expect(featureOn(effectiveFeatures("retail", { dealer: true }), "dealer")).toBe(false);
+  });
+
+  it("cannot be entered or left, or have its tools switched, from a company's own settings", async () => {
+    const { setBusinessType, setFeature, ValidationError } = await import("../src/index");
+    await expect(setBusinessType(await as("owner"), "dealer")).rejects.toThrow(ValidationError);
+    await expect(setFeature(await as("owner"), "dealer", true)).rejects.toThrow(/separate membership/);
+    await owner.query("update organizations set business_type = 'dealer'");
+    await expect(setFeature(await as("owner"), "calendar", false)).rejects.toThrow(/set by the membership/);
+    await expect(setBusinessType(await as("owner"), "retail")).rejects.toThrow(/separate membership/);
+    await owner.query("update organizations set business_type = 'distributor'");
+  });
+});

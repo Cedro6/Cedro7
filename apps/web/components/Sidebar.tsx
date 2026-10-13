@@ -37,13 +37,13 @@ const ICONS: Record<string, ReactNode> = {
 /** One entry per screen this person may open. The server decides the list from their role and the company's features. */
 export type NavItem = { href: string; label: string; count?: number; children?: { href: string; label: string }[] };
 
-export function Sidebar({ items, company, footer }: { items: NavItem[]; company: string; footer: ReactNode }) {
+export function Sidebar({ items, company, product, footer }: { items: NavItem[]; company: string; product: "cedro" | "dealer"; footer: ReactNode }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Main" className="glass sidebar">
       <div className="brand">
         <span>
-          Cedro Terminal
+          {product === "dealer" ? "Dealer Terminal" : "Cedro Terminal"}
           <small>{company}</small>
         </span>
       </div>
