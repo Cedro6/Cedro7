@@ -296,3 +296,36 @@ describe("Ava on a dealer account", () => {
     expect(early.proposals).toHaveLength(0);
   });
 });
+
+describe("Customize on a dealer Home", () => {
+  it("starts with the dealer cards, offers only dealer and calendar cards, and saves each person's own layout", async () => {
+    const { getHomeLayout, changeHomeLayout, defaultHome, WIDGETS } = await import("../src/index");
+    const dealerCards = ["lot-tiles", "dealer-sales", "dealer-deals", "lot-attention", "open-deals", "newest-cars", "aged-cars", "today", "calendar"];
+    const start = await getHomeLayout(as("owner"), "dealer");
+    expect(start.customized).toBe(false);
+    expect(start.widgets).toEqual(defaultHome("dealer").filter((id) => start.widgets.includes(id)));
+    expect(start.widgets).toContain("dealer-sales");
+    expect(start.widgets).toContain("dealer-deals");
+    for (const id of [...start.widgets, ...start.available]) expect(dealerCards).toContain(id);
+    expect(start.available).toContain("open-deals");
+
+    // Cedro cards can't be added to a dealer Home, even by asking for them directly.
+    await expect(changeHomeLayout(as("owner"), "dealer", { kind: "add", id: "hero" })).rejects.toThrow(/not available/);
+    await changeHomeLayout(as("owner"), "dealer", { kind: "add", id: "open-deals" });
+    await changeHomeLayout(as("owner"), "dealer", { kind: "remove", id: "aged-cars" });
+    await changeHomeLayout(as("owner"), "dealer", { kind: "move", id: "dealer-deals", by: -1 });
+    const after = await getHomeLayout(as("owner"), "dealer");
+    expect(after.customized).toBe(true);
+    expect(after.widgets.at(-1)).toBe("open-deals");
+    expect(after.widgets).not.toContain("aged-cars");
+    expect(after.widgets.indexOf("dealer-deals")).toBeLessThan(after.widgets.indexOf("dealer-sales"));
+
+    // A regular Cedro company never sees the dealer cards.
+    const cedro = await getHomeLayout(as("owner", { dealer: false }), "distributor");
+    expect([...cedro.widgets, ...cedro.available].some((id) => dealerCards.slice(0, 7).includes(id))).toBe(false);
+    expect(WIDGETS.length).toBeGreaterThan(14);
+
+    await changeHomeLayout(as("owner"), "dealer", { kind: "reset" });
+    expect((await getHomeLayout(as("owner"), "dealer")).customized).toBe(false);
+  });
+});

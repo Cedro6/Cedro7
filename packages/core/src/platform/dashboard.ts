@@ -9,6 +9,8 @@ import { can } from "./permissions";
 export const WIDGETS = [
   "hero", "tiles", "sales", "invoices", "attention", "today", "top-products", "top-customers",
   "calendar", "heatmap", "ship", "low-stock", "putaway", "quotes",
+  // Dealer Terminal cards. Only a dealer company can have these, and a dealer company only these and the calendar cards.
+  "lot-tiles", "dealer-sales", "dealer-deals", "lot-attention", "open-deals", "newest-cars", "aged-cars",
 ] as const;
 export type WidgetId = (typeof WIDGETS)[number];
 export const isWidget = (value: string): value is WidgetId => (WIDGETS as readonly string[]).includes(value);
@@ -16,6 +18,21 @@ export const isWidget = (value: string): value is WidgetId => (WIDGETS as readon
 /** Whether this person, in this company, may have a card. A card never shows what its screens would not. */
 export function widgetAllowed(ctx: Ctx, id: WidgetId): boolean {
   const on = (feature: Parameters<typeof featureOn>[1]) => featureOn(ctx.features, feature);
+  const dealer = on("dealer");
+  switch (id) {
+    case "lot-tiles":
+    case "dealer-sales":
+    case "dealer-deals":
+    case "lot-attention":
+    case "open-deals":
+    case "newest-cars":
+    case "aged-cars":
+      return dealer && can(ctx, "vehicle.read");
+    case "today":
+    case "calendar":
+      return on("calendar");
+  }
+  if (dealer) return false;
   switch (id) {
     case "hero":
     case "sales":
@@ -30,9 +47,6 @@ export function widgetAllowed(ctx: Ctx, id: WidgetId): boolean {
     case "quotes":
     case "heatmap":
       return can(ctx, "sales_order.read");
-    case "today":
-    case "calendar":
-      return on("calendar");
     case "ship":
       return on("stock") && can(ctx, "sales_order.read");
     case "low-stock":
@@ -49,6 +63,7 @@ const HOME_BY_TYPE: Partial<Record<BusinessType, WidgetId[]>> = {
   warehouse: ["tiles", "ship", "putaway", "attention", "low-stock", "today"],
   sales: ["hero", "tiles", "sales", "quotes", "attention", "today", "top-customers"],
   contractor: ["hero", "tiles", "sales", "quotes", "attention", "invoices", "top-customers"],
+  dealer: ["lot-tiles", "dealer-sales", "dealer-deals", "newest-cars", "lot-attention", "aged-cars", "today"],
 };
 export const defaultHome = (type: BusinessType | undefined): WidgetId[] => (type && HOME_BY_TYPE[type]) || DEFAULT_HOME;
 

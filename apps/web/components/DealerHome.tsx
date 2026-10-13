@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { dealSeries, DEALER_PERIODS, listReminders, listVehicles, lotSummary, VEHICLE_STATUS_TEXT, type Ctx, type DealerPeriod, type DealSeries } from "@bos/core";
+import { dealerAttention, dealSeries, DEALER_PERIODS, listDeals, listReminders, listVehicles, lotSummary, VEHICLE_STATUS_TEXT, type Ctx, type DealerPeriod, type DealSeries, type WidgetId } from "@bos/core";
 import { AreaChart, CountBars } from "./home/charts";
 import { todayHere, whole } from "../lib/locale";
 
@@ -16,15 +16,16 @@ const shortMonth = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateStr
 const span = (d: DealSeries) => (d.from.slice(0, 4) === d.to.slice(0, 4) ? `${shortDay(d.from)} to ${shortDay(d.to)}` : `${shortDay(d.from)}, ${d.from.slice(0, 4)} to ${shortDay(d.to)}, ${d.to.slice(0, 4)}`);
 const BUCKET = { day: ["by day", "today"], week: ["by week", "this week"], month: ["by month", "this month"] } as const;
 
-/** Each chart keeps its own period in the address, and the other chart's choice with it. */
-type Choice = { sales: DealerPeriod; deals: DealerPeriod };
-const homeHref = (choice: Choice, change: Partial<Choice>) => {
+/** Each chart keeps its own period in the address, with the other chart's choice and Customize mode. */
+export type DealerView = { sales: DealerPeriod; deals: DealerPeriod; edit: boolean };
+type Choice = DealerView;
+const homeHref = (choice: Choice, change: Partial<Pick<Choice, "sales" | "deals">>) => {
   const next = { ...choice, ...change };
-  const parts = [next.sales !== "30d" ? `chart=${next.sales}` : "", next.deals !== "30d" ? `deals=${next.deals}` : ""].filter(Boolean);
+  const parts = [next.sales !== "30d" ? `chart=${next.sales}` : "", next.deals !== "30d" ? `deals=${next.deals}` : "", next.edit ? "edit=1" : ""].filter(Boolean);
   return parts.length ? `/?${parts.join("&")}` : "/";
 };
 
-function Periods({ choice, which, label }: { choice: Choice; which: keyof Choice; label: string }) {
+function Periods({ choice, which, label }: { choice: Choice; which: "sales" | "deals"; label: string }) {
   return (
     <div className="segmented" role="group" aria-label={label}>
       {DEALER_PERIODS.map((p) => (
@@ -35,7 +36,9 @@ function Periods({ choice, which, label }: { choice: Choice; which: keyof Choice
 }
 
 /** The same sales chart as Cedro's Home: the money from cars delivered, drawn even when nothing has sold yet. */
-function DealerSalesChart({ data, choice }: { data: DealSeries; choice: Choice }) {
+async function DealerSalesChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
+  const data = await dealSeries(ctx, choice.sales);
+  if (!data) return null;
   const last = data.points.at(-1)?.total ?? 0;
   const [by, now] = BUCKET[data.bucket];
   const tick = data.bucket === "month" ? shortMonth : shortDay;
@@ -59,7 +62,9 @@ function DealerSalesChart({ data, choice }: { data: DealSeries; choice: Choice }
 }
 
 /** How many deals were written, with how many of those are still open, beside the sales chart. */
-function DealCountChart({ data, choice }: { data: DealSeries; choice: Choice }) {
+async function DealCountChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
+  const data = await dealSeries(ctx, choice.deals);
+  if (!data) return null;
   const [by] = BUCKET[data.bucket];
   const tick = data.bucket === "month" ? shortMonth : shortDay;
   return (
@@ -81,81 +86,146 @@ function DealCountChart({ data, choice }: { data: DealSeries; choice: Choice }) 
   );
 }
 
-/** Home for a Dealer Terminal company: the lot at a glance, what is getting old, and what is due. */
-export async function DealerHome({ ctx, sales = "30d", deals = "30d" }: { ctx: Ctx; sales?: DealerPeriod; deals?: DealerPeriod }) {
-  const choice = { sales, deals };
-  const [lot, vehicles, due, salesData, dealsData] = await Promise.all([
-    lotSummary(ctx), listVehicles(ctx, { status: "live" }), listReminders(ctx, { to: todayHere(), openOnly: true }), dealSeries(ctx, sales), dealSeries(ctx, deals),
-  ]);
-  const aged = vehicles.filter((v) => v.daysHeld >= 60).sort((a, b) => b.daysHeld - a.daysHeld).slice(0, 5);
-  const newest = vehicles.slice(0, 6);
-  const name = (v: (typeof vehicles)[number]) => [v.year, v.make, v.model, v.trim].filter(Boolean).join(" ") || v.stockNumber;
+const carName = (v: { year?: number | null; make?: string | null; model?: string | null; trim?: string | null; stockNumber: string }) =>
+  [v.year, v.make, v.model, v.trim].filter(Boolean).join(" ") || v.stockNumber;
+
+/** The lot at a glance: what is on it, what is getting old, money tied up, and reminders due. */
+async function LotTiles({ ctx }: { ctx: Ctx }) {
+  const [lot, due] = await Promise.all([lotSummary(ctx), listReminders(ctx, { to: todayHere(), openOnly: true })]);
   return (
-    <>
-      <div className="tiles">
-        <Link href="/vehicles?show=on_lot" className="glass panel tile"><h2 className="label">On the lot</h2><div className="numeral">{lot.onLot}</div><div className="muted">{lot.recon} in reconditioning · {lot.draft} drafts</div></Link>
-        <Link href="/vehicles" className="glass panel tile"><h2 className="label">Over 60 days</h2><div className="numeral">{lot.aged}</div><div className="muted">{lot.aged === 0 ? "Nothing is getting old" : "Worth a price review"}</div></Link>
-        {lot.invested !== null && <div className="glass panel tile"><h2 className="label">Invested in stock</h2><div className="numeral">{whole(lot.invested)}</div><div className="muted">What you paid for the {lot.live} on hand</div></div>}
-        <Link href="/calendar" className="glass panel tile"><h2 className="label">Due today</h2><div className="numeral">{due.length}</div><div className="muted">{due.length === 0 ? "No reminders due" : `${due.filter((r) => r.overdue).length} overdue`}</div></Link>
+    <div className="tiles">
+      <Link href="/vehicles?show=on_lot" className="glass panel tile"><h2 className="label">On the lot</h2><div className="numeral">{lot.onLot}</div><div className="muted">{lot.recon} in reconditioning · {lot.draft} drafts</div></Link>
+      <Link href="/vehicles" className="glass panel tile"><h2 className="label">Over 60 days</h2><div className="numeral">{lot.aged}</div><div className="muted">{lot.aged === 0 ? "Nothing is getting old" : "Worth a price review"}</div></Link>
+      {lot.invested !== null && <div className="glass panel tile"><h2 className="label">Invested in stock</h2><div className="numeral">{whole(lot.invested)}</div><div className="muted">What you paid for the {lot.live} on hand</div></div>}
+      <Link href="/calendar" className="glass panel tile"><h2 className="label">Due today</h2><div className="numeral">{due.length}</div><div className="muted">{due.length === 0 ? "No reminders due" : `${due.filter((r) => r.overdue).length} overdue`}</div></Link>
+    </div>
+  );
+}
+
+async function NewestCars({ ctx }: { ctx: Ctx }) {
+  const newest = (await listVehicles(ctx, { status: "live" })).slice(0, 6);
+  return (
+    <section className="glass panel">
+      <div className="panel-head">
+        <h2 className="title">Newest on the lot</h2>
+        <Link href="/vehicles" className="panel-link">All vehicles</Link>
       </div>
-      {salesData && dealsData && (
-        <div className="chart-pair">
-          <DealerSalesChart data={salesData} choice={choice} />
-          <DealCountChart data={dealsData} choice={choice} />
+      {newest.length === 0 ? (
+        <p className="muted">No vehicles yet. Add the first one by its VIN.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="compact">
+            <thead><tr><th>Stock #</th><th>Vehicle</th><th className="num">Mileage</th><th className="num">Asking</th><th>Status</th></tr></thead>
+            <tbody>
+              {newest.map((v) => (
+                <tr key={v.id}>
+                  <td><Link href={`/vehicles/${v.id}`} className="row-link">{v.stockNumber}</Link></td>
+                  <td>{carName(v)}</td>
+                  <td className="num">{v.mileage === null || v.mileage === undefined ? "—" : `${v.mileage.toLocaleString("en-US")} mi`}</td>
+                  <td className="num">{v.askingPrice === null || v.askingPrice === undefined ? "—" : whole(v.askingPrice)}</td>
+                  <td>{VEHICLE_STATUS_TEXT[v.status]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-      <div className="dash">
-        <section className="glass panel dash-item dash-wide">
-          <div className="panel-head">
-            <h2 className="title">Newest on the lot</h2>
-            <Link href="/vehicles" className="row-link">All vehicles</Link>
-          </div>
-          {newest.length === 0 ? (
-            <p className="muted">No vehicles yet. Add the first one by its VIN.</p>
-          ) : (
-            <div className="table-wrap">
-              <table className="compact">
-                <thead><tr><th>Stock #</th><th>Vehicle</th><th className="num">Mileage</th><th className="num">Asking</th><th>Status</th></tr></thead>
-                <tbody>
-                  {newest.map((v) => (
-                    <tr key={v.id}>
-                      <td><Link href={`/vehicles/${v.id}`} className="row-link">{v.stockNumber}</Link></td>
-                      <td>{name(v)}</td>
-                      <td className="num">{v.mileage === null || v.mileage === undefined ? "—" : `${v.mileage.toLocaleString("en-US")} mi`}</td>
-                      <td className="num">{v.askingPrice === null || v.askingPrice === undefined ? "—" : whole(v.askingPrice)}</td>
-                      <td>{VEHICLE_STATUS_TEXT[v.status]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-        <section className="glass panel dash-item dash-half">
-          <h2 className="title">Been here longest</h2>
-          {aged.length === 0 ? (
-            <p className="muted">Nothing has been on hand for 60 days or more.</p>
-          ) : (
-            <ul className="plain-list">
-              {aged.map((v) => (
-                <li key={v.id}><Link href={`/vehicles/${v.id}`} className="row-link">{name(v)}</Link> <span className="muted">· {v.daysHeld} days</span></li>
-              ))}
-            </ul>
-          )}
-        </section>
-        <section className="glass panel dash-item dash-half">
-          <h2 className="title">Due today</h2>
-          {due.length === 0 ? (
-            <p className="muted">No reminders due. Ava can set one for you.</p>
-          ) : (
-            <ul className="plain-list">
-              {due.slice(0, 6).map((r) => (
-                <li key={r.id}>{r.title}{r.customerName ? <span className="muted"> · {r.customerName}</span> : null}{r.overdue ? <span className="badge badge-bad"> overdue</span> : null}</li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </>
+    </section>
   );
+}
+
+async function AgedCars({ ctx }: { ctx: Ctx }) {
+  const aged = (await listVehicles(ctx, { status: "live" })).filter((v) => v.daysHeld >= 60).sort((a, b) => b.daysHeld - a.daysHeld).slice(0, 6);
+  return (
+    <section className="glass panel">
+      <h2 className="title">Been here longest</h2>
+      {aged.length === 0 ? (
+        <p className="muted">Nothing has been on hand for 60 days or more.</p>
+      ) : (
+        <ul className="plain-list">
+          {aged.map((v) => (
+            <li key={v.id}><Link href={`/vehicles/${v.id}`} className="row-link">{carName(v)}</Link> <span className="muted">· {v.daysHeld} days</span></li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const TONE: Record<string, string> = { deal_owed: "warn", deal_ready: "ok", deal_paperwork: "warn", car_aged: "warn", car_no_price: "bad", car_draft: "info", car_recon: "info", car_no_title: "bad" };
+/** The same list Ava's briefing works from: money owed, deals ready to deliver, paperwork gaps and stale cars. */
+async function LotAttention({ ctx }: { ctx: Ctx }) {
+  const list = await dealerAttention(ctx);
+  return (
+    <section className="glass panel">
+      <div className="panel-head">
+        <h2 className="title">Needs attention</h2>
+        <span className="muted">{list.length} {list.length === 1 ? "item" : "items"}</span>
+      </div>
+      {list.length === 0 ? (
+        <p className="muted">Nothing needs you right now.</p>
+      ) : (
+        <div className="rows scroll-rows">
+          {list.map((item, i) => (
+            <div className="row" key={i}>
+              <span className={`dot dot-${TONE[item.kind] ?? "info"}`} aria-hidden="true" />
+              <div className="row-text">
+                <Link href={item.link} className="row-link row-title">{item.title}</Link>
+                <div className="muted">{item.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+async function OpenDeals({ ctx }: { ctx: Ctx }) {
+  const open = (await listDeals(ctx, { status: "open" })).slice(0, 8);
+  return (
+    <section className="glass panel">
+      <div className="panel-head">
+        <h2 className="title">Open deals</h2>
+        <Link href="/deals" className="panel-link">All deals</Link>
+      </div>
+      {open.length === 0 ? (
+        <p className="muted">No open deals. Start one from a vehicle on the lot.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="compact">
+            <thead><tr><th>Deal</th><th>Buyer</th><th>Vehicle</th><th className="num">Total</th><th className="num">Still owed</th></tr></thead>
+            <tbody>
+              {open.map((d) => (
+                <tr key={d.id}>
+                  <td><Link href={`/deals/${d.id}`} className="row-link">{d.number}</Link></td>
+                  <td>{d.buyerName}</td>
+                  <td>{d.vehicleName || d.stockNumber}</td>
+                  <td className="num">{whole(d.total)}</td>
+                  <td className="num">{d.balance > 0.005 ? whole(d.balance) : <span className="badge badge-ok">Paid</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The cards only a dealer Home has. Today and Calendar are shared with Cedro and drawn by its widgets. */
+export const DEALER_CARDS: ReadonlySet<WidgetId> = new Set<WidgetId>(["lot-tiles", "dealer-sales", "dealer-deals", "lot-attention", "open-deals", "newest-cars", "aged-cars"]);
+
+/** Draws one Dealer Terminal Home card, or null for a card that is not a dealer card. */
+export function DealerWidget({ id, ctx, view }: { id: WidgetId; ctx: Ctx; view: DealerView }) {
+  switch (id) {
+    case "lot-tiles": return <LotTiles ctx={ctx} />;
+    case "dealer-sales": return <DealerSalesChart ctx={ctx} choice={view} />;
+    case "dealer-deals": return <DealCountChart ctx={ctx} choice={view} />;
+    case "lot-attention": return <LotAttention ctx={ctx} />;
+    case "open-deals": return <OpenDeals ctx={ctx} />;
+    case "newest-cars": return <NewestCars ctx={ctx} />;
+    case "aged-cars": return <AgedCars ctx={ctx} />;
+    default: return null;
+  }
 }

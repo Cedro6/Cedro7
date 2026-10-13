@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { can, getBriefing, isDealerPeriod, productOf, getHomeLayout, HERO_RANGES, isChartPeriod, isWidget, type HeroRange, type WidgetId } from "@bos/core";
 import { ModeSwitch } from "../../components/ModeSwitch";
-import { DealerHome } from "../../components/DealerHome";
+import { DEALER_CARDS, DealerWidget } from "../../components/DealerHome";
 import { BriefingPanel } from "../../components/BriefingPanel";
 import { Widget, WIDGET_INFO } from "../../components/home/widgets";
 import { assistantConfigured } from "../../lib/assistant";
@@ -53,10 +53,15 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { ctx, membership } = await requireSession();
   const params = await searchParams;
   const dealer = productOf(membership.businessType ?? "distributor") === "dealer";
-  const edit = params.edit === "1" && !dealer;
+  const edit = params.edit === "1";
   const requested = Number(params.range);
   const range: HeroRange = (HERO_RANGES as readonly number[]).includes(requested) ? (requested as HeroRange) : 30;
   const view = { range, chart: params.chart && isChartPeriod(params.chart) ? params.chart : ("30d" as const), edit };
+  const dealerView = {
+    sales: params.chart && isDealerPeriod(params.chart) ? params.chart : ("30d" as const),
+    deals: params.deals && isDealerPeriod(params.deals) ? params.deals : ("30d" as const),
+    edit,
+  };
   const [layout, briefing] = await Promise.all([getHomeLayout(ctx, membership.businessType), assistantConfigured() ? getBriefing(ctx) : null]);
   const replacing = edit && params.replace && isWidget(params.replace) && layout.widgets.includes(params.replace) ? params.replace : null;
   const adding = edit && params.add === "1";
@@ -91,11 +96,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </>
         ) : (
           <>
-            {!dealer && (
-              <Link href="/?edit=1" className="btn btn-glass">
-                Customize
-              </Link>
-            )}
+            <Link href="/?edit=1" className="btn btn-glass">
+              Customize
+            </Link>
             {dealer ? (
               <Link href="/vehicles/new" className="btn btn-primary">Add vehicle by VIN</Link>
             ) : can(ctx, "sales_order.write") ? (
@@ -120,9 +123,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         />
       )}
 
-      {dealer ? (
-        <DealerHome ctx={ctx} sales={params.chart && isDealerPeriod(params.chart) ? params.chart : "30d"} deals={params.deals && isDealerPeriod(params.deals) ? params.deals : "30d"} />
-      ) : (
       <div className="dash">
         {layout.widgets.map((id, index) => {
           const info = WIDGET_INFO[id];
@@ -156,7 +156,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 </div>
               )}
               {replacing === id && <WidgetMenu options={layout.available} replacing={id} />}
-              <Widget id={id} ctx={ctx} view={view} />
+              {DEALER_CARDS.has(id) ? <DealerWidget id={id} ctx={ctx} view={dealerView} /> : <Widget id={id} ctx={ctx} view={view} />}
             </div>
           );
         })}
@@ -177,7 +177,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </section>
         )}
       </div>
-      )}
     </>
   );
 }
