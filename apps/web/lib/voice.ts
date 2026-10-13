@@ -7,10 +7,12 @@ export const voiceConfigured = (): boolean => Boolean(process.env.ELEVENLABS_API
 /** The longest reply Ava will read aloud. Keeps each spoken answer short and its cost small. */
 export const MAX_SPOKEN = 400;
 
-// A calm, unhurried delivery: steady rather than expressive, and a touch slower than normal speech.
-const SETTINGS = { stability: 0.7, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 0.94 };
-// "Rachel", one of ElevenLabs' standard calm voices. Set ELEVENLABS_VOICE_ID to use any other voice from their library.
-const DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM";
+// Soft and natural: enough variation to sound like a person, steady enough to stay calm, a touch slower than normal speech.
+const SETTINGS = { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 0.95 };
+// "Sarah", ElevenLabs' soft-spoken American default voice. Set ELEVENLABS_VOICE_ID to use any other voice from their library.
+const DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
+// Multilingual v2 sounds more natural than the faster Flash models, which the default voices are also tuned for.
+const DEFAULT_MODEL = "eleven_multilingual_v2";
 
 /** Why ElevenLabs would not speak, in words for the person, from its status code. */
 function problem(status: number): string {
@@ -27,7 +29,7 @@ export async function speak(text: string): Promise<{ audio: ReadableStream<Uint8
   const response = await fetch(`${process.env.ELEVENLABS_BASE_URL || "https://api.elevenlabs.io"}/v1/text-to-speech/${voice}/stream?output_format=mp3_44100_128`, {
     method: "POST",
     headers: { "content-type": "application/json", "xi-api-key": process.env.ELEVENLABS_API_KEY ?? "", accept: "audio/mpeg" },
-    body: JSON.stringify({ text, model_id: process.env.ELEVENLABS_MODEL || "eleven_flash_v2_5", voice_settings: SETTINGS }),
+    body: JSON.stringify({ text, model_id: process.env.ELEVENLABS_MODEL || DEFAULT_MODEL, voice_settings: SETTINGS }),
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok || !response.body) {
