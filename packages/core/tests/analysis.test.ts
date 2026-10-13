@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
-  analysis, compareRange, confirmOrder, createQuote, ForbiddenError, listCustomers, listInvoices, listProducts, recordPayment, resolveRange, shipOrder, today,
+  analysis, compareRange, confirmOrder, createQuote, ForbiddenError, listCustomers, listInvoices, listProducts, recordPayment, report, resolveRange, shipOrder, today,
   type Ctx, type Role,
 } from "../src/index";
 
@@ -90,6 +90,32 @@ describe("full report", () => {
     expect(after.trend.reduce((n, s) => n + s.now, 0)).toBeCloseTo(after.sales.revenue.now, 2);
     expect(after.trend.reduce((n, s) => n + (s.was ?? 0), 0)).toBeCloseTo(after.sales.revenue.was!, 2);
     expect(after.trend).toHaveLength(30);
+  });
+
+  it("keeps the margin on a past sale when the product's cost is changed afterwards", async () => {
+    const quote = await (async () => {
+      const product = (await listProducts(as("owner"))).find((p) => p.available >= 20 && (p.cost ?? 0) > 0)!;
+      const customer = (await listCustomers(as("owner")))[0]!;
+      return { product, order: await createQuote(as("sales"), { customerId: customer.id, lines: [{ productId: product.id, qty: 2, unitPrice: 100 }] }) };
+    })();
+    const cost = quote.product.cost!;
+    const unitCost = async () => (await owner.query<{ c: string | null }>("select unit_cost::text as c from sales_order_lines where order_id = $1", [quote.order.id])).rows[0]!.c;
+    expect(await unitCost()).toBeNull(); // a quote has no cost of sale yet
+    // The cost changes while it is still a quote: confirming takes the cost on that day.
+    await owner.query("update products set cost = cost + 1 where id = $1", [quote.product.id]);
+    const before = await analysis(as("owner"), { range: last30() });
+    await confirmOrder(as("sales"), quote.order.id);
+    expect(Number(await unitCost())).toBeCloseTo(cost + 1, 4);
+    const sold = await analysis(as("owner"), { range: last30() });
+    expect(sold.sales.margin!.now - before.sales.margin!.now).toBeCloseTo(200 - 2 * (cost + 1), 2);
+    // Doubling the cost afterwards changes nothing already sold, in either report.
+    const old = await report(as("owner"), 30);
+    await owner.query("update products set cost = cost * 2 where id = $1", [quote.product.id]);
+    const later = await analysis(as("owner"), { range: last30() });
+    expect(later.sales.margin!.now).toBeCloseTo(sold.sales.margin!.now, 2);
+    expect(later.products.find((p) => p.id === quote.product.id)!.margin!.now).toBeCloseTo(sold.products.find((p) => p.id === quote.product.id)!.margin!.now, 2);
+    expect((await report(as("owner"), 30)).topProducts.find((p) => p.id === quote.product.id)!.margin).toBeCloseTo(old.topProducts.find((p) => p.id === quote.product.id)!.margin!, 2);
+    await owner.query("update products set cost = $2 where id = $1", [quote.product.id, cost]);
   });
 
   it("compares with a year earlier, or with nothing, when asked", async () => {
