@@ -100,12 +100,16 @@ export function BarList({ items }: { items: { key: string; label: React.ReactNod
  * Two lines on one scale: the chosen dates solid, the comparison dates dashed, lined up step for step.
  * The dashed line is also named in the legend under the chart, so it never depends on colour alone.
  */
-export function CompareChart({ steps, label, animate, tick }: {
+export function CompareChart({ steps, label, animate, tick, format = shortMoney }: {
   steps: { start: string; now: number; was: number | null }[]; label: string; animate?: string; tick: (iso: string) => string;
+  /** How to write the numbers up the side. Money unless told otherwise. */
+  format?: (n: number) => string;
 }) {
   const W = 720, H = 260, left = 46, right = 16, top = 20, bottom = 30;
   const compared = steps.some((s) => s.was !== null);
-  const max = niceMax(Math.max(...steps.map((s) => Math.max(s.now, s.was ?? 0))));
+  const top0 = niceMax(Math.max(...steps.map((s) => Math.max(s.now, s.was ?? 0))));
+  // Counts get an even top so the halfway line is a whole number.
+  const max = format !== shortMoney && top0 % 2 === 1 ? top0 + 1 : top0;
   const x = (i: number) => (steps.length === 1 ? (left + W - right) / 2 : left + (i * (W - left - right)) / (steps.length - 1));
   const y = (v: number) => top + (1 - v / max) * (H - top - bottom);
   const now = steps.map((s, i): [number, number] => [x(i), y(s.now)]);
@@ -126,7 +130,7 @@ export function CompareChart({ steps, label, animate, tick }: {
         <g key={f}>
           <path d={`M${left} ${y(f * max).toFixed(1)}H${W - right}`} stroke="currentColor" strokeOpacity="0.12" fill="none" />
           <text x={left - 8} y={y(f * max) + 4} fill="currentColor" fillOpacity="0.7" fontSize="12" textAnchor="end">
-            {shortMoney(f * max)}
+            {format(f * max)}
           </text>
         </g>
       ))}

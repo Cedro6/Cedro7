@@ -121,6 +121,10 @@ export type Analysis = {
   };
   /** One step per day, week or month. `was` lines up step for step with the comparison dates. */
   trend: { start: string; now: number; wasStart: string | null; was: number | null }[];
+  /** Units sold, in the same steps as `trend`. */
+  unitsTrend: { start: string; now: number; wasStart: string | null; was: number | null }[];
+  /** Customers whose first ever order falls in each step. Empty when the role may not see customers. */
+  newCustomerTrend: { start: string; now: number; wasStart: string | null; was: number | null }[];
   /** Every product sold in either set of dates, biggest first. */
   products: { id: string; sku: string; name: string; category: string | null; units: Pair; revenue: Pair; margin: Pair | null }[];
   categories: { name: string; revenue: Pair }[];
@@ -239,14 +243,32 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
     const ret = back.rows[0]!;
     const margin = { now: t.margin - ret.hit, was: t.margin0 - ret.hit0 };
 
-    const daily = await tx.query<{ day: string; cur: boolean; total: number }>(
-      `select to_char(day, 'YYYY-MM-DD') as day, cur, sum(amount)::float8 as total from (${LINES}) x group by day, cur`,
+    const daily = await tx.query<{ day: string; cur: boolean; total: number; units: number }>(
+      `select to_char(day, 'YYYY-MM-DD') as day, cur, sum(amount)::float8 as total, sum(qty)::float8 as units from (${LINES}) x group by day, cur`,
       dates,
     );
     const byDay = (cur: boolean) => new Map(daily.rows.filter((r) => r.cur === cur).map((r) => [r.day, r.total]));
     const nowSteps = intoBuckets(range, bucket, byDay(true));
     const wasSteps = compare ? intoBuckets(compare, bucket, byDay(false)) : [];
     const trend = nowSteps.map((s, i) => ({ start: s.start, now: s.total, wasStart: wasSteps[i]?.start ?? null, was: wasSteps[i]?.total ?? null }));
+    // The same steps for any other daily count.
+    const stepped = (days: { day: string; cur: boolean; n: number }[]) => {
+      const of = (cur: boolean) => new Map(days.filter((r) => r.cur === cur).map((r) => [r.day, r.n]));
+      const a = intoBuckets(range, bucket, of(true));
+      const b = compare ? intoBuckets(compare, bucket, of(false)) : [];
+      return a.map((s, i) => ({ start: s.start, now: s.total, wasStart: b[i]?.start ?? null, was: b[i]?.total ?? null }));
+    };
+    const unitsTrend = stepped(daily.rows.map((r) => ({ day: r.day, cur: r.cur, n: r.units })));
+    const firsts = can(ctx, "customer.read")
+      ? await tx.query<{ day: string; cur: boolean; n: number }>(
+          `select to_char(${local("first")}, 'YYYY-MM-DD') as day, ${NOW("first")} as cur, count(*)::int as n
+             from (select min(confirmed_at) as first from sales_orders
+                    where status <> 'cancelled' and confirmed_at is not null group by customer_id) f
+            where ${EITHER("first")} group by 1, 2`,
+          dates,
+        )
+      : { rows: [] };
+    const newCustomerTrend = can(ctx, "customer.read") ? stepped(firsts.rows) : [];
 
     const products = await tx.query<{ id: string; sku: string; name: string; category: string | null } & Record<"units" | "units0" | "rev" | "rev0" | "margin" | "margin0", number>>(
       `select p.id, p.sku, p.name, p.category,
@@ -426,6 +448,8 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
         margin: seeCost ? pair(margin.now, margin.was) : null,
       },
       trend,
+      unitsTrend,
+      newCustomerTrend,
       products: products.rows.map((p) => ({
         id: p.id, sku: p.sku, name: p.name, category: p.category,
         units: pair(p.units, p.units0), revenue: pair(p.rev, p.rev0), margin: seeCost ? pair(p.margin, p.margin0) : null,

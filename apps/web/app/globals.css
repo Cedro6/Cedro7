@@ -2396,3 +2396,7 @@ a.account-card:hover .account-name { text-decoration: underline; }
 .briefing-points li.is-done .briefing-point { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.6); color: rgba(255, 255, 255, 0.62); font-weight: 500; }
 .briefing-points li.is-done .briefing-point strong { color: rgba(255, 255, 255, 0.7); }
 .briefing-points li.is-done .briefing-num { border-color: transparent; background: rgba(94, 234, 212, 0.22); color: #9ff5e6; }
+.rpt-graph { margin: 4px 0 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.rpt-graph-note { margin: 0; font-size: 13px; }
+.briefing-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.briefing-min { display: inline-flex; align-items: center; gap: 6px; }

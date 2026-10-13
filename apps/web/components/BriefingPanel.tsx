@@ -48,6 +48,11 @@ export function BriefingPanel({ initial, writtenAt, done, day }: { initial: stri
     setShown("asked");
     try { localStorage.setItem("cedro-briefing-open", day); } catch { /* open for this visit only */ }
   };
+  // Back to the closed panel. The briefing itself is kept, so asking again shows it at once.
+  const minimize = () => {
+    setShown("no");
+    try { localStorage.removeItem("cedro-briefing-open"); } catch { /* nothing was remembered */ }
+  };
   const write = () =>
     start(async () => {
       setError("");
@@ -82,9 +87,17 @@ export function BriefingPanel({ initial, writtenAt, done, day }: { initial: stri
               : `Written by Ava ${when}${all.length > left ? ` · ${all.length - left} of ${all.length} dealt with` : ""}`}
           </div>
         </div>
-        <button type="button" className="btn btn-glass btn-small" onClick={ask} disabled={pending}>
-          {pending ? "Writing…" : open ? "Write it again" : "Write today's briefing"}
-        </button>
+        <div className="briefing-actions">
+          <button type="button" className="btn btn-glass btn-small" onClick={ask} disabled={pending}>
+            {pending ? "Writing…" : open ? "Write it again" : "Write today's briefing"}
+          </button>
+          {open && (
+            <button type="button" className="btn btn-glass btn-small briefing-min" onClick={minimize} aria-label="Minimize the briefing">
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5-5 5 5" /></svg>
+              <span>Minimize</span>
+            </button>
+          )}
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
       {open && !cleared && (
