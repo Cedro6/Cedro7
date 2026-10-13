@@ -278,3 +278,54 @@ export async function headline(ctx: Ctx): Promise<Headline> {
     return out;
   });
 }
+
+export const CHART_PERIODS = ["30d", "quarter", "ytd"] as const;
+export type ChartPeriod = (typeof CHART_PERIODS)[number];
+export const isChartPeriod = (value: string): value is ChartPeriod => (CHART_PERIODS as readonly string[]).includes(value);
+
+export type SalesSeries = {
+  period: ChartPeriod;
+  /** One point per day, or per week (labelled by the week's first day in the period) for year to date. */
+  bucket: "day" | "week";
+  points: { date: string; total: number }[];
+  total: number;
+  from: string;
+  to: string;
+};
+
+/**
+ * Sales for the chart: the last 30 days, this calendar quarter so far, or this year so far.
+ * Same definition as everywhere else: orders confirmed, goods before tax, cancelled left out.
+ */
+export async function salesSeries(ctx: Ctx, period: ChartPeriod): Promise<SalesSeries | null> {
+  if (!can(ctx, "sales_order.read")) return null;
+  const start =
+    period === "30d" ? "(now() at time zone $1)::date - 29"
+    : period === "quarter" ? "date_trunc('quarter', now() at time zone $1)::date"
+    : "date_trunc('year', now() at time zone $1)::date";
+  const weekly = period === "ytd";
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const result = await tx.query<{ date: string; total: number; first: string; last: string }>(
+      `with span as (select ${start} as first, (now() at time zone $1)::date as last),
+            days as (select generate_series(first, last, interval '1 day')::date as day from span),
+            daily as (select d.day,
+                             coalesce((select sum(x.amount) from (${LINES}) x where (x.confirmed_at at time zone $1)::date = d.day), 0) as total
+                        from days d)
+       select to_char(min(day), 'YYYY-MM-DD') as date, sum(total)::float8 as total,
+              to_char((select first from span), 'YYYY-MM-DD') as first, to_char((select last from span), 'YYYY-MM-DD') as last
+         from daily
+        group by ${weekly ? "date_trunc('week', day)" : "day"}
+        order by 1`,
+      [ZONE],
+    );
+    const points = result.rows.map(({ date, total }) => ({ date, total }));
+    return {
+      period,
+      bucket: weekly ? "week" : "day",
+      points,
+      total: points.reduce((sum, p) => sum + p.total, 0),
+      from: result.rows[0]!.first,
+      to: result.rows[0]!.last,
+    };
+  });
+}
