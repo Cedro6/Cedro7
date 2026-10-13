@@ -60,6 +60,7 @@ describe("migrations", () => {
       "0024_region_tax.sql",
       "0025_returns.sql",
       "0026_reminder_time.sql",
+      "0027_two_step.sql",
     ]);
   });
 

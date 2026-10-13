@@ -1,9 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { membershipsByEmail, sessionVersion, signInWithPassword } from "@bos/core";
+import { membershipsByEmail, sessionVersion, signInWithPassword, verifyTwoStep } from "@bos/core";
 import { pool } from "../../lib/pool";
-import { devSignInEnabled, previewPasswordMatches, previewPasswordRequired, startSession } from "../../lib/session";
+import { clearPending, devSignInEnabled, previewPasswordMatches, previewPasswordRequired, readPending, startPending, startSession } from "../../lib/session";
 
 export async function signIn(formData: FormData): Promise<void> {
   if (!devSignInEnabled()) redirect("/sign-in?error=disabled");
@@ -29,6 +29,32 @@ export async function signInWithEmail(formData: FormData): Promise<void> {
   if (!email || !password) redirect("/sign-in?error=wrong");
   const result = await signInWithPassword(pool, email, password);
   if (!result.ok) redirect(`/sign-in?error=${result.reason}`);
+  if (result.session.twoStep) {
+    await startPending(result.session.userId, result.session.orgId, result.session.sessionVersion);
+    redirect("/sign-in/verify");
+  }
   await startSession(result.session.userId, result.session.orgId, result.session.sessionVersion);
   redirect("/");
+}
+
+/** The second step: the code from the person's authenticator app, or one of their recovery codes. */
+export async function verifyCode(formData: FormData): Promise<void> {
+  const pending = await readPending();
+  if (!pending) redirect("/sign-in?error=expired");
+  const result = await verifyTwoStep(pool, pending.userId, String(formData.get("code") ?? ""));
+  if (!result.ok) {
+    if (result.reason === "locked") {
+      await clearPending();
+      redirect("/sign-in?error=locked");
+    }
+    redirect("/sign-in/verify?error=wrong");
+  }
+  // The password may have been changed while this screen was open; only the current version signs in.
+  if ((await sessionVersion(pool, pending.userId)) !== pending.version) {
+    await clearPending();
+    redirect("/sign-in?error=expired");
+  }
+  await clearPending();
+  await startSession(pending.userId, pending.orgId, pending.version);
+  redirect(result.usedRecovery ? `/account?notice=${encodeURIComponent(`You signed in with a recovery code. ${result.recoveryLeft} left. If you have lost your phone, turn two-step verification off below and set it up again.`)}` : "/");
 }

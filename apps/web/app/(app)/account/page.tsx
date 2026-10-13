@@ -1,12 +1,17 @@
-import { sessionVersion } from "@bos/core";
+import QRCode from "qrcode";
+import { pendingTwoStep, sessionVersion, twoStepStatus } from "@bos/core";
+import { TwoStepSetup } from "../../../components/TwoStepSetup";
 import { pool } from "../../../lib/pool";
 import { requireSession } from "../../../lib/session";
-import { changePassword } from "./actions";
+import { changePassword, startSetup, turnOffTwoStep } from "./actions";
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { ctx, membership } = await requireSession();
   const { error, notice } = await searchParams;
   const hasPassword = (await sessionVersion(pool, ctx.userId)) > 0;
+  const twoStep = hasPassword ? await twoStepStatus(pool, ctx.userId) : { on: false, recoveryLeft: 0 };
+  const pending = hasPassword && !twoStep.on ? await pendingTwoStep(ctx, "Cedro Terminal") : null;
+  const qr = pending ? await QRCode.toString(pending.uri, { type: "svg", margin: 1, width: 200 }) : "";
   const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);
   return (
     <>
@@ -47,6 +52,45 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           <p className="muted">This is a demo person with no password of their own. To get a personal login, ask an owner to add you under Settings, then Team.</p>
         )}
       </section>
+      {hasPassword && (
+        <section className="glass panel form-panel" id="two-step">
+          <h2 className="title">Two-step verification</h2>
+          {twoStep.on ? (
+            <div className="stack">
+              <p>
+                <span className="badge badge-ok">On</span> Signing in asks for a code from your authenticator app after your password.{" "}
+                {twoStep.recoveryLeft} of 8 recovery codes left.
+              </p>
+              <details className="return-form">
+                <summary className="btn btn-glass btn-small">Turn it off</summary>
+                <form action={turnOffTwoStep} className="stack">
+                  <p className="muted">To get new recovery codes or move to a new phone, turn it off and set it up again.</p>
+                  <label className="field">
+                    <span>Your password</span>
+                    <input type="password" name="password" required maxLength={200} autoComplete="current-password" />
+                  </label>
+                  <label className="field">
+                    <span>Current code from the app, or a recovery code</span>
+                    <input name="code" required maxLength={20} autoComplete="one-time-code" />
+                  </label>
+                  <div className="actions">
+                    <button type="submit" className="btn btn-glass">Turn off two-step verification</button>
+                  </div>
+                </form>
+              </details>
+            </div>
+          ) : pending ? (
+            <TwoStepSetup qr={qr} secret={pending.secret} />
+          ) : (
+            <form action={startSetup} className="stack">
+              <p className="muted">Adds a second lock on your account: after your password, sign-in asks for a 6-digit code from an app on your phone. Someone who learns your password still cannot get in.</p>
+              <div className="actions">
+                <button type="submit" className="btn btn-primary">Set up two-step verification</button>
+              </div>
+            </form>
+          )}
+        </section>
+      )}
     </>
   );
 }

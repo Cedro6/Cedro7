@@ -50,6 +50,7 @@ export function TeamPanel({ members, canMakeOwners }: { members: TeamMemberDetai
               </div>
               <div className="muted">
                 {member.email} · {member.status === "suspended" ? "Suspended" : member.hasPassword ? "Has a password" : "No password yet"}
+                {member.twoStep ? " · Two-step on" : ""}
               </div>
             </div>
             <form action={changeAction} className="inline-form">
@@ -79,6 +80,15 @@ export function TeamPanel({ members, canMakeOwners }: { members: TeamMemberDetai
                 <input type="hidden" name="name" value={member.name} />
                 <button type="submit" className="link-button">
                   {member.hasPassword ? "Reset password" : "Get sign-in link"}
+                </button>
+              </form>
+            )}
+            {member.twoStep && !member.isYou && (
+              <form action={changeAction}>
+                <input type="hidden" name="userId" value={member.userId} />
+                <input type="hidden" name="resetTwoStep" value="1" />
+                <button type="submit" className="link-button" title="For someone who lost their phone and recovery codes">
+                  Reset two-step
                 </button>
               </form>
             )}

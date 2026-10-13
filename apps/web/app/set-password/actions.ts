@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { setPasswordWithLink, ValidationError } from "@bos/core";
 import { pool } from "../../lib/pool";
-import { startSession } from "../../lib/session";
+import { startPending, startSession } from "../../lib/session";
 
 export async function choosePassword(formData: FormData): Promise<void> {
   const token = String(formData.get("token") ?? "");
@@ -16,6 +16,10 @@ export async function choosePassword(formData: FormData): Promise<void> {
   } catch (error) {
     if (error instanceof ValidationError) redirect(`${back}&error=${encodeURIComponent(error.message)}`);
     throw error;
+  }
+  if (session.twoStep) {
+    await startPending(session.userId, session.orgId, session.sessionVersion);
+    redirect("/sign-in/verify");
   }
   await startSession(session.userId, session.orgId, session.sessionVersion);
   redirect("/");

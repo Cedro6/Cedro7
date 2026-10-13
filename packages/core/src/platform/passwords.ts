@@ -48,7 +48,8 @@ const tokenHash = (token: string) => createHash("sha256").update(token).digest("
 // Checked against when the email is unknown, so an unknown email takes as long to refuse as a wrong password.
 let decoy: Promise<string> | null = null;
 
-export type SignedIn = { userId: string; orgId: string; sessionVersion: number };
+/** `twoStep` means the password was right but a code from the person's authenticator app is still needed. */
+export type SignedIn = { userId: string; orgId: string; sessionVersion: number; twoStep: boolean };
 export type SignInResult = { ok: true; session: SignedIn } | { ok: false; reason: "wrong" | "locked" };
 
 /**
@@ -71,7 +72,11 @@ export async function signInWithPassword(pool: Pool, email: string, password: st
   if (!ok) return { ok: false, reason: "wrong" };
   const org = await pool.query<{ org_id: string }>("select org_id from auth_memberships_by_email($1) limit 1", [email]);
   if (!org.rows[0]) return { ok: false, reason: "wrong" };
-  return { ok: true, session: { userId: row.user_id, orgId: org.rows[0].org_id, sessionVersion: row.session_version } };
+  return { ok: true, session: { userId: row.user_id, orgId: org.rows[0].org_id, sessionVersion: row.session_version, twoStep: await hasTwoStep(pool, row.user_id) } };
+}
+
+async function hasTwoStep(pool: Pool, userId: string): Promise<boolean> {
+  return (await pool.query("select 1 from auth_totp_enabled($1::uuid[])", [[userId]])).rows.length > 0;
 }
 
 export async function sessionVersion(pool: Pool, userId: string): Promise<number> {
@@ -103,10 +108,10 @@ export async function setPasswordWithLink(pool: Pool, token: string, password: s
   );
   const row = result.rows[0];
   if (!row) throw new ValidationError("token", "This link has been used or has expired. Ask for a new one.");
-  return { userId: row.user_id, orgId: row.org_id, sessionVersion: row.session_version };
+  return { userId: row.user_id, orgId: row.org_id, sessionVersion: row.session_version, twoStep: await hasTwoStep(pool, row.user_id) };
 }
 
-export type TeamMemberDetail = { userId: string; name: string; email: string; role: Role; status: "active" | "suspended"; hasPassword: boolean; isYou: boolean };
+export type TeamMemberDetail = { userId: string; name: string; email: string; role: Role; status: "active" | "suspended"; hasPassword: boolean; twoStep: boolean; isYou: boolean };
 
 export async function listMembers(ctx: Ctx): Promise<TeamMemberDetail[]> {
   requirePermission(ctx, "settings.manage");
@@ -116,7 +121,8 @@ export async function listMembers(ctx: Ctx): Promise<TeamMemberDetail[]> {
     );
     const withPassword = await tx.query<{ user_id: string }>("select user_id from auth_has_password($1::uuid[])", [members.rows.map((m) => m.userId)]);
     const set = new Set(withPassword.rows.map((r) => r.user_id));
-    return members.rows.flatMap((m) => (isRole(m.role) ? [{ ...m, role: m.role, hasPassword: set.has(m.userId), isYou: m.userId === ctx.userId }] : []));
+    const twoStep = new Set((await tx.query<{ user_id: string }>("select user_id from auth_totp_enabled($1::uuid[])", [members.rows.map((m) => m.userId)])).rows.map((r) => r.user_id));
+    return members.rows.flatMap((m) => (isRole(m.role) ? [{ ...m, role: m.role, hasPassword: set.has(m.userId), twoStep: twoStep.has(m.userId), isYou: m.userId === ctx.userId }] : []));
   });
 }
 
