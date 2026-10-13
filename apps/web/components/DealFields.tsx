@@ -22,6 +22,8 @@ export function DealFields({ v, currency, locked }: { v: Values; currency: strin
           <label className="field"><span>Co-buyer (optional)</span><input name="coBuyerName" maxLength={200} defaultValue={v.coBuyerName ?? ""} /></label>
           <label className="field"><span>Driver licence no.</span><input name="buyerDl" maxLength={40} defaultValue={v.buyerDl ?? ""} /></label>
           <label className="field"><span>Date of birth</span><input name="buyerDob" type="date" defaultValue={v.buyerDob ?? ""} /></label>
+          <label className="field"><span>Sex (as on licence)</span><select name="buyerSex" defaultValue={v.buyerSex ?? ""}><option value="">—</option><option value="M">M</option><option value="F">F</option><option value="X">X</option></select></label>
+          <label className="field"><span>County of residence</span><input name="buyerCounty" maxLength={60} defaultValue={v.buyerCounty ?? ""} /></label>
           <label className="field"><span>Street address</span><input name="buyerAddress" maxLength={200} defaultValue={v.buyerAddress ?? ""} /></label>
           <label className="field"><span>City</span><input name="buyerCity" maxLength={100} defaultValue={v.buyerCity ?? ""} /></label>
           <label className="field"><span>State</span><input name="buyerState" maxLength={2} defaultValue={v.buyerState ?? "FL"} /></label>

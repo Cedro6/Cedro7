@@ -31,6 +31,8 @@ export type DealInput = {
   buyerEmail?: string;
   buyerDl?: string;
   buyerDob?: string;
+  buyerSex?: string;
+  buyerCounty?: string;
   coBuyerName?: string;
   salePrice: number;
   dealerFee?: number;
@@ -87,7 +89,17 @@ export type Deal = DealMoney & {
   buyerEmail: string | null;
   buyerDl: string | null;
   buyerDob: string | null;
+  buyerSex: string | null;
+  buyerCounty: string | null;
   coBuyerName: string | null;
+  /** The dealer's title for the car, needed on the forms. */
+  titleNumber: string | null;
+  titleState: string | null;
+  vehicleColour: string | null;
+  vehicleBody: string | null;
+  vehicleMake: string | null;
+  vehicleModel: string | null;
+  vehicleYear: number | null;
   tradeVin: string | null;
   tradeDescription: string | null;
   tradeMileage: number | null;
@@ -179,6 +191,8 @@ function clean(input: DealInput, d: Defaults) {
     buyerEmail: text(input.buyerEmail, 200, "buyerEmail") ?? null,
     buyerDl: text(input.buyerDl, 40, "buyerDl") ?? null,
     buyerDob: input.buyerDob?.trim() || null,
+    buyerSex: input.buyerSex && ["M", "F", "X"].includes(input.buyerSex.trim().toUpperCase()) ? input.buyerSex.trim().toUpperCase() : null,
+    buyerCounty: text(input.buyerCounty, 60, "buyerCounty") ?? null,
     coBuyerName: text(input.coBuyerName, 200, "coBuyerName") ?? null,
     salePrice: money(input.salePrice, "salePrice"),
     dealerFee: money(input.dealerFee, "dealerFee", d.dealerFee),
@@ -205,6 +219,7 @@ const COLUMNS = `
   concat_ws(' ', v.year::text, v.make, v.model, v.trim) as "vehicleName", v.acquisition_price::float8 as "vehicleCost",
   d.customer_id as "customerId", d.buyer_name as "buyerName", d.buyer_address as "buyerAddress", d.buyer_city as "buyerCity", d.buyer_state as "buyerState",
   d.buyer_zip as "buyerZip", d.buyer_phone as "buyerPhone", d.buyer_email as "buyerEmail", d.buyer_dl as "buyerDl", to_char(d.buyer_dob, 'YYYY-MM-DD') as "buyerDob",
+  d.buyer_sex as "buyerSex", d.buyer_county as "buyerCounty", v.title_number as "titleNumber", v.title_state as "titleState", v.colour as "vehicleColour", v.body_style as "vehicleBody", v.make as "vehicleMake", v.model as "vehicleModel", v.year as "vehicleYear",
   d.co_buyer_name as "coBuyerName", d.sale_price::float8 as "salePrice", d.dealer_fee::float8 as "dealerFee", d.trade_allowance::float8 as "tradeAllowance",
   d.trade_vin as "tradeVin", d.trade_description as "tradeDescription", d.trade_mileage as "tradeMileage",
   d.state_tax_pct::float8 as "stateTaxPct", d.surtax_pct::float8 as "surtaxPct", d.surtax_cap::float8 as "surtaxCap",

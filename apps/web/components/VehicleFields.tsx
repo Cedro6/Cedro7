@@ -70,6 +70,11 @@ export function OwnFields({ values, showCost, currency }: { values: Partial<Vehi
         {showCost && <label className="field"><span>Bought on</span><input name="acquiredOn" type="date" defaultValue={values.acquiredOn ?? ""} /></label>}
         <label className="field"><span>Asking price ({currency})</span><input name="askingPrice" inputMode="decimal" defaultValue={values.askingPrice ?? ""} /></label>
       </div>
+      <div className="veh-grid">
+        <label className="field"><span>Title number</span><input name="titleNumber" maxLength={40} defaultValue={values.titleNumber ?? ""} /></label>
+        <label className="field"><span>Title state</span><input name="titleState" maxLength={2} defaultValue={values.titleState ?? "FL"} /></label>
+        <label className="field"><span>Title issued on</span><input name="titleIssuedOn" type="date" defaultValue={values.titleIssuedOn ?? ""} /></label>
+      </div>
       <label className="field"><span>Notes for the team</span><textarea name="notes" rows={2} maxLength={4000} defaultValue={values.notes ?? ""} /></label>
     </>
   );

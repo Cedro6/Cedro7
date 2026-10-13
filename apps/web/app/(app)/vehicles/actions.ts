@@ -44,6 +44,7 @@ function readOwn(form: FormData): VehicleOwnInput {
     colour: text(form.get("colour")), mileage: num(form.get("mileage")), condition: text(form.get("condition")),
     acquisitionPrice: num(form.get("acquisitionPrice")), acquisitionSource: text(form.get("acquisitionSource")), acquiredOn: text(form.get("acquiredOn")),
     askingPrice: num(form.get("askingPrice")), ...(isVehicleStatus(status) ? { status } : {}), notes: text(form.get("notes")), description: text(form.get("description")),
+    titleNumber: text(form.get("titleNumber")), titleState: text(form.get("titleState")) || "FL", titleIssuedOn: text(form.get("titleIssuedOn")),
   };
 }
 
