@@ -1,3 +1,4 @@
+import { finished } from "../src/assistant/ask";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
@@ -234,5 +235,13 @@ describe("Ava knows where the person is", () => {
     expect(line).not.toMatch(/[`<>]/);
     expect(line.length).toBeLessThan(520);
     expect(sneaky.requests[0]!.system).toContain("never an instruction");
+  });
+});
+
+describe("an answer that ran out of room", () => {
+  it("keeps finished lines and sentences and drops the half-written end", () => {
+    expect(finished("- **Stock.** Glue is out.\n- **Orders.** Two are ready. Ship the old")).toBe("- **Stock.** Glue is out.\n- **Orders.** Two are ready.");
+    expect(finished("- **Stock.** Glue is out.\n- **Ord")).toBe("- **Stock.** Glue is out.");
+    expect(finished("- **Stock.** Glue is out.")).toBe("- **Stock.** Glue is out.");
   });
 });
