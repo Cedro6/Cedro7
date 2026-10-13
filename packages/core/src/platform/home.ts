@@ -176,7 +176,7 @@ export async function attention(ctx: Ctx): Promise<AttentionItem[]> {
 
     if (can(ctx, "expense.read")) {
       const bills = await tx.query<{ n: number; owed: string; oldest: number }>(
-        `select count(*)::int as n, coalesce(sum(amount), 0)::text as owed,
+        `select count(*)::int as n, coalesce(sum((amount - coalesce((select sum(p.amount) from expense_payments p where p.expense_id = expenses.id), 0))), 0)::text as owed,
                 coalesce(max((now() at time zone $1)::date - due_on), 0)::int as oldest
            from expenses where voided_at is null and paid_on is null and due_on < (now() at time zone $1)::date`,
         [zoneOf(ctx)],

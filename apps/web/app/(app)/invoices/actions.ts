@@ -7,6 +7,7 @@ import {
   ForbiddenError,
   raiseCredit,
   recordPayment,
+  refundCredit,
   requestDeposit,
   StateError,
   useCustomerCredit,
@@ -115,4 +116,23 @@ export async function saveInvoice(formData: FormData): Promise<void> {
     target = `/invoices/new?error=${encodeURIComponent(friendly(error))}`;
   }
   redirect(target);
+}
+
+/** Pays back credit on a customer's account. */
+export async function refund(formData: FormData): Promise<void> {
+  const { ctx } = await requireSession();
+  const customerId = String(formData.get("customerId") ?? "");
+  let query: string;
+  try {
+    const done = await refundCredit(ctx, customerId, {
+      amount: Number(String(formData.get("amount") ?? "").replace(/[$,\s]/g, "") || "NaN"),
+      method: String(formData.get("method") ?? ""),
+      reference: String(formData.get("reference") ?? ""),
+      idempotencyKey: String(formData.get("requestId") ?? ""),
+    });
+    query = `notice=${encodeURIComponent(`Refund of ${moneyText(done.refunded, ctx.currency)} recorded. ${done.creditLeft > 0 ? `${moneyText(done.creditLeft, ctx.currency)} of credit is left.` : "No credit is left on the account."}`)}`;
+  } catch (error) {
+    query = `error=${encodeURIComponent(friendly(error))}`;
+  }
+  redirect(`/customers/${encodeURIComponent(customerId)}?${query}#credit`);
 }

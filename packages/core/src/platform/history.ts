@@ -58,6 +58,7 @@ const WHAT: Record<string, string> = {
   "contact.created": "added a contact to",
   "contact.updated": "edited a contact of",
   "contact.removed": "removed a contact from",
+  "customer.refunded": "paid a refund to",
   "customers.imported": "imported customers from a spreadsheet",
   "product.created": "added product",
   "product.updated": "edited product",

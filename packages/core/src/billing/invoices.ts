@@ -447,10 +447,11 @@ export async function recordPayment(
   });
 }
 
-/** Credit on a customer's account: what their credit notes are worth, less what has been used. */
+/** Credit on a customer's account: what their credit notes are worth, less what has been used on invoices or paid back. */
 async function creditLeftInTx(tx: PoolClient, customerId: string): Promise<{ id: string; left: number }[]> {
   const notes = await tx.query<{ id: string; left: number }>(
-    `select n.id, (n.amount - coalesce((select sum(a.amount) from credit_applications a where a.credit_note_id = n.id), 0))::float8 as left
+    `select n.id, (n.amount - coalesce((select sum(a.amount) from credit_applications a where a.credit_note_id = n.id), 0)
+                            - coalesce((select sum(f.amount) from credit_refunds f where f.credit_note_id = n.id), 0))::float8 as left
      from credit_notes n where n.customer_id = $1 order by n.created_at, n.number`,
     [customerId],
   );
@@ -635,6 +636,68 @@ export async function getInvoice(ctx: Ctx, invoiceId: string): Promise<InvoiceDe
     );
     const credit = (await creditLeftInTx(tx, invoice.customerId)).reduce((sum, note) => cents(sum + note.left), 0);
     return { ...invoice, lines: lines.rows, payments: payments.rows, credits: credits.rows, customerCredit: credit };
+  });
+}
+
+export type Refund = { amount: number; method: string; reference: string | null; paidAt: Date; paidBy: string | null };
+
+/**
+ * Pays money back to a customer out of the credit on their account, oldest credit first.
+ * It can never be more than the credit they have. This records the refund; the money itself is
+ * sent however the business pays people.
+ */
+export async function refundCredit(
+  ctx: Ctx,
+  customerId: string,
+  input: { amount: number; method: string; reference?: string; idempotencyKey: string },
+): Promise<{ refunded: number; creditLeft: number; replayed: boolean }> {
+  requirePermission(ctx, "invoice.write");
+  if (!UUID.test(customerId)) throw new ValidationError("customerId", "Customer not found.");
+  if (!Number.isFinite(input.amount) || input.amount <= 0 || !twoDecimals(input.amount)) throw new ValidationError("amount", "Enter the amount to refund, in dollars and cents.");
+  const method = input.method.trim();
+  if (!method) throw new ValidationError("method", "Say how it was paid back.");
+  if (method.length > 40) throw new ValidationError("method", "Keep the method under 40 characters.");
+  const reference = input.reference?.trim().slice(0, 100) || null;
+  const key = input.idempotencyKey.trim();
+  if (!key) throw new ValidationError("idempotencyKey", "The refund could not be identified. Reload the page and try again.");
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const customer = await tx.query("select 1 from customers where id = $1 for update", [customerId]);
+    if (!customer.rowCount) throw new ValidationError("customerId", "Customer not found.");
+    const total = async () => (await creditLeftInTx(tx, customerId)).reduce((sum, note) => cents(sum + note.left), 0);
+    const before = await tx.query<{ amount: number }>("select coalesce(sum(amount), 0)::float8 as amount from credit_refunds where request_key = $1", [key]);
+    if (before.rows[0]!.amount > 0) return { refunded: before.rows[0]!.amount, creditLeft: await total(), replayed: true };
+    const amount = cents(input.amount);
+    const available = await total();
+    if (amount > available) {
+      throw new ValidationError("amount", available <= 0 ? "This customer has no credit to refund." : `This customer only has ${available.toFixed(2)} in credit.`);
+    }
+    let remaining = amount;
+    for (const note of await creditLeftInTx(tx, customerId)) {
+      if (remaining <= 0) break;
+      const take = cents(Math.min(note.left, remaining));
+      await tx.query(
+        "insert into credit_refunds (org_id, credit_note_id, amount, method, reference, request_key, paid_by) values ($1, $2, $3, $4, $5, $6, $7)",
+        [ctx.orgId, note.id, take, method, reference, key, ctx.userId],
+      );
+      remaining = cents(remaining - take);
+    }
+    await audit(tx, ctx, "customer.refunded", "customer", customerId, { amount, method });
+    return { refunded: amount, creditLeft: await total(), replayed: false };
+  });
+}
+
+/** Refunds paid to a customer, newest first. One line per refund, however many credit notes it drew on. */
+export async function listRefunds(ctx: Ctx, customerId: string): Promise<Refund[]> {
+  requirePermission(ctx, "sales_order.read");
+  if (!UUID.test(customerId)) return [];
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const r = await tx.query<Refund>(
+      `select sum(f.amount)::float8 as amount, min(f.method) as method, min(f.reference) as reference, min(f.paid_at) as "paidAt", min(u.name) as "paidBy"
+         from credit_refunds f join credit_notes n on n.id = f.credit_note_id left join users u on u.id = f.paid_by
+        where n.customer_id = $1 group by f.request_key order by min(f.paid_at) desc`,
+      [customerId],
+    );
+    return r.rows;
   });
 }
 

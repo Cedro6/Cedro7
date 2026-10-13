@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
-  confirmOrder, createQuote, createReturn, ForbiddenError, getProduct, listCustomers, listInvoices, listProducts, listReturnable, listReturns, reconcileStock, recordPayment,
+  analysis, confirmOrder, createQuote, createReturn, customerStatement, ForbiddenError, listRefunds, raiseCredit, refundCredit, resolveRange, today, getProduct, listCustomers, listInvoices, listProducts, listReturnable, listReturns, reconcileStock, recordPayment,
   shipOrder, StateError, ValidationError, type Ctx, type Role,
 } from "../src/index";
 
@@ -137,5 +137,76 @@ describe("customer returns", () => {
     const there: Ctx = { pool: app, orgId: other.rows[0]!.id, userId, role: "owner" };
     expect(await listReturnable(there, order.id)).toEqual([]);
     await expect(createReturn(there, order.id, { lines: [{ orderLineId: line.orderLineId, qty: 1 }], reason: "x", restock: true, credit: false, idempotencyKey: randomUUID() })).rejects.toBeInstanceOf(StateError);
+  });
+});
+
+describe("refunds", () => {
+  it("pays back credit on the account, never more than there is, and only once per request", async () => {
+    const { order, customer, line, invoice } = await shipped();
+    await recordPayment(as("owner"), invoice.id, { amount: invoice.balance, method: "Check", idempotencyKey: randomUUID() });
+    const start = (await customerStatement(as("owner"), customer.id))!.credit;
+    await createReturn(as("owner"), order.id, { lines: [{ orderLineId: line.orderLineId, qty: 2 }], reason: "Changed mind", restock: true, credit: true, idempotencyKey: randomUUID() });
+    expect((await customerStatement(as("owner"), customer.id))!.credit - start).toBeCloseTo(44, 2);
+    const credit = (await customerStatement(as("owner"), customer.id))!.credit;
+    await expect(refundCredit(as("owner"), customer.id, { amount: credit + 0.01, method: "Check", idempotencyKey: randomUUID() })).rejects.toThrow(/only has/);
+    await expect(refundCredit(as("owner"), customer.id, { amount: 0, method: "Check", idempotencyKey: randomUUID() })).rejects.toBeInstanceOf(ValidationError);
+    await expect(refundCredit(as("owner"), customer.id, { amount: 10, method: " ", idempotencyKey: randomUUID() })).rejects.toBeInstanceOf(ValidationError);
+    const key = randomUUID();
+    const done = await refundCredit(as("owner"), customer.id, { amount: 30, method: "Bank transfer", reference: "REF-1", idempotencyKey: key });
+    expect(done).toMatchObject({ refunded: 30, replayed: false });
+    expect(done.creditLeft).toBeCloseTo(credit - 30, 2);
+    const again = await refundCredit(as("owner"), customer.id, { amount: 30, method: "Bank transfer", idempotencyKey: key });
+    expect(again).toMatchObject({ refunded: 30, replayed: true });
+    expect((await customerStatement(as("owner"), customer.id))!.credit).toBeCloseTo(credit - 30, 2);
+    expect((await listRefunds(as("owner"), customer.id))[0]).toMatchObject({ amount: 30, method: "Bank transfer", reference: "REF-1" });
+    // The rest can be refunded, and then there is nothing left to refund or to use on an invoice.
+    await refundCredit(as("owner"), customer.id, { amount: Math.round((credit - 30) * 100) / 100, method: "Cash", idempotencyKey: randomUUID() });
+    expect((await customerStatement(as("owner"), customer.id))!.credit).toBe(0);
+    await expect(refundCredit(as("owner"), customer.id, { amount: 1, method: "Cash", idempotencyKey: randomUUID() })).rejects.toThrow(/no credit/);
+  });
+
+  it("is for roles that handle invoices, and stays inside the company", async () => {
+    const customer = (await listCustomers(as("owner")))[0]!;
+    await expect(refundCredit(as("sales"), customer.id, { amount: 1, method: "Cash", idempotencyKey: randomUUID() })).rejects.toBeInstanceOf(ForbiddenError);
+    const other = await owner.query<{ id: string }>("insert into organizations (name, slug) values ('Other', 'other-refunds') returning id");
+    const there: Ctx = { pool: app, orgId: other.rows[0]!.id, userId, role: "owner" };
+    await expect(refundCredit(there, customer.id, { amount: 1, method: "Cash", idempotencyKey: randomUUID() })).rejects.toBeInstanceOf(ValidationError);
+    expect(await listRefunds(there, customer.id)).toEqual([]);
+  });
+});
+
+describe("returns and refunds in the report", () => {
+  it("takes returns off sales and margin: the margin for restocked goods, the whole sale for damaged ones", async () => {
+    const range = resolveRange("30d", today());
+    const { order, line, product } = await shipped(6);
+    const cost = (await owner.query<{ c: number }>("select unit_cost::float8 as c from sales_order_lines where id = $1", [line.orderLineId])).rows[0]!.c;
+    const before = await analysis(as("owner"), { range });
+    await createReturn(as("owner"), order.id, { lines: [{ orderLineId: line.orderLineId, qty: 2 }], reason: "Fine, restocked", restock: true, credit: false, idempotencyKey: randomUUID() });
+    const restocked = await analysis(as("owner"), { range });
+    expect(restocked.sales.returns.now - before.sales.returns.now).toBeCloseTo(40, 2);
+    expect(restocked.sales.revenue.now).toBeCloseTo(before.sales.revenue.now, 2);
+    expect(before.sales.net.now - restocked.sales.net.now).toBeCloseTo(40, 2);
+    expect(before.sales.margin!.now - restocked.sales.margin!.now).toBeCloseTo(2 * (20 - cost), 2);
+    await createReturn(as("owner"), order.id, { lines: [{ orderLineId: line.orderLineId, qty: 1 }], reason: "Broken", restock: false, credit: false, idempotencyKey: randomUUID() });
+    const damaged = await analysis(as("owner"), { range });
+    expect(restocked.sales.margin!.now - damaged.sales.margin!.now).toBeCloseTo(20, 2);
+    expect(restocked.costs!.profit!.now - damaged.costs!.profit!.now).toBeCloseTo(20, 2);
+    expect(damaged.sales.net.now).toBeCloseTo(damaged.sales.revenue.now - damaged.sales.returns.now, 2);
+    expect(product.id).toBeTruthy();
+    // A return made last period shows in the comparison, not in this period.
+    await owner.query("update returns set returned_at = now() - interval '45 days' where order_id = $1 and reason = 'Broken'", [order.id]);
+    const moved = await analysis(as("owner"), { range });
+    expect(damaged.sales.returns.now - moved.sales.returns.now).toBeCloseTo(20, 2);
+    expect(moved.sales.returns.was! - damaged.sales.returns.was!).toBeCloseTo(20, 2);
+  });
+
+  it("shows refunds paid in the period", async () => {
+    const range = resolveRange("30d", today());
+    const { order, customer, line } = await shipped();
+    const before = await analysis(as("owner"), { range });
+    await createReturn(as("owner"), order.id, { lines: [{ orderLineId: line.orderLineId, qty: 1 }], reason: "Refund me", restock: true, credit: false, idempotencyKey: randomUUID() });
+    await raiseCredit(as("owner"), { customerId: customer.id, amount: 15, reason: "Goodwill" });
+    await refundCredit(as("owner"), customer.id, { amount: 15, method: "Cash", idempotencyKey: randomUUID() });
+    expect((await analysis(as("owner"), { range })).money.refunded.now - before.money.refunded.now).toBe(15);
   });
 });

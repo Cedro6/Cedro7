@@ -70,7 +70,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
           <div className="table-wrap">
             <table className="compact">
               <thead>
-                <tr><th scope="col">Date</th><th scope="col">For</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col" className="num">Amount</th></tr>
+                <tr><th scope="col">Date</th><th scope="col">For</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col" className="num">Amount</th><th scope="col" className="num">Still owed</th></tr>
               </thead>
               <tbody>
                 {bills.map((b) => (
@@ -83,6 +83,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
                     <td>{b.category}</td>
                     <td><BillStatus bill={b} /></td>
                     <td className="num">{formatMoney(b.amount)}</td>
+                    <td className="num">{b.balance > 0 ? formatMoney(b.balance) : "–"}</td>
                   </tr>
                 ))}
               </tbody>

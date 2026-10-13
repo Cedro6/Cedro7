@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { can, EXPENSE_CATEGORIES, listSuppliers } from "@bos/core";
+import { can, EXPENSE_CATEGORIES, getPurchaseOrder, listSuppliers } from "@bos/core";
 import { requireSession } from "../../../../lib/session";
 import { saveBill } from "../actions";
 import { todayHere } from "../../../../lib/locale";
 
-export default async function NewBillPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function NewBillPage({ searchParams }: { searchParams: Promise<{ error?: string; po?: string }> }) {
   const { ctx } = await requireSession();
   if (!can(ctx, "expense.write")) redirect("/bills");
-  const { error } = await searchParams;
+  const { error, po: poId } = await searchParams;
+  // Started from a purchase order: the supplier, category and amount come from it.
+  const po = poId && can(ctx, "purchase_order.read") ? await getPurchaseOrder(ctx, poId) : null;
   const suppliers = can(ctx, "purchase_order.read") ? await listSuppliers(ctx) : [];
   const on = todayHere();
   return (
@@ -22,21 +24,23 @@ export default async function NewBillPage({ searchParams }: { searchParams: Prom
       <section className="glass panel form-panel">
         <form action={saveBill} className="stack">
           {error && <p className="error">{error}</p>}
+          {po && <p className="notice">Bill for purchase order <strong>{po.number}</strong> from {po.supplierName}. Check the amount against the supplier&apos;s invoice.</p>}
+          {po && <input type="hidden" name="purchaseOrderId" value={po.id} />}
           <label className="field">
             <span>What was it for?</span>
-            <input name="description" required maxLength={200} autoFocus placeholder="October rent" />
+            <input name="description" required maxLength={200} autoFocus placeholder="October rent" defaultValue={po ? `${po.number} from ${po.supplierName}` : ""} />
           </label>
           <div className="form-row">
             <label className="field grow">
               <span>Category</span>
-              <select name="category" required defaultValue="">
+              <select name="category" required defaultValue={po ? "Stock purchases" : ""}>
                 <option value="" disabled>Choose one</option>
                 {EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
               </select>
             </label>
             <label className="field grow">
               <span>Amount</span>
-              <input name="amount" required inputMode="decimal" placeholder="0.00" />
+              <input name="amount" required inputMode="decimal" placeholder="0.00" defaultValue={po?.total != null ? po.total.toFixed(2) : ""} />
             </label>
           </div>
           <p className="muted">Use Stock purchases for goods you will resell. They count as money out, but are not taken off profit a second time.</p>
@@ -45,7 +49,7 @@ export default async function NewBillPage({ searchParams }: { searchParams: Prom
               <span>Date of the bill or purchase</span>
               <input name="incurredOn" type="date" required defaultValue={on} />
             </label>
-            {suppliers.length > 0 && (
+            {suppliers.length > 0 && !po && (
               <label className="field grow">
                 <span>Supplier (optional)</span>
                 <select name="supplierId" defaultValue="">
