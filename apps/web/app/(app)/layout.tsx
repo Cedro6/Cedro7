@@ -1,7 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { isPlatformAdmin } from "../../lib/platform";
-import { can, expenseSummary, featureOn, overview } from "@bos/core";
+import { assistantUsage, can, expenseSummary, featureOn, getBriefing, overview } from "@bos/core";
+import { Suspense } from "react";
+import { Ava } from "../../components/Ava";
+import { assistantConfigured, monthlyLimit } from "../../lib/assistant";
+import { voiceConfigured } from "../../lib/voice";
 import { Avatar } from "../../components/Avatar";
 import { Main } from "../../components/Main";
 import { ModeSwitch } from "../../components/ModeSwitch";
@@ -33,7 +37,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (warehouseJobs) items.push({ href: "/warehouse", label: "Warehouse" });
   if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
   if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
-  items.push({ href: "/assistant", label: "Assistant" });
+  // Ava sits beside every screen rather than having a page of her own.
+  const avaOn = assistantConfigured();
+  const [usage, briefing] = await Promise.all([assistantUsage(ctx, monthlyLimit()), avaOn ? getBriefing(ctx) : null]);
   const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);
   return (
     <div className="shell">
@@ -63,6 +69,25 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         }
       />
       <Main>{children}</Main>
+      <Suspense fallback={null}>
+        <Ava
+          firstName={membership.userName.split(" ")[0] || "there"}
+          on={avaOn}
+          left={Math.max(usage.limit - usage.questions, 0)}
+          limit={usage.limit}
+          voice={voiceConfigured()}
+          briefing={briefing?.body ?? ""}
+          abilities={{
+            sales: can(ctx, "sales_order.write"),
+            ship: can(ctx, "sales_order.ship"),
+            stock: stock && can(ctx, "product.read"),
+            reports: featureOn(ctx.features, "reports") && can(ctx, "report.view"),
+            customers: can(ctx, "customer.write"),
+            invoices: can(ctx, "sales_order.read"),
+            calendar: featureOn(ctx.features, "calendar"),
+          }}
+        />
+      </Suspense>
     </div>
   );
 }

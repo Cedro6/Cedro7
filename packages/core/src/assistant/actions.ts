@@ -33,17 +33,19 @@ const str = (value: unknown, max = 200) => (typeof value === "string" ? value.tr
 const qtyText = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
 const bad = (message: string) => new ValidationError("assistant", message);
 
-type Line = { productId: string; qty: number; discountPercent?: number };
+type Line = { productId: string; qty: number };
 function readLines(value: unknown): Line[] {
   if (!Array.isArray(value) || value.length === 0) throw bad("Say which products and how many.");
   if (value.length > 50) throw bad("That is too many lines for one request. Split it up.");
   return value.map((raw) => {
     const row = (raw ?? {}) as Record<string, unknown>;
     const qty = Number(row.qty);
-    const discount = row.discount_percent === undefined ? 0 : Number(row.discount_percent);
+    // A discount or a special price is a financial decision, which Ava does not make.
+    if (row.discount_percent !== undefined || row.unit_price !== undefined || row.price !== undefined) {
+      throw bad("I only use the customer's normal prices. A discount or a special price is your decision: create the quote, then set it on the order yourself.");
+    }
     if (!Number.isFinite(qty) || qty <= 0) throw bad("Each quantity must be more than zero.");
-    if (!Number.isFinite(discount) || discount < 0 || discount > 100) throw bad("A discount must be between 0 and 100 percent.");
-    return { productId: str(row.product_id, 36), qty, ...(discount > 0 ? { discountPercent: discount } : {}) };
+    return { productId: str(row.product_id, 36), qty };
   });
 }
 
@@ -56,16 +58,22 @@ const lineSchema = {
   },
 };
 
+/**
+ * What Ava may prepare. She works like a secretary: she does the paperwork and never makes a
+ * financial decision. So there is deliberately nothing here that takes or records a payment, pays a
+ * bill, refunds or credits a customer, raises a purchase order, voids an invoice, or sets a price,
+ * cost, discount or tax. Those are done by a person on their own screens.
+ */
 export const ASSISTANT_ACTIONS: AssistantAction[] = [
   {
     name: "propose_quote",
     description:
-      "Prepare a new sales quote for a customer, for the person to confirm. Prices come from the customer's price list. Look up the customer and product ids first.",
+      "Prepare a new sales quote for a customer, for the person to confirm. Prices always come from the customer's price list: you cannot set a price or a discount. Look up the customer and product ids first.",
     input_schema: {
       type: "object",
       properties: {
         customer_id: { type: "string" },
-        lines: { ...lineSchema, items: { ...lineSchema.items, properties: { ...lineSchema.items.properties, discount_percent: { type: "number" } } } },
+        lines: lineSchema,
         notes: { type: "string" },
       },
       required: ["customer_id", "lines"],
@@ -79,7 +87,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       for (const line of lines) {
         const product = await getProduct(ctx, line.productId);
         if (!product) throw bad("I could not find one of those products.");
-        parts.push(`${qtyText(line.qty)} × ${product.name}${line.discountPercent ? ` at ${line.discountPercent}% off` : ""}`);
+        parts.push(`${qtyText(line.qty)} × ${product.name}`);
       }
       const notes = str(input.notes, 500);
       return {
@@ -161,33 +169,6 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     },
   },
   {
-    name: "propose_purchase_order",
-    description:
-      "Prepare a draft purchase order with a supplier, for the person to confirm. It is created as a draft and still has to be submitted on the Purchasing screen. Look up the supplier id with find_suppliers and product ids with find_products.",
-    input_schema: { type: "object", properties: { supplier_id: { type: "string" }, lines: lineSchema, notes: { type: "string" } }, required: ["supplier_id", "lines"] },
-    allowed: (ctx) => featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.write"),
-    describe: async (ctx, input) => {
-      const supplier = await getSupplier(ctx, str(input.supplier_id, 36));
-      if (!supplier || supplier.status !== "active") throw bad("I could not find that supplier.");
-      const lines = readLines(input.lines).map(({ productId, qty }) => ({ productId, qty }));
-      const parts: string[] = [];
-      for (const line of lines) {
-        const product = await getProduct(ctx, line.productId);
-        if (!product) throw bad("I could not find one of those products.");
-        parts.push(`${qtyText(line.qty)} × ${product.name}`);
-      }
-      const notes = str(input.notes, 500);
-      return {
-        payload: { supplierId: supplier.id, lines, ...(notes ? { notes } : {}) },
-        summary: `Draft a purchase order with ${supplier.name}: ${parts.join(", ")}. It stays a draft until you submit it.`,
-      };
-    },
-    apply: async (ctx, payload) => {
-      const made = await createPurchaseOrder(ctx, payload as Parameters<typeof createPurchaseOrder>[1]);
-      return { message: `Draft purchase order ${made.number} created.`, link: `/purchasing/${made.id}` };
-    },
-  },
-  {
     name: "propose_ship_order",
     description:
       "Prepare to ship an open order (everything currently reserved for it goes out as one shipment and the invoice is raised), for the person to confirm. If stock is not tracked this completes the order. Needs the order id from list_orders.",
@@ -230,36 +211,6 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       const id = String(payload.orderId);
       const { released } = await cancelOrder(ctx, id);
       return { message: `Order cancelled.${released > 0 ? ` ${qtyText(released)} units returned to stock.` : ""}`, link: `/sales/${id}` };
-    },
-  },
-  {
-    name: "propose_payment",
-    description: `Prepare to record a payment received against an invoice, for the person to confirm. Leave amount out to record the full balance. Method must be one of: ${PAYMENT_METHODS.join(", ")}. Needs the invoice id from list_invoices.`,
-    input_schema: {
-      type: "object",
-      properties: { invoice_id: { type: "string" }, amount: { type: "number" }, method: { type: "string", enum: [...PAYMENT_METHODS] }, reference: { type: "string" } },
-      required: ["invoice_id", "method"],
-    },
-    allowed: (ctx) => can(ctx, "invoice.write") && can(ctx, "sales_order.read"),
-    describe: async (ctx, input) => {
-      const invoice = await getInvoice(ctx, str(input.invoice_id, 36));
-      if (!invoice) throw bad("I could not find that invoice.");
-      if (invoice.balance <= 0) throw bad(`${invoice.number} has nothing left to pay.`);
-      const method = str(input.method, 30);
-      if (!(PAYMENT_METHODS as readonly string[]).includes(method)) throw bad(`Say how it was paid: ${PAYMENT_METHODS.join(", ")}.`);
-      const amount = input.amount === undefined || input.amount === null ? invoice.balance : Math.round(Number(input.amount) * 100) / 100;
-      if (!Number.isFinite(amount) || amount <= 0) throw bad("The amount must be more than zero.");
-      if (amount > invoice.balance) throw bad(`${invoice.number} only has ${moneyText(invoice.balance, currencyOf(ctx))} left to pay.`);
-      const reference = str(input.reference, 80);
-      return {
-        payload: { invoiceId: invoice.id, amount, method, ...(reference ? { reference } : {}), key: randomUUID() },
-        summary: `Record a ${moneyText(amount, currencyOf(ctx))} payment by ${method.toLowerCase()} from ${invoice.customerName} against ${invoice.number}${reference ? `, reference "${reference}"` : ""}. ${amount >= invoice.balance ? "This pays it in full." : `${moneyText(invoice.balance - amount, currencyOf(ctx))} will still be owed.`}`,
-      };
-    },
-    apply: async (ctx, payload) => {
-      const id = String(payload.invoiceId);
-      const done = await recordPayment(ctx, id, { amount: Number(payload.amount), method: String(payload.method), reference: payload.reference ? String(payload.reference) : undefined, idempotencyKey: String(payload.key) });
-      return { message: `Payment recorded. ${done.balance > 0 ? `${moneyText(done.balance, currencyOf(ctx))} still owed.` : "The invoice is paid in full."}`, link: `/invoices/${id}` };
     },
   },
   {

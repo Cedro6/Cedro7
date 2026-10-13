@@ -2222,3 +2222,54 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 
 /* A table beside a side column gets less room, so it may be narrower before it scrolls. */
 .split .grow-3 table { min-width: 460px; }
+
+/* Ava: the assistant that sits beside every screen. */
+.shell:has(#assistant) { flex-wrap: nowrap; }
+.ava-orb {
+  display: inline-block;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.85), transparent 42%),
+    conic-gradient(from 210deg, #7c5cff, #38bdf8, #5eead4, #f0abfc, #7c5cff);
+  box-shadow: 0 0 22px rgba(124, 92, 255, 0.45), inset 0 -6px 14px rgba(20, 10, 60, 0.35);
+  animation: ava-turn 14s linear infinite;
+}
+.ava-orb-small { width: 26px; height: 26px; box-shadow: 0 0 10px rgba(124, 92, 255, 0.4); }
+.ava-orb-big { width: 64px; height: 64px; margin-bottom: 6px; }
+@keyframes ava-turn { to { filter: hue-rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ava-orb { animation: none; } }
+.ava-launch {
+  position: fixed;
+  z-index: 40;
+  right: calc(18px + env(safe-area-inset-right, 0px));
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 18px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(26, 27, 24, 0.9);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 12px 40px rgba(var(--k), 0.5);
+  backdrop-filter: blur(14px);
+}
+.ava-launch:hover .ava-orb { transform: scale(1.06); }
+.ava-orb { transition: transform 0.2s; }
+:root[data-mode="light"] .ava-launch { background: rgba(255, 255, 255, 0.92); }
+.ava-close { width: 40px; height: 40px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font-size: 24px; line-height: 1; cursor: pointer; }
+.ava-close:hover { background: rgba(var(--w), 0.1); }
+.ava-briefing { padding: 12px 14px; border: 1px solid var(--line); border-radius: 16px; background: rgba(var(--w), 0.04); font-size: 14px; line-height: 1.5; }
+.ava-turn { display: flex; flex-direction: column; gap: 10px; }
+.ava-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.ava-foot .link-button { font-size: 12px; padding: 0; }
+.ava-left { padding: 0 18px 10px; font-size: 12px; text-align: center; }
+.ava-mic.is-live { background: #e5484d; color: #fff; animation: ava-pulse 1.2s ease-in-out infinite; }
+@keyframes ava-pulse { 50% { box-shadow: 0 0 0 8px rgba(229, 72, 77, 0.18); } }
+@media (max-width: 860px) { .ava-launch-name { display: none; } .ava-launch { padding: 6px; } }
