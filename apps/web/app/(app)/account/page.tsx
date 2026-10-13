@@ -3,6 +3,9 @@ import { pendingTwoStep, sessionVersion, twoStepStatus } from "@bos/core";
 import { TwoStepSetup } from "../../../components/TwoStepSetup";
 import { pool } from "../../../lib/pool";
 import { requireSession } from "../../../lib/session";
+import Link from "next/link";
+import { isPlatformAdmin } from "../../../lib/platform";
+import { signOut } from "../actions";
 import { changePassword, startSetup, turnOffTwoStep } from "./actions";
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string; required?: string }> }) {
@@ -22,6 +25,16 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           </div>
           <h1>{membership.userName}</h1>
         </div>
+        {isPlatformAdmin(membership.userEmail) && (
+          <Link href="/platform" className="btn btn-glass">
+            Platform
+          </Link>
+        )}
+        <form action={signOut}>
+          <button type="submit" className="btn btn-glass">
+            Sign out
+          </button>
+        </form>
       </header>
       {required && hasPassword && !twoStep.on && <p className="error">{membership.orgName} requires two-step verification. Set it up below to carry on. It takes about a minute.</p>}
       {error && <p className="error">{error}</p>}
