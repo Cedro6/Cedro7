@@ -122,6 +122,25 @@ const FACTS: [key: string, show: (v: unknown) => string][] = [
   ["timeZone", (v) => String(v)],
   ["currency", (v) => String(v)],
 ];
+/** The words for each field that can change on a customer, product or supplier. */
+const FIELD: Record<string, string> = {
+  name: "Name", paymentTerms: "Payment terms", billingAddress: "Billing address", shippingAddress: "Shipping address", taxExempt: "Not charged tax",
+  sku: "Code", category: "Category", price: "Price", cost: "Cost", shelfLocation: "Shelf location", reorderPoint: "Reorder point", barcode: "Barcode", taxable: "Taxed",
+  email: "Email", phone: "Phone", leadTimeDays: "Lead time in days", address: "Address", role: "Role", status: "Status",
+};
+const say = (v: unknown): string => (v === null || v === undefined || v === "" ? "nothing" : typeof v === "boolean" ? (v ? "yes" : "no") : String(v).replace(/\s+/g, " ").slice(0, 60));
+
+/** What changed between two snapshots of a record: "Price 8.5 → 9". Empty when they are not both snapshots. */
+function changesOf(before: unknown, after: unknown): string {
+  if (!before || !after || typeof before !== "object" || typeof after !== "object") return "";
+  const was = before as Record<string, unknown>;
+  const now = after as Record<string, unknown>;
+  return Object.keys(FIELD)
+    .filter((key) => key in was && key in now && say(was[key]) !== say(now[key]))
+    .map((key) => `${FIELD[key]}: ${say(was[key])} → ${say(now[key])}`)
+    .join(" · ");
+}
+
 function detailOf(after: unknown): string {
   if (!after || typeof after !== "object") return "";
   const o = after as Record<string, unknown>;
@@ -154,8 +173,8 @@ export async function listHistory(
   const [beforeAt = "", beforeId = ""] = (options.before ?? "").split("|");
   const before = !Number.isNaN(Date.parse(beforeAt)) && /^[0-9a-f-]{36}$/i.test(beforeId) ? { at: beforeAt, id: beforeId } : null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const r = await tx.query<{ id: string; at: Date; actor_type: string; actor: string | null; cursor: string; action: string; entity_type: string; entity_id: string | null; after: unknown; subject: string | null }>(
-      `select a.id, a.created_at as at, to_char(a.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as cursor, a.actor_type, u.name as actor, a.action, a.entity_type, a.entity_id, a.after,
+    const r = await tx.query<{ id: string; at: Date; actor_type: string; actor: string | null; cursor: string; action: string; entity_type: string; entity_id: string | null; before: unknown; after: unknown; subject: string | null }>(
+      `select a.id, a.created_at as at, to_char(a.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as cursor, a.actor_type, u.name as actor, a.action, a.entity_type, a.entity_id, a.before, a.after,
               case a.entity_type
                 when 'sales_order' then (select number from sales_orders where id = a.entity_id)
                 when 'customer' then (select name from customers where id = a.entity_id)
@@ -185,7 +204,8 @@ export async function listHistory(
         what: WHAT[row.action] ?? row.action.replace(/[._]/g, " "),
         subject: row.subject ?? "",
         href: row.entity_id && row.subject && HREF[row.entity_type] ? HREF[row.entity_type]!(row.entity_id) : null,
-        detail: detailOf(row.after),
+        // An edit shows exactly what changed; anything else shows the facts recorded with it.
+        detail: changesOf(row.before, row.after) || (row.action.endsWith(".updated") && row.before ? "Saved with no changes" : detailOf(row.after)),
         area: areaOf(row.action),
       })),
       next: r.rows.length > HISTORY_PAGE ? `${rows.at(-1)!.cursor}|${rows.at(-1)!.id}` : null,

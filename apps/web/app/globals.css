@@ -2215,3 +2215,10 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .signup-kind:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; }
 .signup-tools { font-size: 13px; color: var(--ink-2); }
 .welcome-tools { margin: 8px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+
+/* Light mode: change markers need darker greens and reds to stay readable on a pale surface. */
+:root[data-mode="light"] .delta-good { color: #0a7350; }
+:root[data-mode="light"] .delta-bad { color: #b42318; }
+
+/* A table beside a side column gets less room, so it may be narrower before it scrolls. */
+.split .grow-3 table { min-width: 460px; }

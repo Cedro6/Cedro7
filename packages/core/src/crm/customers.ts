@@ -143,6 +143,8 @@ export async function updateCustomer(
     const address = (value: string | undefined) => (value === undefined ? undefined : value.trim().slice(0, 500) || null);
     const billing = address(input.billingAddress);
     const shipping = address(input.shippingAddress);
+    const was = (await tx.query<Record<string, unknown>>(
+      `select name, payment_terms as "paymentTerms", billing_address as "billingAddress", shipping_address as "shippingAddress", tax_exempt as "taxExempt" from customers where id = $1 for update`, [id])).rows[0];
     const done = await tx.query(
       `update customers set name = $2, payment_terms = $3,
               billing_address = case when $4 then $5 else billing_address end,
@@ -153,7 +155,12 @@ export async function updateCustomer(
       [id, name, paymentTerms, billing !== undefined, billing ?? null, shipping !== undefined, shipping ?? null, input.taxExempt ?? null],
     );
     if (done.rowCount === 0) throw new ValidationError("id", "Customer not found.");
-    await audit(tx, ctx, "customer.updated", "customer", id, { name, paymentTerms });
+    const now = (await tx.query<Record<string, unknown>>(
+      `select name, payment_terms as "paymentTerms", billing_address as "billingAddress", shipping_address as "shippingAddress", tax_exempt as "taxExempt" from customers where id = $1`, [id])).rows[0];
+    await tx.query(
+      `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, before, after) values ($1, 'user', $2, 'customer.updated', 'customer', $3, $4, $5)`,
+      [ctx.orgId, ctx.userId, id, JSON.stringify(was ?? {}), JSON.stringify(now ?? {})],
+    );
   });
 }
 
