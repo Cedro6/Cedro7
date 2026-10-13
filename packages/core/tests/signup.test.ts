@@ -152,3 +152,14 @@ describe("running the service", () => {
     expect((await currentMembership(app, s.orgId, s.userId))!.requireTwoStep).toBe(false);
   });
 });
+
+describe("signing up without an invitation", () => {
+  it("makes a one-off link of its own and creates the company", async () => {
+    const { openSignupLink, signupLinkValid, signUp } = await import("../src/index");
+    const token = await openSignupLink(owner);
+    expect(await signupLinkValid(owner, token)).toBe(true);
+    const made = await signUp(owner, token, { company: "Open Motors", businessType: "dealer", timeZone: "America/New_York", currency: "USD", taxPercent: 0, name: "Pat Open", email: "pat@openmotors.example", password: "a long enough password" });
+    expect(made.orgId).toBeTruthy();
+    expect(await signupLinkValid(owner, token)).toBe(false); // used up
+  });
+});

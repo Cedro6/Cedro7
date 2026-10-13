@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { signUp, ValidationError } from "@bos/core";
+import { openSignupLink, signUp, ValidationError } from "@bos/core";
 import { pool } from "../../lib/pool";
 import { startSession } from "../../lib/session";
 
@@ -16,7 +16,7 @@ export async function createCompany(_previous: SignUpState, form: FormData): Pro
   const tax = text("taxPercent").trim();
   let session;
   try {
-    session = await signUp(pool, text("token"), {
+    session = await signUp(pool, text("token") || (await openSignupLink(pool)), {
       company: text("company"), businessType: text("businessType"), timeZone: text("timeZone"), currency: text("currency"),
       taxPercent: tax === "" ? 0 : Number(tax), name: text("name"), email: text("email"), password: text("password"),
     });

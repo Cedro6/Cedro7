@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { devSignInEnabled, previewPasswordRequired } from "../../lib/session";
 import { signIn, signInWithEmail } from "./actions";
 
@@ -37,7 +38,8 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
           <button type="submit" className="btn btn-primary">
             Sign in
           </button>
-          <p className="muted">Forgotten it, or new here? Ask your company&apos;s owner for a sign-in link.</p>
+          <p className="muted">Forgotten it? Ask your company&apos;s owner for a sign-in link.</p>
+          <p className="muted">New here? <Link href="/sign-up" className="row-link">Create your company</Link>. Cedro Terminal or Dealer Terminal, about two minutes.</p>
         </form>
         {enabled && <hr className="rule" />}
         {enabled ? (

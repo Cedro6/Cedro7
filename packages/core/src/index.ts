@@ -251,7 +251,8 @@ export { likeness, search, SEARCH_MIN, type SearchGroup, type SearchHit } from "
 export { HISTORY_AREAS, HISTORY_PAGE, isHistoryArea, listHistory, type HistoryArea, type HistoryEntry } from "./platform/history";
 export { beginTwoStep, confirmTwoStep, disableTwoStep, pendingTwoStep, resetMemberTwoStep, totpCode, totpStep, twoStepStatus, verifyTwoStep, type TwoStepCheck, type TwoStepStatus } from "./platform/twostep";
 export {
-  checkSignup, createSignupLink, listCompanies, listSignupLinks, platformResetTwoStep, revokeSignupLink, setCompanySuspended, signUp, signupLinkValid,
+  checkSignup, createSignupLink,
+  openSignupLink, listCompanies, listSignupLinks, platformResetTwoStep, revokeSignupLink, setCompanySuspended, signUp, signupLinkValid,
   type PlatformCompany, type SignupInput, type SignupLink,
 } from "./platform/signup";
 export {
