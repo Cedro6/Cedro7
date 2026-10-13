@@ -239,6 +239,23 @@ describe("the dealer's sales chart", () => {
     expect((await dealSalesSeries(as("owner"), "ytd"))!.bucket).toBe("week");
     expect(await dealSalesSeries(as("owner", { dealer: false }), "30d")).toBeNull();
   });
+
+  it("counts deals written by the day they were written, and offers 7 days to 12 months", async () => {
+    const { dealSeries } = await import("../src/index");
+    await owner.query("update deals set created_at = now()");
+    const all = await owner.query<{ status: string; n: number }>("select status, count(*)::int as n from deals group by status");
+    const n = (st: string) => all.rows.find((r) => r.status === st)?.n ?? 0;
+    const week = (await dealSeries(as("owner"), "7d"))!;
+    expect(week.points).toHaveLength(7);
+    expect(week.deals).toBe(n("open") + n("delivered"));
+    expect(week.open).toBe(n("open"));
+    expect(week.points.at(-1)!.deals).toBe(week.deals);
+    const year = (await dealSeries(as("owner"), "12m"))!;
+    expect(year.bucket).toBe("month");
+    expect(year.points).toHaveLength(12);
+    expect(year.deals).toBe(week.deals);
+    expect(year.total).toBe(6000);
+  });
 });
 
 describe("Ava on a dealer account", () => {
