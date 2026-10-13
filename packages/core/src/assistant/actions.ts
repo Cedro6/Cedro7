@@ -4,7 +4,7 @@ import { withTenant } from "@bos/db/runtime";
 import { getInvoice, PAYMENT_METHODS, recordPayment } from "../billing/invoices";
 import { getProduct } from "../catalog/products";
 import { createCustomer, getCustomer, saveContact } from "../crm/customers";
-import { createReminder, listTeam } from "../crm/reminders";
+import { createReminder, listTeam, clock } from "../crm/reminders";
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
 import { featureOn } from "../platform/features";
@@ -295,10 +295,10 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
   },
   {
     name: "propose_reminder",
-    description: "Prepare a reminder on the calendar for a date (YYYY-MM-DD), optionally about a customer and for a named team member (ids from list_reminders), for the person to confirm. Work out the date from today's date.",
+    description: "Prepare a reminder on the calendar for a date (YYYY-MM-DD), optionally at a time of day, about a customer and for a named team member (ids from list_reminders), for the person to confirm. Work out the date from today's date.",
     input_schema: {
       type: "object",
-      properties: { title: { type: "string" }, date: { type: "string", description: "YYYY-MM-DD" }, customer_id: { type: "string" }, for_user_id: { type: "string" } },
+      properties: { title: { type: "string" }, date: { type: "string", description: "YYYY-MM-DD" }, time: { type: "string", description: "Optional time of day, 24-hour HH:MM" }, customer_id: { type: "string" }, for_user_id: { type: "string" } },
       required: ["title", "date"],
     },
     allowed: (ctx) => featureOn(ctx.features, "calendar"),
@@ -306,6 +306,8 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       const title = str(input.title);
       const dueOn = str(input.date, 10);
       if (!title) throw bad("Say what the reminder is for.");
+      const dueTime = str(input.time, 5);
+      if (dueTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(dueTime)) throw bad("I need the time as hours and minutes, such as 14:30.");
       const when = new Date(`${dueOn}T12:00:00Z`);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dueOn) || Number.isNaN(when.getTime()) || when.toISOString().slice(0, 10) !== dueOn) throw bad("I need a real date for the reminder.");
       const customer = input.customer_id && can(ctx, "customer.read") ? await getCustomer(ctx, str(input.customer_id, 36)) : null;
@@ -315,8 +317,8 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       if (!person) throw bad("I could not find that person on the team.");
       const date = when.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
       return {
-        payload: { title, dueOn, ...(customer ? { customerId: customer.id } : {}), assignedTo: person.id },
-        summary: `Add a reminder for ${person.id === ctx.userId ? "you" : person.name} on ${date}: "${title}"${customer ? `, about ${customer.name}` : ""}.`,
+        payload: { title, dueOn, ...(dueTime ? { dueTime } : {}), ...(customer ? { customerId: customer.id } : {}), assignedTo: person.id },
+        summary: `Add a reminder for ${person.id === ctx.userId ? "you" : person.name} on ${date}${dueTime ? ` at ${clock(dueTime)}` : ""}: "${title}"${customer ? `, about ${customer.name}` : ""}.`,
       };
     },
     apply: async (ctx, payload) => {

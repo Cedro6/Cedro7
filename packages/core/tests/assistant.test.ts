@@ -49,9 +49,9 @@ describe("assistant", () => {
 
   it("offers only the lookups the role and features allow", async () => {
     const names = (ctx: Ctx) => toolsFor(ctx).map((t) => t.name);
-    expect(names(as("owner"))).toContain("sales_report");
+    expect(names(as("owner"))).toContain("business_report");
     expect(names(as("warehouse"))).not.toContain("find_customers");
-    expect(names(as("owner", { purchasing: false, reports: false }))).not.toEqual(expect.arrayContaining(["list_purchase_orders", "sales_report"]));
+    expect(names(as("owner", { purchasing: false, reports: false }))).not.toEqual(expect.arrayContaining(["list_purchase_orders", "business_report"]));
     const model = scripted([]);
     await ask(as("viewer", { calendar: false }), { ...who, question: "hi" }, model.call);
     expect(model.requests[0]!.tools.map((t) => t.name)).toEqual(names(as("viewer", { calendar: false })));
@@ -75,6 +75,19 @@ describe("assistant", () => {
     const counts = () => owner.query("select (select count(*) from customers) + (select count(*) from products) + (select count(*) from sales_orders) + (select count(*) from stock_movements) + (select count(*) from invoices) + (select count(*) from audit_log) as n");
     const before = (await counts()).rows[0].n;
     for (const tool of toolsFor(as("owner"))) await tool.run(as("owner"), {});
+    const report = toolsFor(as("owner")).find((t) => t.name === "business_report")!;
+    const year = (await report.run(as("owner"), { period: "ytd", compare: "year" })) as { dates: { from: string }; comparedWith: { from: string } | null; sales: { revenue: { now: number; was: number | null }; margin: unknown }; link: string; costsAndProfit: unknown };
+    expect(year.dates.from.endsWith("-01-01")).toBe(true);
+    expect(Number(year.comparedWith!.from.slice(0, 4))).toBe(Number(year.dates.from.slice(0, 4)) - 1);
+    expect(year.sales.revenue.was).not.toBeNull();
+    expect(year.link).toBe("/reports?period=ytd&compare=year");
+    const plain = (await report.run(as("owner"), { period: "nonsense", compare: "none" })) as typeof year;
+    expect(plain.comparedWith).toBeNull();
+    expect(plain.link).toBe("/reports?compare=none");
+    // The same limits as the Reports screen: no margin or costs for a role that may not see them.
+    const sales = (await toolsFor(as("sales")).find((t) => t.name === "business_report")!.run(as("sales"), {})) as typeof year;
+    expect(sales.sales.margin).toBeNull();
+    expect(sales.costsAndProfit).toBeNull();
     expect((await counts()).rows[0].n).toBe(before);
   });
 

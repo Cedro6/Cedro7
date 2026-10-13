@@ -6,7 +6,8 @@ import type { Ctx } from "../platform/context";
 import { featureOn } from "../platform/features";
 import { attention } from "../platform/home";
 import { can } from "../platform/permissions";
-import { isReportPeriod, report } from "../platform/reports";
+import { analysis, ANALYSIS_PRESETS, COMPARE_MODES, isAnalysisPreset, isCompareMode, resolveRange } from "../platform/analysis";
+import { todayIn, zoneOf } from "../platform/locale";
 import { listPurchaseOrders, listSuppliers } from "../purchasing/orders";
 import { listOrders } from "../sales/orders";
 
@@ -133,13 +134,37 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     run: async (ctx) => cap((await listSuppliers(ctx)).map((s) => ({ id: s.id, name: s.name, terms: s.paymentTerms, leadTimeDays: s.leadTimeDays }))),
   },
   {
-    name: "sales_report",
-    description: "Sales figures for the last 30, 90 or 365 days: revenue, orders, change on the period before, best-selling products, biggest customers, what customers owe by age.",
-    input_schema: { type: "object", properties: { days: { type: "number", enum: [30, 90, 365] } } },
+    name: "business_report",
+    description:
+      "The full report for a period, each figure beside the same figure for a comparison period: sales, orders, average order, units, margin, customers buying and new customers; best-selling products and biggest customers with their change; sales by category and by person; invoiced, payments received, days to get paid, what customers owe by age and who owes most; running costs, profit and unpaid bills; stock value and stock that did not sell; purchasing by supplier. Use this for any question about how the business is doing, growth, comparisons, profit or costs.",
+    input_schema: {
+      type: "object",
+      properties: {
+        period: { type: "string", enum: ANALYSIS_PRESETS.filter((p) => p !== "custom"), description: "Defaults to 30d (the last 30 days). ytd is the year to date, 12m the last 12 months." },
+        compare: { type: "string", enum: [...COMPARE_MODES], description: "previous (the same length just before, the default), year (the same dates a year earlier) or none." },
+      },
+    },
     allowed: (ctx) => featureOn(ctx.features, "reports") && can(ctx, "report.view"),
     run: async (ctx, input) => {
-      const days = Number(input.days);
-      return report(ctx, isReportPeriod(days) ? days : 30);
+      const period = isAnalysisPreset(input.period) && input.period !== "custom" ? input.period : "30d";
+      const mode = isCompareMode(input.compare) ? input.compare : "previous";
+      const data = await analysis(ctx, { range: resolveRange(period, todayIn(zoneOf(ctx))), mode });
+      const top = <T>(rows: T[], n = 10) => ({ total: rows.length, rows: rows.slice(0, n) });
+      return {
+        dates: data.range,
+        comparedWith: data.compare,
+        note: "Each figure is { now, was }: now is the chosen dates, was is the comparison dates (null when nothing is compared). Sales are orders confirmed, before tax.",
+        sales: data.sales,
+        products: top(data.products.map((p) => ({ name: p.name, sku: p.sku, link: `/products/${p.id}`, units: p.units, sales: p.revenue, margin: p.margin }))),
+        customers: top(data.customers.map((c) => ({ name: c.name, link: `/customers/${c.id}`, new: c.isNew, orders: c.orders, sales: c.revenue }))),
+        categories: data.categories,
+        people: data.people.map((p) => ({ name: p.name, orders: p.orders, sales: p.revenue })),
+        money: { ...data.money, debtors: top(data.money.debtors.map((d) => ({ name: d.name, link: `/customers/${d.id}`, owed: d.owed, overdue: d.overdue, oldestDaysLate: d.oldest }))) },
+        costsAndProfit: data.costs,
+        stock: data.stock && { value: data.stock.value, units: data.stock.units, lowStock: data.stock.lowStock, valueNotSelling: data.stock.idleValue, notSelling: top(data.stock.idle.map((p) => ({ name: p.name, sku: p.sku, onHand: p.onHand, value: p.value })), 8) },
+        purchasing: data.purchasing && { ...data.purchasing, suppliers: top(data.purchasing.suppliers.map((s) => ({ name: s.name, orders: s.orders, ordered: s.ordered })), 8) },
+        link: `/reports${period === "30d" && mode === "previous" ? "" : `?${new URLSearchParams({ ...(period !== "30d" ? { period } : {}), ...(mode !== "previous" ? { compare: mode } : {}) })}`}`,
+      };
     },
   },
 ];

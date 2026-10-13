@@ -1,4 +1,4 @@
-import type { Reminder, TeamMember } from "@bos/core";
+import { clock, type Reminder, type TeamMember } from "@bos/core";
 import { addReminder, deleteReminder, toggleReminder } from "../app/(app)/calendar/actions";
 
 const nice = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
@@ -42,7 +42,7 @@ export function ReminderList({
               <div className="row-text">
                 <div className="row-title">{reminder.title}</div>
                 <div className="muted">
-                  {[nice(reminder.dueOn), showCustomer ? reminder.customerName : null, reminder.assignedName && reminder.assignedTo !== me ? `for ${reminder.assignedName}` : null].filter(Boolean).join(" · ")}
+                  {[`${nice(reminder.dueOn)}${reminder.dueTime ? ` at ${clock(reminder.dueTime)}` : ""}`, showCustomer ? reminder.customerName : null, reminder.assignedName && reminder.assignedTo !== me ? `for ${reminder.assignedName}` : null].filter(Boolean).join(" · ")}
                 </div>
               </div>
               {reminder.overdue && <span className="badge badge-warn">Overdue</span>}
@@ -67,6 +67,10 @@ export function ReminderList({
         <label className="field date-field">
           <span>On</span>
           <input name="dueOn" type="date" required defaultValue={defaultDate} />
+        </label>
+        <label className="field date-field">
+          <span>At (optional)</span>
+          <input name="dueTime" type="time" />
         </label>
         {team.length > 1 && (
           <label className="field">

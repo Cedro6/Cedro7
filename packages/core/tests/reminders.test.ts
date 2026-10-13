@@ -71,4 +71,17 @@ describe("reminders", () => {
     expect((await calendarEntries(as("sales"), day(0), day(10))).some((e) => e.kind === "delivery")).toBe(false);
     expect((await calendarEntries(as("owner", { purchasing: false }), day(0), day(10))).some((e) => e.kind === "delivery")).toBe(false);
   });
+
+  it("keeps an optional time of day and lists timed reminders in order", async () => {
+    const day = "2031-03-04";
+    await createReminder(as("owner"), { title: "Afternoon call", dueOn: day, dueTime: "14:30" });
+    await createReminder(as("owner"), { title: "Morning call", dueOn: day, dueTime: "09:00" });
+    await createReminder(as("owner"), { title: "Any time", dueOn: day });
+    const list = await listReminders(as("owner"), { from: day, to: day });
+    expect(list.map((r) => [r.title, r.dueTime])).toEqual([["Any time", null], ["Morning call", "09:00"], ["Afternoon call", "14:30"]]);
+    expect((await calendarEntries(as("owner"), day, day)).filter((e) => e.kind === "reminder").map((e) => e.title).sort()).toEqual(["2:30 pm Afternoon call", "9 am Morning call", "Any time"]);
+    for (const bad of ["25:00", "9am", "12:60", "1:5"]) {
+      await expect(createReminder(as("owner"), { title: "Bad time", dueOn: day, dueTime: bad })).rejects.toBeInstanceOf(ValidationError);
+    }
+  });
 });
