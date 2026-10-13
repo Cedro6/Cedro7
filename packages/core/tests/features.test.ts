@@ -65,7 +65,8 @@ describe("feature rules", () => {
   });
 
   it("gives each business type its starting set", () => {
-    expect(Object.values(featuresFor("distributor")).every(Boolean)).toBe(true);
+    // A distributor starts with everything except the dealer add-on.
+    expect(Object.entries(featuresFor("distributor")).filter(([, on]) => !on).map(([id]) => id)).toEqual(["dealer"]);
     const sales = featuresFor("sales");
     expect(sales.stock).toBe(false);
     expect(sales.purchasing).toBe(false);

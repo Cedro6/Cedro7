@@ -62,6 +62,8 @@ it("matches the documented table for the other roles", () => {
       "sales_order.read",
       "sales_order.write",
       "report.view",
+      "vehicle.read",
+      "vehicle.write",
     ]);
     expect(allowed.purchasing).toEqual([
       "customer.read",
@@ -76,6 +78,8 @@ it("matches the documented table for the other roles", () => {
       "report.view",
       "expense.read",
       "expense.write",
+      "vehicle.read",
+      "vehicle.write",
     ]);
     expect(allowed.warehouse).toEqual([
       "product.read",
@@ -84,6 +88,7 @@ it("matches the documented table for the other roles", () => {
       "sales_order.ship",
       "purchase_order.read",
       "purchase_order.receive",
+      "vehicle.read",
     ]);
     expect(allowed.viewer).toEqual([
       "customer.read",
@@ -91,6 +96,7 @@ it("matches the documented table for the other roles", () => {
       "sales_order.read",
       "purchase_order.read",
       "report.view",
+      "vehicle.read",
     ]);
   });
 });

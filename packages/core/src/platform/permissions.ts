@@ -22,6 +22,8 @@ export const PERMISSIONS = [
   "report.view",
   "expense.read",
   "expense.write",
+  "vehicle.read",
+  "vehicle.write",
   "settings.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -40,6 +42,8 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "sales_order.read",
     "sales_order.write",
     "report.view",
+    "vehicle.read",
+    "vehicle.write",
   ],
   purchasing: [
     "customer.read",
@@ -54,6 +58,8 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "report.view",
     "expense.read",
     "expense.write",
+    "vehicle.read",
+    "vehicle.write",
   ],
   warehouse: [
     "product.read",
@@ -62,8 +68,9 @@ const MATRIX: Record<Role, readonly Permission[]> = {
     "sales_order.ship",
     "purchase_order.read",
     "purchase_order.receive",
+    "vehicle.read",
   ],
-  viewer: ["customer.read", "product.read", "sales_order.read", "purchase_order.read", "report.view"],
+  viewer: ["customer.read", "product.read", "sales_order.read", "purchase_order.read", "report.view", "vehicle.read"],
 };
 
 export class ForbiddenError extends Error {
@@ -88,6 +95,8 @@ const PERMISSION_FEATURE: Partial<Record<Permission, FeatureId>> = {
   "report.view": "reports",
   "expense.read": "expenses",
   "expense.write": "expenses",
+  "vehicle.read": "dealer",
+  "vehicle.write": "dealer",
 };
 
 /** Either a bare role, or the acting person with their company's feature switches. */

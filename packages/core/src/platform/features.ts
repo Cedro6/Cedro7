@@ -16,22 +16,24 @@ export const FEATURES = [
   "counts",
   "reports",
   "expenses",
+  "dealer",
 ] as const;
 export type FeatureId = (typeof FEATURES)[number];
 
 /** Stored per company. A missing key means on. */
 export type FeatureSet = Partial<Record<FeatureId, boolean>>;
 
-export const BUSINESS_TYPES = ["distributor", "retail", "warehouse", "sales", "contractor"] as const;
+export const BUSINESS_TYPES = ["distributor", "retail", "warehouse", "sales", "contractor", "dealer"] as const;
 export type BusinessType = (typeof BUSINESS_TYPES)[number];
 
 /** What each business type starts with. */
 export const TYPE_FEATURES: Record<BusinessType, readonly FeatureId[]> = {
-  distributor: FEATURES,
+  distributor: FEATURES.filter((f) => f !== "dealer"),
   retail: ["stock", "calendar", "purchasing", "returns", "counts", "reports", "expenses"],
   warehouse: ["stock", "purchasing", "picking", "returns", "warehouse", "putaway", "counts", "calendar"],
   sales: ["activity", "board", "calendar", "reports", "expenses"],
   contractor: ["activity", "board", "calendar", "purchasing", "reports", "expenses"],
+  dealer: ["dealer", "activity", "calendar", "reports", "expenses"],
 };
 
 /** These do nothing unless stock is tracked, so they count as off while "stock" is off. */

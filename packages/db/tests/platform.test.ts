@@ -67,6 +67,7 @@ describe("migrations", () => {
       "0031_taxable_supplier_address.sql",
       "0032_service_controls.sql",
       "0033_briefing_checks.sql",
+      "0034_dealer.sql",
     ]);
   });
 

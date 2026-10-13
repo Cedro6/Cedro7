@@ -19,6 +19,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const stock = featureOn(ctx.features, "stock");
   // The menu lists only what this person may open and this company has switched on.
   const items: NavItem[] = [{ href: "/", label: "Home" }];
+  // Dealer Terminal: the lot comes first for a dealer.
+  if (featureOn(ctx.features, "dealer") && can(ctx, "vehicle.read")) items.push({ href: "/vehicles", label: "Vehicles" });
   if (can(ctx, "customer.read")) items.push({ href: "/customers", label: "Customers" });
   if (can(ctx, "product.read")) items.push({ href: "/products", label: "Products", count: stock ? (counts.lowStock ?? 0) : 0 });
   if (can(ctx, "sales_order.read")) items.push({ href: "/sales", label: "Sales", count: counts.readyToShip ?? 0 });

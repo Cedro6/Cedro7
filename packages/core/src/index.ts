@@ -248,3 +248,12 @@ export {
   checkSignup, createSignupLink, listCompanies, listSignupLinks, platformResetTwoStep, revokeSignupLink, setCompanySuspended, signUp, signupLinkValid,
   type PlatformCompany, type SignupInput, type SignupLink,
 } from "./platform/signup";
+export {
+  cleanVin, vinProblem, fromVpic, vpicDecoder, decodeVin, DecodeError, SPEC_FIELDS,
+  type VehicleSpecs, type Decoded, type VinDecoder,
+} from "./dealer/vin";
+export {
+  VEHICLE_STATUSES, STATUS_TEXT as VEHICLE_STATUS_TEXT, CONDITIONS as VEHICLE_CONDITIONS, isVehicleStatus, useVinDecoder, lookupVin, createVehicle, listVehicles, getVehicle, updateVehicle,
+  planVehicleImport, runVehicleImport, lotSummary,
+  type VehicleStatus, type VehicleOwnInput, type Vehicle, type VehicleSummary, type VinLookup, type VehicleImportRow,
+} from "./dealer/vehicles";
