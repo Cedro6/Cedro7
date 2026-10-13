@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ADD_ONS, CEDRO_TYPES, can, FEATURES, productOf, CURRENCIES, getCompanyProfile, getRegion, getSettings, timeZones, listMembers, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
+import { ADD_ONS, CEDRO_TYPES, can, FEATURES, getDealerSettings, productOf, CURRENCIES, getCompanyProfile, getRegion, getSettings, timeZones, listMembers, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
 import { TeamPanel } from "../../../components/TeamPanel";
 import { BUILT, FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
-import { chooseType, saveCompany, saveLogo, saveRegion, saveTwoStepRule, switchFeature } from "./actions";
+import { chooseType, saveCompany, saveDealer, saveLogo, saveRegion, saveTwoStepRule, switchFeature } from "./actions";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { ctx, membership } = await requireSession();
@@ -12,6 +12,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { error, notice } = await searchParams;
   const [settings, company, members, region] = await Promise.all([getSettings(ctx), getCompanyProfile(ctx), listMembers(ctx), getRegion(ctx)]);
   const dealer = productOf(settings.businessType) === "dealer";
+  const dealerSettings = dealer ? await getDealerSettings(ctx) : null;
   const starting = TYPE_FEATURES[settings.businessType];
   const customized = FEATURES.some((id) => settings.features[id] !== starting.includes(id));
   const onCount = FEATURES.filter((id) => !ADD_ONS.includes(id) && settings.features[id]).length;
@@ -148,10 +149,36 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       {dealer ? (
+        <>
         <section className="glass panel">
           <h2 className="title">Dealer Terminal membership</h2>
           <p className="muted">Your tools are set by the membership: vehicles, deals, compliance paperwork, customers, calendar, reports, bills and Ava. There is nothing to switch on or off. To change the membership, contact support.</p>
         </section>
+        <section className="glass panel form-panel">
+          <h2 className="title">Dealership</h2>
+          <p className="muted">What goes on the paperwork and what each new deal starts with.</p>
+          <form action={saveDealer} className="stack">
+            <div className="form-row">
+              <label className="field grow"><span>Dealer licence number</span><input name="licence" maxLength={40} defaultValue={dealerSettings!.licence ?? ""} /></label>
+              <label className="field grow"><span>County</span><input name="county" maxLength={60} defaultValue={dealerSettings!.county ?? ""} /></label>
+            </div>
+            <div className="form-row">
+              <label className="field grow"><span>County surtax %</span><input name="surtaxPct" inputMode="decimal" defaultValue={dealerSettings!.surtaxPct} /></label>
+              <label className="field grow"><span>Dealer fee default</span><input name="dealerFee" inputMode="decimal" defaultValue={dealerSettings!.dealerFee} /></label>
+              <label className="field grow"><span>Tag and title default</span><input name="tagTitleFees" inputMode="decimal" defaultValue={dealerSettings!.tagTitleFees} /></label>
+            </div>
+            <div className="form-row">
+              <label className="field grow">
+                <span>Stock numbers</span>
+                <select name="stockNumberStyle" defaultValue={dealerSettings!.stockNumberStyle}><option value="counter">Prefix and a counter (STK-000123)</option><option value="vin6">Last six of the VIN</option></select>
+              </label>
+              <label className="field grow"><span>Prefix</span><input name="stockNumberPrefix" maxLength={6} defaultValue={dealerSettings!.stockNumberPrefix} /></label>
+            </div>
+            <p className="muted">Florida state sales tax is 6%; the county&apos;s discretionary surtax is yours to enter. Check both against the Department of Revenue&apos;s current rates.</p>
+            <div className="actions"><button type="submit" className="btn btn-primary">Save dealer settings</button></div>
+          </form>
+        </section>
+        </>
       ) : (
         <>
       <section className="glass panel">

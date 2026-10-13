@@ -32,6 +32,7 @@ const ICONS: Record<string, ReactNode> = {
   "/reports": <ReportsIcon />,
   "/settings": <SettingsIcon />,
   "/vehicles": <VehicleIcon />,
+  "/deals": <SalesIcon />,
 };
 
 /** One entry per screen this person may open. The server decides the list from their role and the company's features. */

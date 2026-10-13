@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
+  cancelDeal, createDeal, dealMoney, deliverDeal, getDeal, listDeals, openDealFor, recordDealPayment, updateDeal,
   cleanVin, createVehicle, fromVpic, getVehicle, listVehicles, lookupVin, lotSummary, planVehicleImport, runVehicleImport, updateVehicle, useVinDecoder, vinProblem, vpicDecoder,
   ForbiddenError, ValidationError, StateError, type Ctx, type Role, type VinDecoder,
 } from "../src/index";
@@ -149,5 +150,67 @@ describe("the vehicle form's own lists", () => {
     const core = await import("../src/index");
     for (const status of core.VEHICLE_STATUSES) expect(form).toContain(`key: "${status}", label: "${core.VEHICLE_STATUS_TEXT[status]}"`);
     expect(form.replace(/\s+/g, "")).toContain(`constCONDITIONS=${JSON.stringify([...core.VEHICLE_CONDITIONS])};`);
+  });
+});
+
+describe("deals", () => {
+  it("works out Florida tax: 6% after trade-in, surtax on the first $5,000 only", () => {
+    const m = dealMoney({ salePrice: 12000, dealerFee: 499, tradeAllowance: 2000, stateTaxPct: 6, surtaxPct: 1, surtaxCap: 5000, tagTitleFees: 225.5, otherFees: 0 }, 500);
+    expect(m.taxable).toBe(10499);
+    expect(m.stateTax).toBe(629.94);
+    expect(m.surtax).toBe(50);
+    expect(m.total).toBe(11404.44);
+    expect(m.balance).toBe(10904.44);
+    expect(dealMoney({ salePrice: 3000, dealerFee: 0, tradeAllowance: 0, stateTaxPct: 6, surtaxPct: 1.5, surtaxCap: 5000, tagTitleFees: 0, otherFees: 0 }).surtax).toBe(45);
+  });
+
+  it("sells a car: deal, payments, delivery paid in full, vehicle sold, trade-in on the lot", async () => {
+    await owner.query("update organizations set county_surtax_pct = 1, dealer_fee_default = 399, tag_title_default = 100");
+    const car = await createVehicle(as("owner"), { vin: "1HGCM82633A004352", specs: { year: 2003, make: "Honda", model: "Accord" }, own: { mileage: 150000, acquisitionPrice: 2500, status: "on_lot" } });
+    const made = await createDeal(as("sales"), { vehicleId: car.id, buyerName: "Maria Lopez", buyerAddress: "12 Palm St", buyerCity: "Tampa", buyerZip: "33602", buyerDl: "L123-456-78-901-0", salePrice: 6000, odometer: 150210 });
+    expect(made.number).toBe("DL-000001");
+    let deal = (await getDeal(as("sales"), made.id))!;
+    expect(deal.dealerFee).toBe(399); // the dealership's default
+    expect(deal.taxable).toBe(6399);
+    expect(deal.surtax).toBe(50);
+    expect(deal.total).toBe(6399 + 383.94 + 50 + 100);
+    expect(deal.gross).toBeNull(); // sales may not see cost
+    expect((await getDeal(as("owner"), made.id))!.gross).toBe(6399 - 2500);
+    // A second deal on the same car is refused while this one is open.
+    await expect(createDeal(as("owner"), { vehicleId: car.id, buyerName: "Someone Else", salePrice: 1 })).rejects.toThrow(/already has an open deal/);
+    // Not paid: cannot deliver.
+    await expect(deliverDeal(as("owner"), made.id, "2026-10-13")).rejects.toThrow(/still owed/);
+    await recordDealPayment(as("owner"), made.id, { amount: 1000, method: "Cash", paidOn: "2026-10-10" });
+    await expect(recordDealPayment(as("owner"), made.id, { amount: 99999, method: "Cash", paidOn: "2026-10-13" })).rejects.toThrow(/more than/);
+    deal = (await getDeal(as("owner"), made.id))!;
+    await recordDealPayment(as("owner"), made.id, { amount: deal.balance, method: "Check", reference: "1042", paidOn: "2026-10-13" });
+    deal = (await getDeal(as("owner"), made.id))!;
+    expect(deal.balance).toBe(0);
+    expect(deal.payments).toHaveLength(2);
+    // Add a trade-in, then deliver.
+    await updateDeal(as("owner"), made.id, { vehicleId: car.id, buyerName: "Maria Lopez", buyerAddress: "12 Palm St", buyerCity: "Tampa", buyerZip: "33602", salePrice: 6000, odometer: 150210, tradeVin: "5YJ3E1EA2JF000316", tradeAllowance: 0, tradeDescription: "2017 Tesla Model S", tradeMileage: 80000 });
+    const delivered = await deliverDeal(as("owner"), made.id, "2026-10-13");
+    expect(delivered.tradeInId).not.toBeNull();
+    expect((await getVehicle(as("owner"), car.id))!.status).toBe("sold");
+    const trade = (await getVehicle(as("owner"), delivered.tradeInId!))!;
+    expect(trade.vin).toBe("5YJ3E1EA2JF000316");
+    expect(trade.status).toBe("draft");
+    expect(trade.acquisitionSource).toBe("Trade-in on DL-000001");
+    deal = (await getDeal(as("owner"), made.id))!;
+    expect(deal.status).toBe("delivered");
+    await expect(updateDeal(as("owner"), made.id, { vehicleId: car.id, buyerName: "x", salePrice: 1 })).rejects.toThrow(/delivered deal cannot be changed/);
+    expect((await listDeals(as("viewer"))).map((d) => d.number)).toContain("DL-000001");
+    await expect(createDeal(as("viewer"), { vehicleId: car.id, buyerName: "x", salePrice: 1 })).rejects.toThrow(ForbiddenError);
+  });
+
+  it("cancels a deal and refuses to deliver without an address or odometer", async () => {
+    const car = await createVehicle(as("owner"), { specs: { make: "Kia", model: "Soul" }, own: { status: "on_lot" } });
+    const made = await createDeal(as("owner"), { vehicleId: car.id, buyerName: "Sam Ng", salePrice: 100, dealerFee: 0, tagTitleFees: 0 });
+    await recordDealPayment(as("owner"), made.id, { amount: 107, method: "Cash", paidOn: "2026-10-13" });
+    await expect(deliverDeal(as("owner"), made.id, "2026-10-13")).rejects.toThrow(/address/);
+    await cancelDeal(as("owner"), made.id, "Buyer changed their mind");
+    expect((await getDeal(as("owner"), made.id))!.status).toBe("cancelled");
+    expect(await openDealFor(as("owner"), car.id)).toBeNull();
+    expect((await getVehicle(as("owner"), car.id))!.status).toBe("on_lot");
   });
 });

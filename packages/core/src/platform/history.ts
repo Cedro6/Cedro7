@@ -77,6 +77,11 @@ const WHAT: Record<string, string> = {
   "expense.created": "recorded bill or expense",
   "vehicle.created": "added vehicle",
   "vehicle.updated": "changed vehicle",
+  "deal.created": "started deal",
+  "deal.updated": "changed deal",
+  "deal.payment_recorded": "recorded a payment on deal",
+  "deal.delivered": "delivered deal",
+  "deal.cancelled": "cancelled deal",
   "expense.paid": "marked as paid",
   "expense.voided": "voided bill or expense",
   "purchase_order.created": "created purchase order",
@@ -161,6 +166,7 @@ const HREF: Record<string, (id: string) => string> = {
   supplier: (id) => `/purchasing/suppliers/${id}`,
   expense: (id) => `/bills/${id}`,
   vehicle: (id) => `/vehicles/${id}`,
+  deal: (id) => `/deals/${id}`,
 };
 
 export const HISTORY_PAGE = 50;
@@ -188,6 +194,7 @@ export async function listHistory(
                 when 'supplier' then (select name from suppliers where id = a.entity_id)
                 when 'expense' then (select description from expenses where id = a.entity_id)
                 when 'vehicle' then (select stock_number from vehicles where id = a.entity_id)
+                when 'deal' then (select number from deals where id = a.entity_id)
                 when 'price_list' then (select name from price_lists where id = a.entity_id)
                 when 'user' then (select name from users where id = a.entity_id)
                 when 'membership' then (select uu.name from memberships m join users uu on uu.id = m.user_id where m.id = a.entity_id)
