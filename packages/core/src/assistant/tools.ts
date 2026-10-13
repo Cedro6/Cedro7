@@ -10,6 +10,12 @@ import { analysis, ANALYSIS_PRESETS, COMPARE_MODES, isAnalysisPreset, isCompareM
 import { todayIn, zoneOf } from "../platform/locale";
 import { listPurchaseOrders, listSuppliers } from "../purchasing/orders";
 import { listOrders } from "../sales/orders";
+import { dealerAttention } from "../dealer/attention";
+import { dealSalesSeries, getDeal, listDeals, type DealStatus } from "../dealer/deals";
+import { getVehicle, listVehicles, lotSummary, isVehicleStatus } from "../dealer/vehicles";
+
+/** Dealer Terminal companies get lookups about cars and deals instead of orders, invoices and stock. */
+export const isDealer = (ctx: Ctx) => featureOn(ctx.features, "dealer");
 
 /**
  * What the assistant may look up. Every tool here only reads (changes are prepared separately, in actions.ts), and each one goes through the same
@@ -34,7 +40,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     name: "needs_attention",
     description: "What needs attention today: overdue invoices, low stock, orders ready to ship, late supplier orders, customers gone quiet.",
     input_schema: none,
-    allowed: () => true,
+    allowed: (ctx) => !isDealer(ctx),
     run: async (ctx) => (await attention(ctx)).map(({ title, detail, href }) => ({ title, detail, link: href })),
   },
   {
@@ -49,7 +55,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     name: "customer_account",
     description: "One customer's money position: what they owe, what is overdue, credit held, and their unpaid invoices. Needs the customer id from find_customers.",
     input_schema: { type: "object", properties: { customer_id: { type: "string" } }, required: ["customer_id"] },
-    allowed: (ctx) => can(ctx, "customer.read") && can(ctx, "sales_order.read"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "customer.read") && can(ctx, "sales_order.read"),
     run: async (ctx, input) => {
       const id = text(input.customer_id);
       const statement = await customerStatement(ctx, id);
@@ -68,7 +74,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     name: "find_products",
     description: "Search products by name or code, or list only those running low. Returns price, stock available, on order and reorder point.",
     input_schema: { type: "object", properties: { search: { type: "string" }, low_stock_only: { type: "boolean" } } },
-    allowed: (ctx) => can(ctx, "product.read"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "product.read"),
     run: async (ctx, input) => {
       const tracked = featureOn(ctx.features, "stock");
       const rows = await listProducts(ctx, { search: text(input.search), lowStockOnly: tracked && input.low_stock_only === true });
@@ -89,7 +95,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     name: "list_orders",
     description: "Sales orders, newest first. Filter by status: open (confirmed, not fully shipped), quote, shipped or cancelled.",
     input_schema: { type: "object", properties: { status: { type: "string", enum: ["open", "quote", "shipped", "cancelled"] }, customer_id: { type: "string" } } },
-    allowed: (ctx) => can(ctx, "sales_order.read"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "sales_order.read"),
     run: async (ctx, input) => {
       const status = ["open", "quote", "shipped", "cancelled"].includes(String(input.status)) ? (input.status as "open" | "quote" | "shipped" | "cancelled") : undefined;
       const rows = await listOrders(ctx, { status, customerId: text(input.customer_id) || undefined });
@@ -100,7 +106,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     name: "list_invoices",
     description: "Invoices. Filter by state: open (anything unpaid), overdue or paid. Returns balance and due date.",
     input_schema: { type: "object", properties: { state: { type: "string", enum: ["open", "overdue", "paid"] } } },
-    allowed: (ctx) => can(ctx, "sales_order.read"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "sales_order.read"),
     run: async (ctx, input) => {
       const state = ["open", "overdue", "paid"].includes(String(input.state)) ? (input.state as "open" | "overdue" | "paid") : undefined;
       const rows = await listInvoices(ctx, { state });
@@ -111,7 +117,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     name: "list_purchase_orders",
     description: "Purchase orders placed with suppliers, with status, expected date and total.",
     input_schema: none,
-    allowed: (ctx) => featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.read"),
+    allowed: (ctx) => !isDealer(ctx) && featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.read"),
     run: async (ctx) =>
       cap((await listPurchaseOrders(ctx)).map((po) => ({ number: po.number, supplier: po.supplierName, status: po.status, total: po.total, expected: po.expectedOn ?? null, link: `/purchasing/${po.id}` }))),
   },
@@ -130,7 +136,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     name: "find_suppliers",
     description: "The company's suppliers, with id, payment terms and lead time in days.",
     input_schema: none,
-    allowed: (ctx) => featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.read"),
+    allowed: (ctx) => !isDealer(ctx) && featureOn(ctx.features, "purchasing") && can(ctx, "purchase_order.read"),
     run: async (ctx) => cap((await listSuppliers(ctx)).map((s) => ({ id: s.id, name: s.name, terms: s.paymentTerms, leadTimeDays: s.leadTimeDays }))),
   },
   {
@@ -144,7 +150,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         compare: { type: "string", enum: [...COMPARE_MODES], description: "previous (the same length just before, the default), year (the same dates a year earlier) or none." },
       },
     },
-    allowed: (ctx) => featureOn(ctx.features, "reports") && can(ctx, "report.view"),
+    allowed: (ctx) => !isDealer(ctx) && featureOn(ctx.features, "reports") && can(ctx, "report.view"),
     run: async (ctx, input) => {
       const period = isAnalysisPreset(input.period) && input.period !== "custom" ? input.period : "30d";
       const mode = isCompareMode(input.compare) ? input.compare : "previous";
@@ -165,6 +171,104 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         purchasing: data.purchasing && { ...data.purchasing, suppliers: top(data.purchasing.suppliers.map((s) => ({ name: s.name, orders: s.orders, ordered: s.ordered })), 8) },
         link: `/reports${period === "30d" && mode === "previous" ? "" : `?${new URLSearchParams({ ...(period !== "30d" ? { period } : {}), ...(mode !== "previous" ? { compare: mode } : {}) })}`}`,
       };
+    },
+  },
+  {
+    name: "lot_attention",
+    description: "What needs the dealer today: money still owed on open deals, deals paid but not delivered, title paperwork that is incomplete, cars on the lot 60+ days or with no asking price or title number, drafts left unfinished, cars stuck in reconditioning. Each item has a link to the one record.",
+    input_schema: none,
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.read"),
+    run: async (ctx) => {
+      const items = await dealerAttention(ctx);
+      const due = featureOn(ctx.features, "calendar") ? (await listReminders(ctx, { to: todayIn(zoneOf(ctx)), openOnly: true })).map((r) => ({ title: `Reminder: ${r.title}`, detail: `${r.overdue ? "Overdue" : "Due today"}${r.customerName ? `, ${r.customerName}` : ""}${r.assignedName ? `, for ${r.assignedName}` : ""}`, link: "/calendar" })) : [];
+      return { items: items.map(({ title, detail, link }) => ({ title, detail, link })), reminders: due };
+    },
+  },
+  {
+    name: "lot_overview",
+    description: "The lot at a glance: how many cars are on the lot, in reconditioning and in draft, how many have been on hand 60+ days, and what was paid for the cars on hand (when the person may see cost).",
+    input_schema: none,
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.read"),
+    run: async (ctx) => ({ ...(await lotSummary(ctx)), link: "/vehicles" }),
+  },
+  {
+    name: "find_vehicles",
+    description: "Search the dealer's vehicles by stock number, VIN, year, make, model, trim or colour, optionally by status (live = everything not sold or removed). Returns id, stock number, the car, VIN, mileage, asking price, days on hand, status and a link. Use the id for vehicle_detail or the propose_ tools.",
+    input_schema: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Words to match, such as 'silver camry' or 'STK-000012'. Leave out to list." },
+        status: { type: "string", enum: ["live", "draft", "recon", "on_lot", "sold", "removed"], description: "Defaults to live." },
+      },
+    },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.read"),
+    run: async (ctx, input) => {
+      const words = text(input.search).toLowerCase().split(/\s+/).filter(Boolean);
+      const status = input.status === "live" || isVehicleStatus(input.status) ? (input.status as "live") : "live";
+      const all = await listVehicles(ctx, { status });
+      const hay = (v: (typeof all)[number]) => `${v.stockNumber} ${v.vin ?? ""} ${v.year ?? ""} ${v.make ?? ""} ${v.model ?? ""} ${v.trim ?? ""} ${v.colour ?? ""}`.toLowerCase();
+      const rows = words.length ? all.filter((v) => words.every((w) => hay(v).includes(w))) : all;
+      return cap(rows.map((v) => ({ id: v.id, stock: v.stockNumber, car: [v.year, v.make, v.model, v.trim].filter(Boolean).join(" ") || null, colour: v.colour ?? null, vin: v.vin, mileage: v.mileage ?? null, asking: v.askingPrice ?? null, daysOnHand: v.daysHeld, status: v.status, link: `/vehicles/${v.id}` })), 30);
+    },
+  },
+  {
+    name: "vehicle_detail",
+    description: "Everything on one vehicle: specifications, mileage, condition, title number, asking price, what was paid (when the person may see cost), status, days on hand, notes, and its open deal if any. Needs the vehicle id from find_vehicles.",
+    input_schema: { type: "object", properties: { vehicle_id: { type: "string" } }, required: ["vehicle_id"] },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.read"),
+    run: async (ctx, input) => {
+      const v = await getVehicle(ctx, text(input.vehicle_id));
+      if (!v) return { error: "No vehicle with that id." };
+      const seeCost = can(ctx, "product.cost.view");
+      const open = (await listDeals(ctx, { status: "open", search: v.stockNumber })).find((d) => d.stockNumber === v.stockNumber);
+      return {
+        stock: v.stockNumber, vin: v.vin, year: v.year, make: v.make, model: v.model, trim: v.trim, body: v.bodyStyle, engine: v.engine, drivetrain: v.drivetrain, fuel: v.fuelType,
+        colour: v.colour, mileage: v.mileage, condition: v.condition, titleNumber: v.titleNumber ?? null, asking: v.askingPrice ?? null,
+        ...(seeCost ? { paid: v.acquisitionPrice ?? null, boughtFrom: v.acquisitionSource ?? null } : {}),
+        status: v.status, daysOnHand: v.daysHeld, location: v.locationName, notes: v.notes ?? null,
+        openDeal: open ? { number: open.number, buyer: open.buyerName, owed: open.balance, link: `/deals/${open.id}` } : null,
+        link: `/vehicles/${v.id}`,
+      };
+    },
+  },
+  {
+    name: "find_deals",
+    description: "Deals by status (open, delivered, cancelled) or search by deal number, buyer, stock number or VIN. Returns number, buyer, car, total, balance still owed, delivered date and a link.",
+    input_schema: { type: "object", properties: { status: { type: "string", enum: ["open", "delivered", "cancelled"] }, search: { type: "string" } } },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.read"),
+    run: async (ctx, input) => {
+      const status = ["open", "delivered", "cancelled"].includes(String(input.status)) ? (input.status as DealStatus) : undefined;
+      return cap((await listDeals(ctx, { status, search: text(input.search) })).map((d) => ({ id: d.id, number: d.number, buyer: d.buyerName, car: d.vehicleName || d.stockNumber, stock: d.stockNumber, status: d.status, total: d.total, owed: d.balance, delivered: d.deliveredOn, link: `/deals/${d.id}` })));
+    },
+  },
+  {
+    name: "deal_detail",
+    description: "One deal in full: buyer, car, price, dealer fee, trade-in, tax, fees, total, payments recorded and what is still owed, odometer, and what the title paperwork still needs. Needs the deal id from find_deals.",
+    input_schema: { type: "object", properties: { deal_id: { type: "string" } }, required: ["deal_id"] },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.read"),
+    run: async (ctx, input) => {
+      const d = await getDeal(ctx, text(input.deal_id));
+      if (!d) return { error: "No deal with that id." };
+      const missing = [!d.buyerAddress && "buyer's address", !d.buyerDl && "licence number", !d.buyerDob && "date of birth", !d.buyerSex && "sex", !d.buyerCounty && "county", d.odometer === null && "odometer reading", !d.titleNumber && "the car's title number"].filter(Boolean);
+      return {
+        number: d.number, status: d.status, buyer: d.buyerName, coBuyer: d.coBuyerName, car: d.vehicleName, stock: d.stockNumber, vin: d.vin,
+        salePrice: d.salePrice, dealerFee: d.dealerFee, tradeIn: d.tradeVin ? { vin: d.tradeVin, description: d.tradeDescription, allowance: d.tradeAllowance } : null,
+        taxable: d.taxable, salesTax: d.stateTax, surtax: d.surtax, tagAndTitle: d.tagTitleFees, otherFees: d.otherFees, total: d.total,
+        payments: d.payments.map((p) => ({ amount: p.amount, method: p.method, on: p.paidOn })), owed: d.balance,
+        odometer: d.odometer, soldAsIs: d.soldAsIs, delivered: d.deliveredOn, paperworkMissing: missing, gross: d.gross,
+        link: `/deals/${d.id}`,
+      };
+    },
+  },
+  {
+    name: "dealer_sales",
+    description: "Cars sold and sales totals (sale price, before tax and fees) for the last 30 days, this quarter or the year so far, counted by the day each deal was delivered.",
+    input_schema: { type: "object", properties: { period: { type: "string", enum: ["30d", "quarter", "ytd"], description: "Defaults to 30d." } } },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.read"),
+    run: async (ctx, input) => {
+      const period = input.period === "quarter" || input.period === "ytd" ? input.period : "30d";
+      const s = await dealSalesSeries(ctx, period);
+      return s && { period, from: s.from, to: s.to, carsSold: s.cars, sales: s.total, link: "/deals?show=delivered" };
     },
   },
 ];

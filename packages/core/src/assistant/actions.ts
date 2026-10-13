@@ -1,4 +1,8 @@
-import { currencyOf, moneyText } from "../platform/locale";
+import { currencyOf, moneyText, todayIn, zoneOf } from "../platform/locale";
+import { isDealer } from "./tools";
+import { createDeal, deliverDeal, getDeal, openDealFor } from "../dealer/deals";
+import { getVehicle, updateVehicle, STATUS_TEXT as VEHICLE_STATUS_TEXT } from "../dealer/vehicles";
+import { cleanVin, vinProblem } from "../dealer/vin";
 import { randomUUID } from "node:crypto";
 import { withTenant } from "@bos/db/runtime";
 import { createInvoice } from "../billing/invoices";
@@ -81,7 +85,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       },
       required: ["customer_id", "lines"],
     },
-    allowed: (ctx) => can(ctx, "sales_order.write") && can(ctx, "customer.read") && can(ctx, "product.read"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "sales_order.write") && can(ctx, "customer.read") && can(ctx, "product.read"),
     describe: async (ctx, input) => {
       const customer = await getCustomer(ctx, str(input.customer_id, 36));
       if (!customer) throw bad("I could not find that customer.");
@@ -108,7 +112,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     name: "propose_confirm_order",
     description: "Prepare to confirm a quote so it becomes an order (and reserves stock if stock is tracked), for the person to confirm. Needs the order id from list_orders.",
     input_schema: { type: "object", properties: { order_id: { type: "string" } }, required: ["order_id"] },
-    allowed: (ctx) => can(ctx, "sales_order.write"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "sales_order.write"),
     describe: async (ctx, input) => {
       const order = await getOrder(ctx, str(input.order_id, 36));
       if (!order) throw bad("I could not find that order.");
@@ -176,7 +180,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     description:
       "Prepare to ship an open order (everything currently reserved for it goes out as one shipment and the invoice is raised), for the person to confirm. If stock is not tracked this completes the order. Needs the order id from list_orders.",
     input_schema: { type: "object", properties: { order_id: { type: "string" } }, required: ["order_id"] },
-    allowed: (ctx) => can(ctx, "sales_order.ship") && can(ctx, "sales_order.read"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "sales_order.ship") && can(ctx, "sales_order.read"),
     describe: async (ctx, input) => {
       const order = await getOrder(ctx, str(input.order_id, 36));
       if (!order) throw bad("I could not find that order.");
@@ -203,7 +207,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     name: "propose_cancel_order",
     description: "Prepare to cancel a quote or an order that has not shipped (reserved stock goes back on the shelf), for the person to confirm. Needs the order id from list_orders.",
     input_schema: { type: "object", properties: { order_id: { type: "string" } }, required: ["order_id"] },
-    allowed: (ctx) => can(ctx, "sales_order.write"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "sales_order.write"),
     describe: async (ctx, input) => {
       const order = await getOrder(ctx, str(input.order_id, 36));
       if (!order) throw bad("I could not find that order.");
@@ -220,7 +224,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     name: "propose_stock_adjustment",
     description: "Prepare a correction to a product's stock on hand (positive to add, negative to remove) with a reason, for the person to confirm. Needs the product id from find_products.",
     input_schema: { type: "object", properties: { product_id: { type: "string" }, change: { type: "number", description: "Units to add (positive) or remove (negative)." }, reason: { type: "string" } }, required: ["product_id", "change", "reason"] },
-    allowed: (ctx) => featureOn(ctx.features, "stock") && can(ctx, "stock.adjust") && can(ctx, "product.read"),
+    allowed: (ctx) => !isDealer(ctx) && featureOn(ctx.features, "stock") && can(ctx, "stock.adjust") && can(ctx, "product.read"),
     describe: async (ctx, input) => {
       const product = await getProduct(ctx, str(input.product_id, 36));
       if (!product) throw bad("I could not find that product.");
@@ -289,7 +293,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       properties: { customer_id: { type: "string" }, lines: lineSchema, notes: { type: "string" } },
       required: ["customer_id", "lines"],
     },
-    allowed: (ctx) => can(ctx, "invoice.write") && can(ctx, "customer.read") && can(ctx, "product.read"),
+    allowed: (ctx) => !isDealer(ctx) && can(ctx, "invoice.write") && can(ctx, "customer.read") && can(ctx, "product.read"),
     describe: async (ctx, input) => {
       const customer = await getCustomer(ctx, str(input.customer_id, 36));
       if (!customer) throw bad("I could not find that customer.");
@@ -332,7 +336,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       },
       required: ["order_id", "lines", "reason"],
     },
-    allowed: (ctx) => featureOn(ctx.features, "returns") && can(ctx, "sales_order.write"),
+    allowed: (ctx) => !isDealer(ctx) && featureOn(ctx.features, "returns") && can(ctx, "sales_order.write"),
     describe: async (ctx, input) => {
       const order = await getOrder(ctx, str(input.order_id, 36));
       if (!order) throw bad("I could not find that order.");
@@ -453,6 +457,124 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       const { customerId, ...rest } = payload as { customerId: string } & Parameters<typeof updateCustomer>[2];
       await updateCustomer(ctx, customerId, rest);
       return { message: "Customer updated.", link: `/customers/${customerId}` };
+    },
+  },
+  {
+    name: "propose_vehicle_status",
+    description: "Prepare to move a vehicle between draft, in reconditioning (recon), on the lot (on_lot) or removed from the lot, for the person to confirm. A car is only sold by delivering its deal. Needs the vehicle id from find_vehicles.",
+    input_schema: { type: "object", properties: { vehicle_id: { type: "string" }, status: { type: "string", enum: ["draft", "recon", "on_lot", "removed"] } }, required: ["vehicle_id", "status"] },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.write"),
+    describe: async (ctx, input) => {
+      const car = await getVehicle(ctx, str(input.vehicle_id, 36));
+      if (!car) throw bad("I could not find that vehicle.");
+      const to = str(input.status, 20);
+      if (!["draft", "recon", "on_lot", "removed"].includes(to)) throw bad("I can move a car to draft, reconditioning, the lot, or off the lot. Selling it is done by delivering its deal.");
+      if (car.status === "sold") throw bad(`${car.stockNumber} is sold. Its status comes from its deal.`);
+      if (car.status === to) throw bad(`${car.stockNumber} is already ${VEHICLE_STATUS_TEXT[car.status].toLowerCase()}.`);
+      const name = [car.year, car.make, car.model].filter(Boolean).join(" ") || car.stockNumber;
+      return { payload: { vehicleId: car.id, status: to }, summary: `Move ${car.stockNumber} (${name}) from ${VEHICLE_STATUS_TEXT[car.status].toLowerCase()} to ${VEHICLE_STATUS_TEXT[to as "draft"].toLowerCase()}.` };
+    },
+    apply: async (ctx, payload) => {
+      await updateVehicle(ctx, String(payload.vehicleId), { own: { status: payload.status as "on_lot" } });
+      return { message: "Vehicle moved.", link: `/vehicles/${String(payload.vehicleId)}` };
+    },
+  },
+  {
+    name: "propose_vehicle_details",
+    description: "Prepare to record facts about a vehicle: mileage, colour, condition, title number, title state, VIN (only for a car that has none) or notes, for the person to confirm. Give only what changes. You cannot set an asking price or what was paid: those are the dealer's decisions.",
+    input_schema: {
+      type: "object",
+      properties: { vehicle_id: { type: "string" }, mileage: { type: "number" }, colour: { type: "string" }, condition: { type: "string", enum: ["Excellent", "Good", "Fair", "Poor", "Salvage"] }, title_number: { type: "string" }, title_state: { type: "string" }, vin: { type: "string" }, notes: { type: "string" } },
+      required: ["vehicle_id"],
+    },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.write"),
+    describe: async (ctx, input) => {
+      if (input.asking_price !== undefined || input.price !== undefined || input.acquisition_price !== undefined || input.cost !== undefined) throw bad("Prices and costs are the dealer's decision; set them on the vehicle's page.");
+      const car = await getVehicle(ctx, str(input.vehicle_id, 36));
+      if (!car) throw bad("I could not find that vehicle.");
+      const own: Record<string, unknown> = {};
+      const changes: string[] = [];
+      if (input.mileage !== undefined) {
+        const m = Number(input.mileage);
+        if (!Number.isInteger(m) || m < 0) throw bad("Mileage must be a whole number.");
+        own.mileage = m; changes.push(`mileage to ${m.toLocaleString("en-US")}`);
+      }
+      for (const [key, field, label] of [["colour", "colour", "colour"], ["condition", "condition", "condition"], ["title_number", "titleNumber", "title number"], ["title_state", "titleState", "title state"]] as const) {
+        if (input[key] !== undefined) { const t = str(input[key], 40); own[field] = t; changes.push(`${label} to "${t}"`); }
+      }
+      if (input.notes !== undefined) { const t = str(input.notes, 2000); own.notes = t; changes.push("notes"); }
+      let vin: string | undefined;
+      if (input.vin !== undefined) {
+        if (car.vin) throw bad(`${car.stockNumber} already has a VIN.`);
+        vin = cleanVin(str(input.vin, 20));
+        const problem = vinProblem(vin);
+        if (problem) throw bad(problem);
+        changes.push(`VIN to ${vin}`);
+      }
+      if (changes.length === 0) throw bad("Say what should change.");
+      return { payload: { vehicleId: car.id, own, ...(vin ? { vin } : {}) }, summary: `On ${car.stockNumber}, set ${changes.join(", ")}.` };
+    },
+    apply: async (ctx, payload) => {
+      await updateVehicle(ctx, String(payload.vehicleId), { own: payload.own as Record<string, never>, ...(payload.vin ? { vin: String(payload.vin) } : {}) });
+      return { message: "Vehicle updated.", link: `/vehicles/${String(payload.vehicleId)}` };
+    },
+  },
+  {
+    name: "propose_deal",
+    description:
+      "Prepare to start a deal: one vehicle to one buyer, for the person to confirm. The sale price is always the vehicle's asking price and the dealer fee and tag fees are the dealership's defaults: you cannot set or discount a price. Give the buyer's details as on their licence if you have them. Needs the vehicle id from find_vehicles.",
+    input_schema: {
+      type: "object",
+      properties: {
+        vehicle_id: { type: "string" }, buyer_name: { type: "string" }, buyer_address: { type: "string" }, buyer_city: { type: "string" }, buyer_state: { type: "string" }, buyer_zip: { type: "string" },
+        buyer_phone: { type: "string" }, buyer_email: { type: "string" }, customer_id: { type: "string", description: "Optional, from find_customers." },
+      },
+      required: ["vehicle_id", "buyer_name"],
+    },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.write"),
+    describe: async (ctx, input) => {
+      if (input.sale_price !== undefined || input.price !== undefined || input.discount !== undefined || input.dealer_fee !== undefined || input.trade_allowance !== undefined) {
+        throw bad("I only start deals at the asking price with the usual fees. A different price, a discount or a trade-in allowance is your decision: change it on the deal after it is started.");
+      }
+      const car = await getVehicle(ctx, str(input.vehicle_id, 36));
+      if (!car) throw bad("I could not find that vehicle.");
+      if (car.status === "sold" || car.status === "removed") throw bad(`${car.stockNumber} is not for sale.`);
+      if (car.askingPrice === undefined || car.askingPrice === null) throw bad(`${car.stockNumber} has no asking price yet. Set one on the vehicle's page first; the price is yours to decide.`);
+      const open = await openDealFor(ctx, car.id);
+      if (open) throw bad(`${car.stockNumber} already has an open deal, ${open.number}.`);
+      const buyer = str(input.buyer_name);
+      if (!buyer) throw bad("Who is buying it?");
+      const name = [car.year, car.make, car.model].filter(Boolean).join(" ") || car.stockNumber;
+      const extra = [str(input.buyer_address), str(input.buyer_city), str(input.buyer_zip)].filter(Boolean).join(", ");
+      return {
+        payload: {
+          vehicleId: car.id, customerId: str(input.customer_id, 36) || null, buyerName: buyer, buyerAddress: str(input.buyer_address), buyerCity: str(input.buyer_city), buyerState: str(input.buyer_state, 2) || "FL",
+          buyerZip: str(input.buyer_zip, 10), buyerPhone: str(input.buyer_phone, 40), buyerEmail: str(input.buyer_email), salePrice: car.askingPrice, odometer: car.mileage ?? undefined,
+        },
+        summary: `Start a deal selling ${car.stockNumber} (${name}) to ${buyer}${extra ? `, ${extra}` : ""}, at the asking price of ${moneyText(car.askingPrice, currencyOf(ctx))} with the usual fees. Nothing is sold or paid until you record payment and deliver it.`,
+      };
+    },
+    apply: async (ctx, payload) => {
+      const made = await createDeal(ctx, payload as unknown as Parameters<typeof createDeal>[1]);
+      return { message: `Deal ${made.number} started.`, link: `/deals/${made.id}` };
+    },
+  },
+  {
+    name: "propose_deliver_deal",
+    description: "Prepare to deliver a deal that is paid in full: the car is marked sold and any trade-in joins the lot. For the person to confirm. Needs the deal id from find_deals. You cannot record payments.",
+    input_schema: { type: "object", properties: { deal_id: { type: "string" } }, required: ["deal_id"] },
+    allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.write"),
+    describe: async (ctx, input) => {
+      const d = await getDeal(ctx, str(input.deal_id, 36));
+      if (!d) throw bad("I could not find that deal.");
+      if (d.status !== "open") throw bad(`${d.number} is already ${d.status}.`);
+      if (d.balance > 0.005) throw bad(`${d.number} still has ${moneyText(d.balance, currencyOf(ctx))} owed. Payments are recorded by a person on the deal's page.`);
+      if (!d.buyerAddress || !d.buyerCity || !d.buyerZip || d.odometer === null) throw bad(`${d.number} still needs the buyer's address and the odometer reading before delivery.`);
+      return { payload: { dealId: d.id, on: todayIn(zoneOf(ctx)) }, summary: `Deliver ${d.number}: ${d.vehicleName || d.stockNumber} to ${d.buyerName}, paid in full (${moneyText(d.total, currencyOf(ctx))}). The car is marked sold${d.tradeVin ? " and the trade-in joins the lot as a draft" : ""}.` };
+    },
+    apply: async (ctx, payload) => {
+      await deliverDeal(ctx, String(payload.dealId), String(payload.on));
+      return { message: "Deal delivered. The car is marked sold.", link: `/deals/${String(payload.dealId)}` };
     },
   },
 ];
