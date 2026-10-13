@@ -1,3 +1,4 @@
+import { zoneOf } from "./locale";
 import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "./context";
 import { featureOn } from "./features";
@@ -23,7 +24,6 @@ export type Report = {
   purchasing: { open: number; value: number; late: number } | null;
 };
 
-const ZONE = "America/New_York";
 
 export function isReportPeriod(value: number): value is ReportPeriod {
   return (REPORT_PERIODS as readonly number[]).includes(value);
@@ -58,7 +58,7 @@ export async function report(ctx: Ctx, days: ReportPeriod = 30): Promise<Report>
                 where date_trunc('month', x.confirmed_at at time zone $2) = m
                   and x.confirmed_at >= now() - make_interval(days => $1))::int as orders
          from months order by m`,
-      [days, ZONE],
+      [days, zoneOf(ctx)],
     );
     const topProducts = await tx.query<{ id: string; sku: string; name: string; units: number; revenue: number; margin: number | null }>(
       `select p.id, p.sku, p.name, sum(x.qty)::float8 as units, sum(x.amount)::float8 as revenue,
@@ -111,7 +111,7 @@ export async function report(ctx: Ctx, days: ReportPeriod = 30): Promise<Report>
                 coalesce(sum((select sum(round((l.qty - l.qty_received) * l.unit_cost, 2)) from purchase_order_lines l where l.order_id = po.id)), 0)::float8 as value,
                 count(*) filter (where po.expected_on < (now() at time zone $1)::date)::int as late
            from purchase_orders po where po.status in ('approved', 'sent', 'partially_received')`,
-        [ZONE],
+        [zoneOf(ctx)],
       );
       purchasing = p.rows[0]!;
     }

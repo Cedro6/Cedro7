@@ -6,14 +6,15 @@ import { PoStatusBadge } from "../../../../components/PoStatusBadge";
 import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 import { approve, cancel, markSent, receive, submit } from "../actions";
+import { zone } from "../../../../lib/locale";
 
-const when = new Intl.DateTimeFormat("en-US", {
+const when = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
-  timeZone: "America/New_York",
-});
+  timeZone: zone(),
+}).format(d) };
 const day = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
 
 export default async function PurchaseOrderPage({

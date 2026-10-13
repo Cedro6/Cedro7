@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 type ProductOption = { id: string; sku: string; name: string; price: number; available: number };
 type Line = { key: number; productId: string; qty: string; discount: string };
 
-const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 /** The line items of a new order. Posts repeated productId and qty fields with the surrounding form. */
 export function OrderLinesEditor({
@@ -13,7 +12,10 @@ export function OrderLinesEditor({
   tracked,
   customerPrices,
   initialCustomer,
+  currency,
 }: {
+  /** The company's currency code, such as USD. */
+  currency: string;
   products: ProductOption[];
   /** Whether the business tracks stock. Without it nothing about availability is shown. */
   tracked: boolean;
@@ -21,6 +23,7 @@ export function OrderLinesEditor({
   customerPrices: Record<string, Record<string, number>>;
   initialCustomer: string;
 }) {
+  const money = new Intl.NumberFormat("en-US", { style: "currency", currency });
   const [lines, setLines] = useState<Line[]>([{ key: 1, productId: "", qty: "", discount: "" }]);
   const [customer, setCustomer] = useState(initialCustomer);
   const root = useRef<HTMLDivElement>(null);

@@ -1,3 +1,4 @@
+import { DEFAULT_TIME_ZONE, todayIn, zoneOf } from "./locale";
 import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "./context";
 import { featureOn } from "./features";
@@ -23,7 +24,6 @@ export type Pair = { now: number; was: number | null };
 export const isAnalysisPreset = (v: unknown): v is AnalysisPreset => (ANALYSIS_PRESETS as readonly unknown[]).includes(v);
 export const isCompareMode = (v: unknown): v is CompareMode => (COMPARE_MODES as readonly unknown[]).includes(v);
 
-const ZONE = "America/New_York";
 const DAY = 86_400_000;
 const at = (iso: string) => new Date(`${iso}T00:00:00Z`);
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -31,9 +31,9 @@ const addDays = (date: string, n: number) => iso(new Date(at(date).getTime() + n
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(at(v).getTime()) && iso(at(v)) === v;
 export const daysIn = (r: DateRange) => Math.round((at(r.to).getTime() - at(r.from).getTime()) / DAY) + 1;
 
-/** Today's date in the company's time zone. */
-export function today(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+/** Today's date in a time zone: pass the company's, or get Eastern time. */
+export function today(now = new Date(), zone: string = DEFAULT_TIME_ZONE): string {
+  return todayIn(zone, now);
 }
 
 /** Moves a date by whole months, keeping the day where the month is long enough (Mar 31 less a month is Feb 28). */
@@ -185,7 +185,7 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
   // $1..$4 everywhere: the chosen dates, then the comparison dates (null when nothing is compared, which matches no row).
   const dates = [range.from, range.to, compare?.from ?? null, compare?.to ?? null];
   const pair = (now: number, was: number): Pair => ({ now, was: compare ? was : null });
-  const local = (column: string) => `(${column} at time zone '${ZONE}')::date`;
+  const local = (column: string) => `(${column} at time zone '${zoneOf(ctx)}')::date`;
   const NOW = (column: string) => `${local(column)} between $1::date and $2::date`;
   const WAS = (column: string) => `${local(column)} between $3::date and $4::date`;
   const EITHER = (column: string) => `(${NOW(column)} or ${WAS(column)})`;
@@ -343,7 +343,7 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
       const open = await tx.query<{ count: number; value: number; late: number }>(
         `select count(*)::int as count,
                 coalesce(sum((select sum(round((l.qty - l.qty_received) * l.unit_cost, 2)) from purchase_order_lines l where l.order_id = po.id)), 0)::float8 as value,
-                count(*) filter (where po.expected_on < (now() at time zone '${ZONE}')::date)::int as late
+                count(*) filter (where po.expected_on < (now() at time zone '${zoneOf(ctx)}')::date)::int as late
            from purchase_orders po where po.status in ('approved', 'sent', 'partially_received')`,
       );
       const sum = (key: "orders" | "orders0" | "value" | "value0") => suppliers.rows.reduce((n, r) => n + r[key], 0);
@@ -367,7 +367,7 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
       );
       const unpaid = await tx.query<{ owed: number; overdue: number }>(
         `select coalesce(sum(amount), 0)::float8 as owed,
-                coalesce(sum(amount) filter (where due_on < (now() at time zone '${ZONE}')::date), 0)::float8 as overdue
+                coalesce(sum(amount) filter (where due_on < (now() at time zone '${zoneOf(ctx)}')::date), 0)::float8 as overdue
            from expenses where voided_at is null and paid_on is null`,
       );
       const isStock = (name: string) => name === "Stock purchases";

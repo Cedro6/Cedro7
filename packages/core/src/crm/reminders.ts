@@ -1,3 +1,4 @@
+import { zoneOf } from "../platform/locale";
 import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "../platform/context";
 import { ValidationError } from "../platform/errors";
@@ -30,8 +31,7 @@ export type CalendarEntry = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const ZONE = "America/New_York";
-const TODAY = `(now() at time zone '${ZONE}')::date`;
+const TODAY = (ctx: Ctx) => `(now() at time zone '${zoneOf(ctx)}')::date`;
 
 /** Reminders are part of the calendar feature and open to everyone in the company. */
 function requireCalendar(ctx: Ctx) {
@@ -44,11 +44,11 @@ function validDate(value: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
 
-const SELECT = (seeCustomers: boolean) => `
+const SELECT = (ctx: Ctx) => `
   select r.id, r.title, to_char(r.due_on, 'YYYY-MM-DD') as "dueOn", r.customer_id as "customerId",
-         ${seeCustomers ? "c.name" : "null"} as "customerName",
+         ${can(ctx, "customer.read") ? "c.name" : "null"} as "customerName",
          r.assigned_to as "assignedTo", u.name as "assignedName",
-         (r.done_at is not null) as done, (r.done_at is null and r.due_on < ${TODAY}) as overdue
+         (r.done_at is not null) as done, (r.done_at is null and r.due_on < ${TODAY(ctx)}) as overdue
     from reminders r
     left join customers c on c.id = r.customer_id
     left join users u on u.id = r.assigned_to`;
@@ -63,7 +63,7 @@ export async function listReminders(
   const to = options.to && validDate(options.to) ? options.to : null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<Reminder>(
-      `${SELECT(can(ctx, "customer.read"))}
+      `${SELECT(ctx)}
         where ($1::uuid is null or r.customer_id = $1)
           and ($2::date is null or r.due_on >= $2) and ($3::date is null or r.due_on <= $3)
           and (not $4 or r.done_at is null) and (not $5 or r.assigned_to = $6)
@@ -159,7 +159,7 @@ export async function calendarEntries(ctx: Ctx, from: string, to: string): Promi
                            + coalesce((select sum(a.amount) from credit_applications a where a.invoice_id = i.id), 0)) as paid
            from invoices i join customers c on c.id = i.customer_id
           where i.voided_at is null and (i.due_at at time zone $3)::date between $1 and $2`,
-        [from, to, ZONE],
+        [from, to, zoneOf(ctx)],
       );
       for (const i of due.rows) entries.push({ date: i.date, kind: "invoice_due", title: `${i.number} due · ${i.customer}`, href: `/invoices/${i.id}`, done: i.paid });
     }

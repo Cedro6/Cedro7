@@ -1,3 +1,4 @@
+import { currencyOf, moneyText } from "../platform/locale";
 import { randomUUID } from "node:crypto";
 import { withTenant } from "@bos/db/runtime";
 import { getInvoice, PAYMENT_METHODS, recordPayment } from "../billing/invoices";
@@ -29,7 +30,6 @@ export type AssistantAction = {
 };
 
 const str = (value: unknown, max = 200) => (typeof value === "string" ? value.trim().slice(0, max) : "");
-const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const qtyText = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
 const bad = (message: string) => new ValidationError("assistant", message);
 
@@ -90,7 +90,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     apply: async (ctx, payload) => {
       const made = await createQuote(ctx, payload as Parameters<typeof createQuote>[1]);
       const order = await getOrder(ctx, made.id);
-      return { message: `Quote ${made.number} created${order ? ` for ${money(order.total)}` : ""}.`, link: `/sales/${made.id}` };
+      return { message: `Quote ${made.number} created${order ? ` for ${moneyText(order.total, currencyOf(ctx))}` : ""}.`, link: `/sales/${made.id}` };
     },
   },
   {
@@ -104,7 +104,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       if (order.status !== "quote") throw bad(`${order.number} is not a quote, so there is nothing to confirm.`);
       return {
         payload: { orderId: order.id },
-        summary: `Confirm quote ${order.number} for ${order.customerName} (${money(order.total)})${featureOn(ctx.features, "stock") ? " and reserve the stock for it" : ""}.`,
+        summary: `Confirm quote ${order.number} for ${order.customerName} (${moneyText(order.total, currencyOf(ctx))})${featureOn(ctx.features, "stock") ? " and reserve the stock for it" : ""}.`,
       };
     },
     apply: async (ctx, payload) => {
@@ -205,13 +205,13 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
         payload: { orderId: order.id, key: randomUUID() },
         summary: tracked
           ? `Ship ${qtyText(ready)} units on ${order.number} for ${order.customerName} and raise the invoice.${short > 0 ? ` ${qtyText(short)} units have no stock yet and stay on the order.` : ""}`
-          : `Complete ${order.number} for ${order.customerName} (${money(order.total)}) and raise the invoice.`,
+          : `Complete ${order.number} for ${order.customerName} (${moneyText(order.total, currencyOf(ctx))}) and raise the invoice.`,
       };
     },
     apply: async (ctx, payload) => {
       const id = String(payload.orderId);
       const done = await shipOrder(ctx, id, { idempotencyKey: String(payload.key) });
-      const billed = done.invoice ? ` Invoice ${done.invoice.number} raised for ${money(done.invoice.amount)}.` : "";
+      const billed = done.invoice ? ` Invoice ${done.invoice.number} raised for ${moneyText(done.invoice.amount, currencyOf(ctx))}.` : "";
       return { message: featureOn(ctx.features, "stock") ? `${done.shipmentNumber} shipped with ${qtyText(done.units)} units.${billed}` : `Order completed.${billed}`, link: `/sales/${id}` };
     },
   },
@@ -224,7 +224,7 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       const order = await getOrder(ctx, str(input.order_id, 36));
       if (!order) throw bad("I could not find that order.");
       if (order.status !== "quote" && order.status !== "confirmed") throw bad(`${order.number} is ${order.status.replace("_", " ")}, so it cannot be cancelled.`);
-      return { payload: { orderId: order.id }, summary: `Cancel ${order.status === "quote" ? "quote" : "order"} ${order.number} for ${order.customerName} (${money(order.total)}). This cannot be undone.` };
+      return { payload: { orderId: order.id }, summary: `Cancel ${order.status === "quote" ? "quote" : "order"} ${order.number} for ${order.customerName} (${moneyText(order.total, currencyOf(ctx))}). This cannot be undone.` };
     },
     apply: async (ctx, payload) => {
       const id = String(payload.orderId);
@@ -249,17 +249,17 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
       if (!(PAYMENT_METHODS as readonly string[]).includes(method)) throw bad(`Say how it was paid: ${PAYMENT_METHODS.join(", ")}.`);
       const amount = input.amount === undefined || input.amount === null ? invoice.balance : Math.round(Number(input.amount) * 100) / 100;
       if (!Number.isFinite(amount) || amount <= 0) throw bad("The amount must be more than zero.");
-      if (amount > invoice.balance) throw bad(`${invoice.number} only has ${money(invoice.balance)} left to pay.`);
+      if (amount > invoice.balance) throw bad(`${invoice.number} only has ${moneyText(invoice.balance, currencyOf(ctx))} left to pay.`);
       const reference = str(input.reference, 80);
       return {
         payload: { invoiceId: invoice.id, amount, method, ...(reference ? { reference } : {}), key: randomUUID() },
-        summary: `Record a ${money(amount)} payment by ${method.toLowerCase()} from ${invoice.customerName} against ${invoice.number}${reference ? `, reference "${reference}"` : ""}. ${amount >= invoice.balance ? "This pays it in full." : `${money(invoice.balance - amount)} will still be owed.`}`,
+        summary: `Record a ${moneyText(amount, currencyOf(ctx))} payment by ${method.toLowerCase()} from ${invoice.customerName} against ${invoice.number}${reference ? `, reference "${reference}"` : ""}. ${amount >= invoice.balance ? "This pays it in full." : `${moneyText(invoice.balance - amount, currencyOf(ctx))} will still be owed.`}`,
       };
     },
     apply: async (ctx, payload) => {
       const id = String(payload.invoiceId);
       const done = await recordPayment(ctx, id, { amount: Number(payload.amount), method: String(payload.method), reference: payload.reference ? String(payload.reference) : undefined, idempotencyKey: String(payload.key) });
-      return { message: `Payment recorded. ${done.balance > 0 ? `${money(done.balance)} still owed.` : "The invoice is paid in full."}`, link: `/invoices/${id}` };
+      return { message: `Payment recorded. ${done.balance > 0 ? `${moneyText(done.balance, currencyOf(ctx))} still owed.` : "The invoice is paid in full."}`, link: `/invoices/${id}` };
     },
   },
   {

@@ -1,3 +1,4 @@
+import { zoneOf } from "../platform/locale";
 import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
@@ -53,17 +54,16 @@ export type ExpenseInput = {
   paidMethod?: string;
 };
 
-const ZONE = "America/New_York";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 
-const SELECT = `
+const select = (ctx: Ctx) => `
   select e.id, e.supplier_id as "supplierId", s.name as "supplierName", e.purchase_order_id as "purchaseOrderId", po.number as "purchaseOrderNumber",
          e.category, e.description, e.reference, e.amount::float8 as amount,
          to_char(e.incurred_on, 'YYYY-MM-DD') as "incurredOn", to_char(e.due_on, 'YYYY-MM-DD') as "dueOn", to_char(e.paid_on, 'YYYY-MM-DD') as "paidOn",
          e.paid_method as "paidMethod", e.voided_at is not null as voided, e.void_reason as "voidReason",
          case when e.paid_on is null and e.voided_at is null and e.due_on is not null
-              then greatest(((now() at time zone '${ZONE}')::date - e.due_on), 0) else 0 end::int as "daysLate"
+              then greatest(((now() at time zone '${zoneOf(ctx)}')::date - e.due_on), 0) else 0 end::int as "daysLate"
     from expenses e left join suppliers s on s.id = e.supplier_id left join purchase_orders po on po.id = e.purchase_order_id`;
 
 function clean(input: ExpenseInput) {
@@ -164,13 +164,13 @@ export async function listExpenses(ctx: Ctx, filter: ExpenseFilter = "unpaid"): 
     voided: "e.voided_at is not null",
   }[filter];
   const order = filter === "unpaid" ? "e.due_on nulls last, e.incurred_on" : "e.incurred_on desc, e.created_at desc";
-  return withTenant(ctx.pool, ctx.orgId, async (tx) => (await tx.query<Expense>(`${SELECT} where ${where} order by ${order} limit 500`)).rows);
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => (await tx.query<Expense>(`${select(ctx)} where ${where} order by ${order} limit 500`)).rows);
 }
 
 export async function getExpense(ctx: Ctx, id: string): Promise<Expense | null> {
   requirePermission(ctx, "expense.read");
   if (!UUID.test(id)) return null;
-  return withTenant(ctx.pool, ctx.orgId, async (tx) => (await tx.query<Expense>(`${SELECT} where e.id = $1`, [id])).rows[0] ?? null);
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => (await tx.query<Expense>(`${select(ctx)} where e.id = $1`, [id])).rows[0] ?? null);
 }
 
 export type ExpenseSummary = {
@@ -189,7 +189,7 @@ export async function expenseSummary(ctx: Ctx): Promise<ExpenseSummary> {
   requirePermission(ctx, "expense.read");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const r = await tx.query<ExpenseSummary>(
-      `with t as (select (now() at time zone '${ZONE}')::date as today)
+      `with t as (select (now() at time zone '${zoneOf(ctx)}')::date as today)
        select coalesce(sum(amount) filter (where paid_on is null), 0)::float8 as owed,
               count(*) filter (where paid_on is null)::int as unpaid,
               coalesce(sum(amount) filter (where paid_on is null and due_on < t.today), 0)::float8 as overdue,

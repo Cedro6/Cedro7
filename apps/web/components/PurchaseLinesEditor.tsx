@@ -5,16 +5,18 @@ import { useState } from "react";
 type ProductOption = { id: string; sku: string; name: string; cost: number; available: number; onOrder: number };
 type Line = { key: number; productId: string; qty: string; unitCost: string };
 
-const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 /** The line items of a new purchase order. Posts repeated productId, qty and unitCost fields. */
 export function PurchaseLinesEditor({
   products,
   initial,
+  currency,
 }: {
+  currency: string;
   products: ProductOption[];
   initial: { productId: string; qty: number }[];
 }) {
+  const money = new Intl.NumberFormat("en-US", { style: "currency", currency });
   const byId = new Map(products.map((product) => [product.id, product]));
   const start: Line[] = initial.length
     ? initial.map((line, index) => ({

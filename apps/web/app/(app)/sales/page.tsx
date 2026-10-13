@@ -3,6 +3,7 @@ import { can, featureOn, listOrders, type OrderStatus } from "@bos/core";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { formatMoney, formatQty } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
+import { zone } from "../../../lib/locale";
 
 const filters: { key: string; label: string; status?: OrderStatus | "open" }[] = [
   { key: "all", label: "All" },
@@ -11,7 +12,7 @@ const filters: { key: string; label: string; status?: OrderStatus | "open" }[] =
   { key: "shipped", label: "Shipped", status: "shipped" },
 ];
 
-const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+const day = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: zone() }).format(d) };
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const { ctx } = await requireSession();

@@ -8,15 +8,16 @@ import { PrintButton } from "../../../../components/PrintButton";
 import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 import { credit, pay, useCredit, voidIt } from "../actions";
+import { zone } from "../../../../lib/locale";
 
-const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
-const when = new Intl.DateTimeFormat("en-US", {
+const day = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: zone() }).format(d) };
+const when = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
-  timeZone: "America/New_York",
-});
+  timeZone: zone(),
+}).format(d) };
 
 export default async function InvoicePage({
   params,

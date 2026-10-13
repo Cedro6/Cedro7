@@ -4,6 +4,7 @@ import { can, listInvoices, type InvoiceState } from "@bos/core";
 import { InvoiceBadge } from "../../../components/InvoiceBadge";
 import { formatMoney } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
+import { zone } from "../../../lib/locale";
 
 const filters: { key: string; label: string; state?: InvoiceState | "open" }[] = [
   { key: "all", label: "All" },
@@ -12,7 +13,7 @@ const filters: { key: string; label: string; state?: InvoiceState | "open" }[] =
   { key: "paid", label: "Paid", state: "paid" },
 ];
 
-const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+const day = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: zone() }).format(d) };
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const { ctx } = await requireSession();

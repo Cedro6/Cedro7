@@ -66,6 +66,7 @@ export default async function NewPurchaseOrderPage({
         <section className="glass panel">
           <h2 className="title">Items</h2>
           <PurchaseLinesEditor
+            currency={ctx.currency ?? "USD"}
             initial={suggested}
             products={products.map((product) => ({
               id: product.id,

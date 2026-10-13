@@ -8,8 +8,9 @@ import { formatQty } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
 import { ship } from "../sales/actions";
 import { putAway, saveCount } from "./actions";
+import { zone } from "../../../lib/locale";
 
-const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+const day = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: zone() }).format(d) };
 
 export default async function WarehousePage({
   searchParams,

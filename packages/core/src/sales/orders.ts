@@ -157,8 +157,9 @@ export async function createQuote(
       throw new ValidationError("lines", "A discount must be between 0 and 100 percent.");
     }
   }
-  const taxPercent = input.taxRatePercent ?? 0;
-  if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent >= 100) {
+  // Left out, the tax is the company's usual rate, or nothing for a customer marked as not charged tax.
+  const givenTax = input.taxRatePercent;
+  if (givenTax !== undefined && (!Number.isFinite(givenTax) || givenTax < 0 || givenTax >= 100)) {
     throw new ValidationError("taxRatePercent", "Tax must be between 0 and 100 percent.");
   }
   const notes = input.notes?.trim() || null;
@@ -167,6 +168,10 @@ export async function createQuote(
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const customer = await tx.query("select 1 from customers where id = $1 and status = 'active'", [input.customerId]);
     if (customer.rowCount === 0) throw new ValidationError("customerId", "Choose a customer.");
+    const taxPercent = givenTax ?? (await tx.query<{ tax: number }>(
+        "select case when c.tax_exempt then 0 else o.default_tax_percent end::float8 as tax from customers c, organizations o where c.id = $1 and o.id = $2",
+        [input.customerId, ctx.orgId],
+      )).rows[0]?.tax ?? 0;
     const productIds = [...new Set(input.lines.map((line) => line.productId))];
     // The customer's own prices: a price list's special price or percentage, else the product's price.
     const price = await customerPricesInTx(tx, input.customerId, productIds);

@@ -6,11 +6,10 @@ import {
 } from "@bos/core";
 import { formatMoney, formatQty } from "../../lib/format";
 import { AreaChart, BarList, Sparkline } from "./charts";
+import { todayHere, whole } from "../../lib/locale";
 
-const ZONE = "America/New_York";
-const whole = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const shortDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-const todayIso = () => new Date().toLocaleDateString("en-CA", { timeZone: ZONE });
+const todayIso = () => todayHere();
 const ago = (date: Date) => {
   const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
   return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;

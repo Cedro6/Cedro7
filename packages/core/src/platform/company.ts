@@ -1,6 +1,7 @@
 import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "./context";
 import { ValidationError } from "./errors";
+import { isCurrency, isTimeZone, type Currency } from "./locale";
 import { requirePermission } from "./permissions";
 
 export type CompanyProfile = {
@@ -76,4 +77,44 @@ export async function setCompanyLogo(ctx: Ctx, dataUrl: string | null): Promise<
     if (!LOGO.test(dataUrl)) throw new ValidationError("logo", "Use a PNG, JPEG or WebP image.");
   }
   await withTenant(ctx.pool, ctx.orgId, (tx) => tx.query("update organizations set logo = $2, updated_at = now() where id = $1", [ctx.orgId, dataUrl]));
+}
+
+export type Region = {
+  timeZone: string;
+  currency: Currency;
+  /** The tax charged on a new order or invoice unless it says otherwise, as a percentage. */
+  defaultTaxPercent: number;
+};
+
+export async function getRegion(ctx: Ctx): Promise<Region> {
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const r = await tx.query<{ tz: string; cur: string; tax: number }>(
+      "select timezone as tz, trim(base_currency) as cur, default_tax_percent::float8 as tax from organizations where id = $1",
+      [ctx.orgId],
+    );
+    const row = r.rows[0];
+    if (!row) throw new Error("Company not found");
+    return { timeZone: isTimeZone(row.tz) ? row.tz : "America/New_York", currency: isCurrency(row.cur) ? row.cur : "USD", defaultTaxPercent: row.tax };
+  });
+}
+
+/**
+ * Sets the company's time zone, currency and usual tax rate. Changing the currency only changes the
+ * symbol shown: amounts already recorded are not converted.
+ */
+export async function updateRegion(ctx: Ctx, input: { timeZone: string; currency: string; defaultTaxPercent: number }): Promise<void> {
+  requirePermission(ctx, "settings.manage");
+  if (!isTimeZone(input.timeZone)) throw new ValidationError("timeZone", "Choose a time zone from the list.");
+  if (!isCurrency(input.currency)) throw new ValidationError("currency", "Choose a currency from the list.");
+  const tax = input.defaultTaxPercent;
+  if (!Number.isFinite(tax) || tax < 0 || tax >= 100) throw new ValidationError("defaultTaxPercent", "Tax must be between 0 and 100 percent.");
+  if (Math.round(tax * 1000) / 1000 !== tax) throw new ValidationError("defaultTaxPercent", "Tax can have at most 3 decimal places.");
+  await withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    await tx.query("update organizations set timezone = $2, base_currency = $3, default_tax_percent = $4, updated_at = now() where id = $1", [ctx.orgId, input.timeZone, input.currency, tax]);
+    await tx.query(
+      `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, after)
+       values ($1, 'user', $2, 'company.region_updated', 'organization', $1, $3)`,
+      [ctx.orgId, ctx.userId, JSON.stringify(input)],
+    );
+  });
 }

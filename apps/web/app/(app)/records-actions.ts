@@ -27,7 +27,7 @@ async function run(back: string, notice: string, change: () => Promise<void>, on
 export async function editCustomer(form: FormData): Promise<void> {
   const { ctx } = await requireSession();
   const id = text(form, "id");
-  await run(`/customers/${id}/edit`, "Customer saved.", () => updateCustomer(ctx, id, { name: text(form, "name"), paymentTerms: text(form, "paymentTerms"), billingAddress: text(form, "billingAddress"), shippingAddress: text(form, "shippingAddress") }), `/customers/${id}`);
+  await run(`/customers/${id}/edit`, "Customer saved.", () => updateCustomer(ctx, id, { name: text(form, "name"), paymentTerms: text(form, "paymentTerms"), billingAddress: text(form, "billingAddress"), shippingAddress: text(form, "shippingAddress"), taxExempt: form.get("taxExempt") === "1" }), `/customers/${id}`);
 }
 
 export async function archiveCustomer(form: FormData): Promise<void> {

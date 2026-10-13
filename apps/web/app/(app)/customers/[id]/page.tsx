@@ -7,6 +7,7 @@ import { Avatar } from "../../../../components/Avatar";
 import { formatMoney } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 import { assignPriceList } from "../../sales/actions";
+import { todayHere } from "../../../../lib/locale";
 
 export default async function CustomerPage({
   params,
@@ -26,7 +27,7 @@ export default async function CustomerPage({
   const tracked = featureOn(ctx.features, "stock");
   const calendar = featureOn(ctx.features, "calendar");
   const [reminders, team] = calendar ? await Promise.all([listReminders(ctx, { customerId: id }), listTeam(ctx)]) : [[], []];
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const today = todayHere();
   const statement = can(ctx, "sales_order.read") ? await customerStatement(ctx, id) : null;
   const since = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
     customer.createdAt,

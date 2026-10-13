@@ -1,15 +1,15 @@
 import { redirect } from "next/navigation";
-import { BUSINESS_TYPES, can, FEATURES, getCompanyProfile, getSettings, listMembers, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
+import { BUSINESS_TYPES, can, FEATURES, CURRENCIES, getCompanyProfile, getRegion, getSettings, timeZones, listMembers, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
 import { TeamPanel } from "../../../components/TeamPanel";
 import { BUILT, FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
-import { chooseType, saveCompany, saveLogo, switchFeature } from "./actions";
+import { chooseType, saveCompany, saveLogo, saveRegion, switchFeature } from "./actions";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { ctx, membership } = await requireSession();
   if (!can(ctx, "settings.manage")) redirect("/");
   const { error, notice } = await searchParams;
-  const [settings, company, members] = await Promise.all([getSettings(ctx), getCompanyProfile(ctx), listMembers(ctx)]);
+  const [settings, company, members, region] = await Promise.all([getSettings(ctx), getCompanyProfile(ctx), listMembers(ctx), getRegion(ctx)]);
   const starting = TYPE_FEATURES[settings.businessType];
   const customized = FEATURES.some((id) => settings.features[id] !== starting.includes(id));
   const onCount = FEATURES.filter((id) => settings.features[id]).length;
@@ -91,6 +91,35 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             )}
           </div>
         </div>
+      </section>
+
+      <section className="glass panel">
+        <h2 className="title">Region and tax</h2>
+        <p className="muted">These decide what counts as today, how amounts are written, and the tax on a new order or invoice.</p>
+        <form action={saveRegion} className="stack">
+          <div className="form-row">
+            <label className="field grow">
+              <span>Time zone</span>
+              <select name="timeZone" defaultValue={region.timeZone}>
+                {timeZones().map((z) => <option key={z} value={z}>{z.replace(/_/g, " ")}</option>)}
+              </select>
+            </label>
+            <label className="field grow">
+              <span>Currency</span>
+              <select name="currency" defaultValue={region.currency}>
+                {CURRENCIES.map((c) => <option key={c} value={c}>{c} ({(0).toLocaleString("en-US", { style: "currency", currency: c, maximumFractionDigits: 0 }).replace(/[\d\s]/g, "")})</option>)}
+              </select>
+            </label>
+            <label className="field tax-field">
+              <span>Usual tax %</span>
+              <input name="defaultTaxPercent" type="number" min="0" max="99" step="any" inputMode="decimal" defaultValue={region.defaultTaxPercent} />
+            </label>
+          </div>
+          <p className="muted">Changing the currency changes the symbol only. Amounts already entered are not converted. A customer can be marked as not charged tax on their own page.</p>
+          <div className="actions">
+            <button type="submit" className="btn btn-primary">Save region and tax</button>
+          </div>
+        </form>
       </section>
 
       <section className="glass panel">

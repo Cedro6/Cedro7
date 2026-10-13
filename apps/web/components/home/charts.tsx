@@ -1,3 +1,4 @@
+import { symbol } from "../../lib/locale";
 /** Small chart pieces for the Home cards. All plain SVG and CSS, drawn on the server. */
 
 export function smoothPath(points: [number, number][]): string {
@@ -17,7 +18,7 @@ function niceMax(value: number): number {
   for (const step of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (value <= step * power) return step * power;
   return 10 * power;
 }
-const shortMoney = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `$${Math.round(n)}`);
+const shortMoney = (n: number) => (n >= 1000 ? `${symbol()}${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `${symbol()}${Math.round(n)}`);
 const shortDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** A smooth area chart of a daily series, plotted to one scale with labelled gridlines. */

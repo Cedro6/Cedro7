@@ -4,8 +4,8 @@ import { can, EXPENSE_FILTERS, expenseSummary, listExpenses, type ExpenseFilter 
 import { billDate, BillStatus } from "../../../components/BillStatus";
 import { formatMoney } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
+import { whole } from "../../../lib/locale";
 
-const whole = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const LABEL: Record<ExpenseFilter, string> = { unpaid: "To pay", paid: "Paid", all: "All", voided: "Voided" };
 export default async function BillsPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const { ctx } = await requireSession();

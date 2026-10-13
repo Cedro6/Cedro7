@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { FEATURES, ForbiddenError, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, isBusinessType, isFeature, setBusinessType, setFeature, StateError, TYPE_FEATURES, ValidationError } from "@bos/core";
+import { FEATURES, ForbiddenError, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, updateRegion, isBusinessType, isFeature, setBusinessType, setFeature, StateError, TYPE_FEATURES, ValidationError } from "@bos/core";
 import { FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
 
@@ -89,6 +89,20 @@ export async function saveLogo(form: FormData): Promise<void> {
       await setCompanyLogo(ctx, `data:${file.type};base64,${data}`);
       query = `notice=${encodeURIComponent("Logo saved. It now prints on your invoices.")}`;
     }
+  } catch (error) {
+    query = `error=${encodeURIComponent(friendly(error))}`;
+  }
+  revalidatePath("/", "layout");
+  redirect(`/settings?${query}`);
+}
+
+export async function saveRegion(form: FormData): Promise<void> {
+  const { ctx } = await requireSession();
+  let query: string;
+  try {
+    const tax = field(form, "defaultTaxPercent").trim();
+    await updateRegion(ctx, { timeZone: field(form, "timeZone"), currency: field(form, "currency"), defaultTaxPercent: tax === "" ? 0 : Number(tax) });
+    query = `notice=${encodeURIComponent("Region and tax saved.")}`;
   } catch (error) {
     query = `error=${encodeURIComponent(friendly(error))}`;
   }

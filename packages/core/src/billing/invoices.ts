@@ -348,8 +348,9 @@ export async function createInvoice(
       throw new ValidationError("lines", "Choose a product from the list.");
     }
   }
-  const taxPercent = input.taxRatePercent ?? 0;
-  if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent >= 100) {
+  // Left out, the tax is the company's usual rate, or nothing for a customer marked as not charged tax.
+  const givenTax = input.taxRatePercent;
+  if (givenTax !== undefined && (!Number.isFinite(givenTax) || givenTax < 0 || givenTax >= 100)) {
     throw new ValidationError("taxRatePercent", "Tax must be between 0 and 100 percent.");
   }
   if (input.dueInDays !== undefined && (!Number.isInteger(input.dueInDays) || input.dueInDays < 0 || input.dueInDays > 365)) {
@@ -364,6 +365,10 @@ export async function createInvoice(
     );
     if (!customer.rows[0]) throw new ValidationError("customerId", "Choose a customer.");
     const terms = customer.rows[0].payment_terms;
+    const taxPercent = givenTax ?? (await tx.query<{ tax: number }>(
+        "select case when c.tax_exempt then 0 else o.default_tax_percent end::float8 as tax from customers c, organizations o where c.id = $1 and o.id = $2",
+        [input.customerId, ctx.orgId],
+      )).rows[0]?.tax ?? 0;
     const lines = input.lines.map((line) => ({ ...line, amount: cents(line.qty * line.unitPrice) }));
     const subtotal = cents(lines.reduce((sum, line) => sum + line.amount, 0));
     const tax = cents((subtotal * taxPercent) / 100);

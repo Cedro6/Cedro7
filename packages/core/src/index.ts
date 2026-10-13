@@ -182,7 +182,8 @@ export {
   type Reminder,
   type TeamMember,
 } from "./crm/reminders";
-export { getCompanyProfile, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, type CompanyProfile } from "./platform/company";
+export { getCompanyProfile, getRegion, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, updateRegion, type CompanyProfile, type Region } from "./platform/company";
+export { CURRENCIES, currencyOf, DEFAULT_CURRENCY, DEFAULT_TIME_ZONE, isCurrency, isTimeZone, moneyText, timeZones, todayIn, zoneOf, type Currency } from "./platform/locale";
 export { getPackingSlip, type PackingSlip } from "./sales/orders";
 export {
   changeOwnPassword,

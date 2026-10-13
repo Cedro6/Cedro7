@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { can, listCustomers } from "@bos/core";
+import { can, getRegion, listCustomers } from "@bos/core";
 import { requireSession } from "../../../../lib/session";
 import { saveInvoice } from "../actions";
 
@@ -10,6 +10,7 @@ export default async function NewInvoicePage({
   searchParams: Promise<{ error?: string; customer?: string }>;
 }) {
   const { ctx } = await requireSession();
+  const region = await getRegion(ctx);
   if (!can(ctx, "invoice.write")) redirect("/invoices");
   const { error, customer } = await searchParams;
   const customers = await listCustomers(ctx);
@@ -41,7 +42,7 @@ export default async function NewInvoicePage({
             </label>
             <label className="field tax-field">
               <span>Tax %</span>
-              <input name="taxRatePercent" type="number" min="0" max="99" step="any" defaultValue="0" inputMode="decimal" />
+              <input name="taxRatePercent" type="number" min="0" max="99" step="any" inputMode="decimal" placeholder={`Usual (${region.defaultTaxPercent}%)`} title="Leave blank for your usual rate, or no tax for a customer marked as not charged tax" />
             </label>
             <label className="field tax-field">
               <span>Due in days</span>

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentMembership, sessionVersion, type Ctx, type Membership } from "@bos/core";
+import { setLocale } from "./locale";
 import { pool } from "./pool";
 
 const COOKIE = "bos_session";
@@ -78,5 +79,6 @@ export async function requireSession(): Promise<Session> {
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) redirect("/sign-in");
   const [membership, current] = await Promise.all([currentMembership(pool, orgId, userId).catch(() => null), sessionVersion(pool, userId).catch(() => -1)]);
   if (!membership || String(current) !== version) redirect("/sign-in");
-  return { ctx: { pool, orgId, userId, role: membership.role, features: membership.features }, membership };
+  setLocale(membership.timeZone, membership.currency);
+  return { ctx: { pool, orgId, userId, role: membership.role, features: membership.features, timeZone: membership.timeZone, currency: membership.currency }, membership };
 }

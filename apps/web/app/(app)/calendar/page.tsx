@@ -2,8 +2,8 @@ import Link from "next/link";
 import { calendarEntries, featureOn, listReminders, listTeam, type CalendarEntry } from "@bos/core";
 import { ReminderList } from "../../../components/ReminderList";
 import { requireSession } from "../../../lib/session";
+import { todayHere } from "../../../lib/locale";
 
-const ZONE = "America/New_York";
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const utc = (value: string) => new Date(`${value}T12:00:00Z`);
 const addDays = (value: string, n: number) => iso(new Date(utc(value).getTime() + n * 86_400_000));
@@ -21,7 +21,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     );
   }
   const params = await searchParams;
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: ZONE });
+  const today = todayHere();
   const day = params.day && /^\d{4}-\d{2}-\d{2}$/.test(params.day) && !Number.isNaN(utc(params.day).getTime()) ? params.day : null;
   const month = params.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(params.month) ? params.month : (day ?? today).slice(0, 7);
   const first = `${month}-01`;
