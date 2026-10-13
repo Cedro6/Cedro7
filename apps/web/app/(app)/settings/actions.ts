@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ForbiddenError, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, isBusinessType, isFeature, setBusinessType, setFeature, StateError, TYPE_FEATURES, ValidationError } from "@bos/core";
+import { FEATURES, ForbiddenError, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, isBusinessType, isFeature, setBusinessType, setFeature, StateError, TYPE_FEATURES, ValidationError } from "@bos/core";
 import { FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
 
@@ -19,7 +19,7 @@ export async function chooseType(formData: FormData): Promise<void> {
   try {
     await setBusinessType(ctx, type);
     query = isBusinessType(type)
-      ? `notice=${encodeURIComponent(`Set up for ${TYPE_TEXT[type].name.toLowerCase()}. ${TYPE_FEATURES[type].length} of 11 tools are on.`)}`
+      ? `notice=${encodeURIComponent(`Set up for ${TYPE_TEXT[type].name.toLowerCase()}. ${TYPE_FEATURES[type].length} of ${FEATURES.length} tools are on.`)}`
       : "";
   } catch (error) {
     query = `error=${encodeURIComponent(friendly(error))}`;

@@ -231,3 +231,7 @@ export {
   IMPORT_COLUMNS, IMPORT_KINDS, IMPORT_MAX_BYTES, IMPORT_MAX_ROWS, importTemplate, isImportKind, parseCsv, planImport, runImport,
   type ImportKind, type ImportPlan, type ImportRow,
 } from "./platform/importing";
+export {
+  createExpense, EXPENSE_CATEGORIES, EXPENSE_FILTERS, expenseSummary, getExpense, isExpenseCategory, listExpenses, payExpense, STOCK_CATEGORY, voidExpense,
+  type Expense, type ExpenseCategory, type ExpenseFilter, type ExpenseInput, type ExpenseSummary,
+} from "./billing/expenses";

@@ -1,6 +1,6 @@
 import { compareRange, isAnalysisPreset, isCompareMode, resolveRange, today, type AnalysisPreset, type CompareMode, type DateRange } from "@bos/core";
 
-export const REPORT_TABS = ["overview", "products", "customers", "money", "stock", "purchasing"] as const;
+export const REPORT_TABS = ["overview", "products", "customers", "money", "profit", "stock", "purchasing"] as const;
 export type ReportTab = (typeof REPORT_TABS)[number];
 
 export const PRESET_LABEL: Record<AnalysisPreset, string> = {

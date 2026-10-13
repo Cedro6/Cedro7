@@ -24,6 +24,7 @@ export const ProductsIcon = () => <Icon><path d="M3 6l7-3 7 3v8l-7 3-7-3zM3 6l7 
 export const SalesIcon = () => <Icon><path d="M5 3h7l4 4v10H5zM8 10h5M8 13h5" /></Icon>;
 export const InvoicesIcon = () => <Icon><path d="M5 2h10v16l-2.5-1.5L10 18l-2.5-1.5L5 18zM8 7h4M8 10h4" /></Icon>;
 export const PurchasingIcon = () => <Icon><path d="M2 5h10v9H2zM12 8h4l2 3v3h-6z" /></Icon>;
+export const BillsIcon = () => <Icon><path d="M3 5h14v10H3zM3 8.5h14M6 12h3" /></Icon>;
 export const CalendarIcon = () => <Icon><path d="M3 5h14v12H3zM3 9h14M7 3v4M13 3v4" /></Icon>;
 export const WarehouseIcon = () => <Icon><path d="M2 8l8-5 8 5v9H2zM6 17v-6h8v6M6 14h8" /></Icon>;
 export const AssistantIcon = () => <Icon><path d="M10 2l1.8 4.7L16.5 8.5l-4.7 1.8L10 15l-1.8-4.7L3.5 8.5l4.7-1.8zM16 14v4M14 16h4" /></Icon>;

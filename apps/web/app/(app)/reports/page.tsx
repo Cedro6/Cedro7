@@ -17,7 +17,7 @@ function Delta({ pair, good = "up" }: { pair: Pair; good?: "up" | "down" | "neit
   if (Math.abs(diff) < 0.005) return <span className="delta delta-flat">No change</span>;
   const up = diff > 0;
   const tone = good === "neither" ? "flat" : (good === "up") === up ? "good" : "bad";
-  const text = pair.was === 0 ? "New" : `${Math.abs(Math.round((diff / Math.abs(pair.was)) * 100))}%`;
+  const text = pair.was === 0 ? (up ? "New" : "From zero") : `${Math.abs(Math.round((diff / Math.abs(pair.was)) * 100))}%`;
   return (
     <span className={`delta delta-${tone}`}>
       <span aria-hidden="true">{up ? "▲" : "▼"}</span> <span className="sr-only">{up ? "Up" : "Down"}</span> {text}
@@ -253,6 +253,48 @@ function Money({ data, view }: { data: Analysis; view: ReportView }) {
   );
 }
 
+function Profit({ data, costs, view }: { data: Analysis; costs: NonNullable<Analysis["costs"]>; view: ReportView }) {
+  const margin = data.sales.margin;
+  return (
+    <>
+      <div className="tiles">
+        {costs.profit && <Tile label="Profit" pair={costs.profit} format={whole} note="Margin less running costs" />}
+        <Tile label="Sales" pair={data.sales.revenue} format={whole} />
+        {margin && <Tile label="Margin on goods sold" pair={margin} format={whole} note="Sales less cost of goods" />}
+        <Tile label="Running costs" pair={costs.running} format={whole} good="down" note="Everything but stock purchases" />
+        <Tile label="Stock purchases" pair={costs.stockPurchases} format={whole} good="neither" note="Not taken off profit again" />
+        <Link href="/bills" className="glass panel tile">
+          <h2 className="label">You owe today</h2>
+          <div className="numeral">{whole(costs.owed)}</div>
+          <div className="muted">{costs.overdue > 0 ? `${whole(costs.overdue)} overdue` : "Nothing overdue"}</div>
+        </Link>
+      </div>
+      {costs.profit && margin && (
+        <section className="glass panel">
+          <h2 className="title">How profit is worked out</h2>
+          <div className="table-wrap">
+            <table className="compact rpt-table rpt-sum">
+              <tbody>
+                <tr><th scope="row">Sales, before tax</th><td className="num">{whole(data.sales.revenue.now)}</td></tr>
+                <tr><th scope="row">Less cost of the goods sold</th><td className="num">− {whole(data.sales.revenue.now - margin.now)}</td></tr>
+                <tr><th scope="row">Margin</th><td className="num">{whole(margin.now)}</td></tr>
+                <tr><th scope="row">Less running costs</th><td className="num">− {whole(costs.running.now)}</td></tr>
+                <tr className="rpt-total"><th scope="row">Profit</th><td className="num">{whole(costs.profit.now)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="muted footnote">Cost of goods uses each product&apos;s current cost. Costs count by the date of the bill or purchase, paid or not. This is a working figure, not a tax return.</p>
+        </section>
+      )}
+      <PairTable
+        view={view} table="costs" title="Costs by category" first="Category"
+        rows={costs.categories.map((c) => ({ key: c.name, label: c.name, values: [c.amount] }))}
+        columns={[{ name: "Amount", format: whole, good: "down" }]}
+      />
+    </>
+  );
+}
+
 function Stock({ stock, view }: { stock: NonNullable<Analysis["stock"]>; view: ReportView }) {
   return (
     <>
@@ -347,6 +389,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     { key: "products", label: "Products" },
     ...(can(ctx, "customer.read") ? [{ key: "customers" as const, label: "Customers" }] : []),
     { key: "money", label: "Money" },
+    ...(data.costs ? [{ key: "profit" as const, label: "Profit and costs" }] : []),
     ...(data.stock ? [{ key: "stock" as const, label: "Stock" }] : []),
     ...(data.purchasing ? [{ key: "purchasing" as const, label: "Purchasing" }] : []),
   ];
@@ -405,6 +448,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         />
       )}
       {view.tab === "money" && <Money data={data} view={view} />}
+      {view.tab === "profit" && data.costs && <Profit data={data} costs={data.costs} view={view} />}
       {view.tab === "stock" && data.stock && <Stock stock={data.stock} view={view} />}
       {view.tab === "purchasing" && data.purchasing && <Purchasing data={data.purchasing} view={view} />}
     </>
