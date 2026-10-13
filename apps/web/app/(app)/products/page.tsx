@@ -44,9 +44,12 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           {lowOnly && <input type="hidden" name="low" value="1" />}
         </form>
         {can(ctx, "product.write") && (
+          <>
+            <Link href="/import?kind=products" className="btn btn-glass">Import</Link>
           <Link href="/products/new" className="btn btn-primary">
             New product
           </Link>
+          </>
         )}
       </header>
       {notice && <p className="notice">{notice}</p>}

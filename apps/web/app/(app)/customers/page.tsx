@@ -41,9 +41,12 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           <input id="q" name="q" type="search" placeholder="Search customers" defaultValue={q} />
         </form>
         {can(ctx, "customer.write") && (
+          <>
+            <Link href="/import?kind=customers" className="btn btn-glass">Import</Link>
           <Link href="/customers/new" className="btn btn-primary">
             New customer
           </Link>
+          </>
         )}
       </header>
       {notice && <p className="notice">{notice}</p>}
