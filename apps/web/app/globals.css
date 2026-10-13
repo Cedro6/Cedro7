@@ -2155,3 +2155,8 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 @media (max-width: 640px) {
   .rpt-controls, .rpt-controls .field, .rpt-controls .field select, .rpt-controls .field input[type="date"] { width: 100%; }
 }
+
+/* Import from a spreadsheet */
+.imp-kinds { margin: 12px 0; }
+.imp-file input[type="file"] { height: auto; padding: 12px 14px; max-width: 100%; color: var(--ink); }
+.imp-file input[type="file"]::file-selector-button { margin-right: 12px; padding: 8px 14px; border: 0; border-radius: 999px; background: rgba(var(--w), 0.18); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
