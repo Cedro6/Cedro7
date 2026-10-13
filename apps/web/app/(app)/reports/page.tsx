@@ -47,7 +47,9 @@ function Download({ view, table }: { view: ReportView; table: string }) {
 }
 
 /** A table whose money columns come in pairs: these dates, the comparison dates and the change. */
-function PairTable({ view, table, title, note, first, rows, columns }: {
+function PairTable({ view, table, title, note, first, rows, columns, graph }: {
+  /** Draws the biggest rows as bars above the table, measured by this column. */
+  graph?: number;
   view: ReportView; table: string; title: string; note?: string; first: string;
   rows: { key: string; label: React.ReactNode; values: Pair[] }[];
   columns: { name: string; format: (n: number) => string; good?: "up" | "down" | "neither" }[];
@@ -63,6 +65,15 @@ function PairTable({ view, table, title, note, first, rows, columns }: {
         </div>
         {rows.length > 0 && <Download view={view} table={table} />}
       </div>
+      {graph !== undefined && rows.some((r) => r.values[graph]!.now > 0) && (
+        <div className="rpt-graph">
+          <p className="muted rpt-graph-note">{columns[graph]!.name} in these dates{rows.length > 10 ? ", top 10" : ""}</p>
+          <Bars
+            items={[...rows].sort((a, b) => b.values[graph]!.now - a.values[graph]!.now).slice(0, 10).filter((r) => r.values[graph]!.now > 0)
+              .map((r) => ({ key: r.key, label: r.label, value: r.values[graph]!.now, text: columns[graph]!.format(r.values[graph]!.now) }))}
+          />
+        </div>
+      )}
       {rows.length === 0 ? (
         <p className="muted rpt-none">Nothing in these dates.</p>
       ) : (
@@ -111,7 +122,7 @@ function PairTable({ view, table, title, note, first, rows, columns }: {
   );
 }
 
-function Bars({ items, tone = "accent" }: { items: { key: string; label: string; value: number; text: string; tone?: "accent" | "warn" | "bad" }[]; tone?: "accent" | "warn" | "bad" }) {
+function Bars({ items, tone = "accent" }: { items: { key: string; label: React.ReactNode; value: number; text: string; tone?: "accent" | "warn" | "bad" }[]; tone?: "accent" | "warn" | "bad" }) {
   const max = Math.max(...items.map((i) => i.value), 0);
   return (
     <div className="rep-bars">
@@ -125,6 +136,36 @@ function Bars({ items, tone = "accent" }: { items: { key: string; label: string;
         </div>
       ))}
     </div>
+  );
+}
+
+/** A count over the chosen dates, step by step, against the dates compared. */
+function Trend({ data, steps, title, total, format, note }: { data: Analysis; steps: Analysis["trend"]; title: string; total: Pair; format: (n: number) => string; note?: string }) {
+  const tick = (iso: string) =>
+    new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", data.bucket === "month" ? { month: "short", year: "2-digit", timeZone: "UTC" } : { month: "short", day: "numeric", timeZone: "UTC" });
+  const step = data.bucket === "day" ? "day by day" : data.bucket === "week" ? "week by week" : "month by month";
+  return (
+    <section className="glass panel">
+      <div className="panel-head">
+        <div>
+          <h2 className="title">{title}, {step}</h2>
+          <p className="muted rpt-legend">
+            <span><i className="rpt-key" /> {rangeText(data.range)}: {format(total.now)}</span>
+            {data.compare && total.was !== null && <span><i className="rpt-key rpt-key-was" /> {rangeText(data.compare)}: {format(total.was)}</span>}
+          </p>
+          {note && <p className="muted">{note}</p>}
+        </div>
+      </div>
+      {total.now === 0 && (total.was ?? 0) === 0 ? (
+        <p className="muted rpt-none">None in these dates. Try a longer period.</p>
+      ) : (
+        <CompareChart
+          steps={steps} tick={tick} format={(n) => format(Math.round(n))}
+          animate={`${title}${data.range.from}${data.range.to}${data.mode}`}
+          label={`${title} ${step}: ${format(total.now)} in these dates${total.was !== null ? `, ${format(total.was)} in the dates compared` : ""}`}
+        />
+      )}
+    </section>
   );
 }
 
@@ -169,12 +210,12 @@ function Overview({ data, view }: { data: Analysis; view: ReportView }) {
         )}
       </section>
       <PairTable
-        view={view} table="categories" title="Sales by category" first="Category"
+        view={view} table="categories" title="Sales by category" first="Category" graph={0}
         rows={data.categories.map((c) => ({ key: c.name, label: c.name, values: [c.revenue] }))}
         columns={[{ name: "Sales", format: whole }]}
       />
       <PairTable
-        view={view} table="people" title="Sales by person" note="By who owns the order." first="Person"
+        view={view} table="people" title="Sales by person" note="By who owns the order." first="Person" graph={1}
         rows={data.people.map((p) => ({ key: p.id ?? "none", label: p.name, values: [p.orders, p.revenue] }))}
         columns={[{ name: "Orders", format: count }, { name: "Sales", format: whole }]}
       />
@@ -290,7 +331,7 @@ function Profit({ data, costs, view }: { data: Analysis; costs: NonNullable<Anal
         </section>
       )}
       <PairTable
-        view={view} table="costs" title="Costs by category" first="Category"
+        view={view} table="costs" title="Costs by category" first="Category" graph={0}
         rows={costs.categories.map((c) => ({ key: c.name, label: c.name, values: [c.amount] }))}
         columns={[{ name: "Amount", format: whole, good: "down" }]}
       />
@@ -367,7 +408,7 @@ function Purchasing({ data, view }: { data: NonNullable<Analysis["purchasing"]>;
         </Link>
       </div>
       <PairTable
-        view={view} table="suppliers" title="Ordered by supplier" first="Supplier"
+        view={view} table="suppliers" title="Ordered by supplier" first="Supplier" graph={1}
         rows={data.suppliers.map((s) => ({ key: s.id, label: s.name, values: [s.orders, s.ordered] }))}
         columns={[{ name: "Orders", format: count, good: "neither" }, { name: "Ordered", format: whole, good: "neither" }]}
       />
@@ -427,7 +468,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
       {view.tab === "overview" && <Overview data={data} view={view} />}
       {view.tab === "products" && (
+        <Trend data={data} steps={data.unitsTrend} title="Units sold" total={data.sales.units} format={formatQty} />
+      )}
+      {view.tab === "products" && (
         <PairTable
+          graph={0}
           view={view} table="products" title="Every product sold" first="Product"
           note={`Sales are orders confirmed, before tax.${showMargin ? " Margin is sales less what each product cost on the day its order was confirmed." : ""}`}
           rows={data.products.map((p) => ({
@@ -439,7 +484,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         />
       )}
       {view.tab === "customers" && (
+        <Trend data={data} steps={data.newCustomerTrend} title="New customers" total={data.sales.newCustomers} format={count} note="Customers whose first ever order is in each step." />
+      )}
+      {view.tab === "customers" && (
         <PairTable
+          graph={1}
           view={view} table="customers" title="Every customer who bought" first="Customer"
           note="New means their first ever order is in these dates."
           rows={data.customers.map((c) => ({
