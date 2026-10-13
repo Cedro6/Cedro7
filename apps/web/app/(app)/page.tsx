@@ -6,7 +6,7 @@ import { Widget, WIDGET_INFO } from "../../components/home/widgets";
 import { assistantConfigured } from "../../lib/assistant";
 import { requireSession } from "../../lib/session";
 import { changeHome } from "./home-actions";
-import { zone } from "../../lib/locale";
+import { zone, todayHere } from "../../lib/locale";
 
 const greeting = (hour: number) => (hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
 
@@ -108,6 +108,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {!edit && assistantConfigured() && (
         <BriefingPanel
           initial={briefing?.body ?? ""}
+          done={briefing?.done ?? []}
+          day={todayHere()}
           writtenAt={briefing ? `at ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone() }).format(briefing.writtenAt)}` : ""}
         />
       )}

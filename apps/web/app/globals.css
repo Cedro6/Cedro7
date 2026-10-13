@@ -2302,20 +2302,33 @@ a.account-card:hover .account-name { text-decoration: underline; }
   overflow: hidden;
   isolation: isolate;
   color: #f4f4f8;
-  background: #04140a;
+  background: #0b0c1a;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   border-color: rgba(255, 255, 255, 0.14);
 }
 /* The picture is its own layer so the glass frame above it has something to blur. */
-.briefing-art::after { content: ""; position: absolute; inset: 0; z-index: -2; background: url("/briefing.jpg") center / cover no-repeat; }
-.briefing-art::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(2, 14, 6, 0.6) 0%, rgba(2, 14, 6, 0.35) 55%, rgba(2, 14, 6, 0.15) 100%); }
+.briefing-art::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: -2;
+  /* Ava's own colours, kept deep and muted so white text sits on them comfortably. */
+  background:
+    radial-gradient(38% 60% at 18% 30%, rgba(124, 92, 255, 0.55), transparent 70%),
+    radial-gradient(34% 55% at 62% 70%, rgba(56, 189, 248, 0.32), transparent 70%),
+    radial-gradient(30% 50% at 88% 22%, rgba(94, 234, 212, 0.24), transparent 70%),
+    radial-gradient(26% 45% at 40% 95%, rgba(240, 171, 252, 0.2), transparent 70%);
+  animation: briefing-drift 38s ease-in-out infinite alternate;
+}
+@keyframes briefing-drift { to { transform: translate3d(6%, -4%, 0) rotate(8deg); } }
+.briefing-art::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(8, 9, 20, 0.2), rgba(8, 9, 20, 0.45)); }
 .briefing-art .panel-head { align-items: center; }
 .briefing-title { margin: 0; font-size: 22px; line-height: 26px; font-weight: 800; letter-spacing: -0.01em; color: #fff; }
 .briefing-sub { margin-top: 1px; color: #fff; }
-.briefing-title, .briefing-sub, .briefing-point, .briefing-foot { text-shadow: 0 1px 3px rgba(0, 12, 3, 0.85); }
-.briefing-art .btn-glass { background: rgba(2, 14, 6, 0.6); border-color: rgba(255, 255, 255, 0.4); color: #fff; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.briefing-art .btn-glass:hover { background: rgba(2, 14, 6, 0.8); }
+.briefing-title, .briefing-sub, .briefing-point, .briefing-foot { text-shadow: 0 1px 3px rgba(5, 6, 16, 0.6); }
+.briefing-art .btn-glass { background: rgba(10, 11, 24, 0.55); border-color: rgba(255, 255, 255, 0.4); color: #fff; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.briefing-art .btn-glass:hover { background: rgba(10, 11, 24, 0.8); }
 .briefing-art .error { color: #ffb4b4; }
 .briefing-glass {
   margin-top: 18px;
@@ -2323,10 +2336,10 @@ a.account-card:hover .account-name { text-decoration: underline; }
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.1));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 12px 36px rgba(0, 20, 5, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 12px 36px rgba(5, 6, 16, 0.35);
   /* A half-strength blur: the leaf stays recognisable but no longer competes with the words. */
-  backdrop-filter: blur(11px) brightness(0.62) saturate(1.1);
-  -webkit-backdrop-filter: blur(11px) brightness(0.62) saturate(1.1);
+  backdrop-filter: blur(18px) brightness(0.85);
+  -webkit-backdrop-filter: blur(18px) brightness(0.85);
   animation: briefing-glass-in 1.6s ease both;
 }
 .briefing-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -2366,12 +2379,20 @@ a.account-card:hover .account-name { text-decoration: underline; }
 @keyframes briefing-grow { from { grid-template-rows: 0fr; } }
 /* People who ask their device for less motion still get the points one at a time, as plain fades. */
 @media (prefers-reduced-motion: reduce) {
+  .briefing-art::after { animation: none; }
   .briefing-open { animation: none; }
   .briefing-points li, .briefing-foot { animation-name: briefing-fade; }
 }
 @keyframes briefing-fade { from { opacity: 0; } }
 /* Before the briefing is written the panel is exactly the height it always was. */
-.briefing-art:not(.is-written) { min-height: 100.78px; display: flex; flex-direction: column; justify-content: center; }
-:root[data-mode="light"] .briefing-art { background: #04140a; color: #f4f4f8; border-color: rgba(255, 255, 255, 0.14); box-shadow: 0 18px 50px rgba(30, 20, 70, 0.25); }
-:root[data-mode="light"] .briefing-art .btn-glass { background: rgba(2, 14, 6, 0.6); border-color: rgba(255, 255, 255, 0.4); color: #fff; }
+.briefing-art { min-height: 100.78px; }
+.briefing-art:not(.is-written) { display: flex; flex-direction: column; justify-content: center; }
+:root[data-mode="light"] .briefing-art { background: #0b0c1a; color: #f4f4f8; border-color: rgba(255, 255, 255, 0.14); box-shadow: 0 18px 50px rgba(30, 20, 70, 0.25); }
+:root[data-mode="light"] .briefing-art .btn-glass { background: rgba(10, 11, 24, 0.55); border-color: rgba(255, 255, 255, 0.4); color: #fff; }
 :root[data-mode="light"] .briefing-art .briefing-title { color: #fff; }
+/* A briefing already opened earlier today is simply there: no reveal the second time. */
+.briefing-art.is-kept .briefing-open, .briefing-art.is-kept .briefing-glass, .briefing-art.is-kept .briefing-points li, .briefing-art.is-kept .briefing-foot { animation: none; }
+/* Dealt with: crossed off and stepped back, still readable. */
+.briefing-points li.is-done .briefing-point { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.6); color: rgba(255, 255, 255, 0.62); font-weight: 500; }
+.briefing-points li.is-done .briefing-point strong { color: rgba(255, 255, 255, 0.7); }
+.briefing-points li.is-done .briefing-num { border-color: transparent; background: rgba(94, 234, 212, 0.22); color: #9ff5e6; }
