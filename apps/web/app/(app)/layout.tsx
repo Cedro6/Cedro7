@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { assistantUsage, can, expenseSummary, featureOn, listReminders, overview } from "@bos/core";
+import { assistantUsage, can, expenseSummary, featureOn, listReminders, overview, productOf } from "@bos/core";
 import { todayHere } from "../../lib/locale";
 import { Suspense } from "react";
 import { Ava } from "../../components/Ava";
@@ -18,25 +18,33 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const counts = await overview(ctx);
   const stock = featureOn(ctx.features, "stock");
   // The menu lists only what this person may open and this company has switched on.
+  const product = productOf(membership.businessType ?? "distributor");
   const items: NavItem[] = [{ href: "/", label: "Home" }];
-  // Dealer Terminal: the lot comes first for a dealer.
-  if (featureOn(ctx.features, "dealer") && can(ctx, "vehicle.read")) items.push({ href: "/vehicles", label: "Vehicles" });
-  if (can(ctx, "customer.read")) items.push({ href: "/customers", label: "Customers" });
-  if (can(ctx, "product.read")) items.push({ href: "/products", label: "Products", count: stock ? (counts.lowStock ?? 0) : 0 });
-  if (can(ctx, "sales_order.read")) items.push({ href: "/sales", label: "Sales", count: counts.readyToShip ?? 0 });
-  if (can(ctx, "sales_order.read")) items.push({ href: "/invoices", label: "Invoices", count: counts.overdueInvoices ?? 0 });
-  if (can(ctx, "purchase_order.read")) items.push({ href: "/purchasing", label: "Purchasing" });
-  if (can(ctx, "expense.read")) items.push({ href: "/bills", label: "Bills", count: (await expenseSummary(ctx)).overdueCount });
-  // Warehouse appears when at least one of its jobs is switched on and this person can do it.
-  const warehouseJobs =
-    stock &&
-    ((featureOn(ctx.features, "picking") && can(ctx, "sales_order.ship")) ||
-      (featureOn(ctx.features, "putaway") && can(ctx, "purchase_order.receive")) ||
-      (featureOn(ctx.features, "counts") && can(ctx, "stock.adjust")) ||
-      (featureOn(ctx.features, "warehouse") && can(ctx, "product.read")));
-  if (warehouseJobs) items.push({ href: "/warehouse", label: "Warehouse" });
-  if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
-  if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
+  if (product === "dealer") {
+    // Dealer Terminal: a fixed set of tools, in the order a lot works.
+    if (can(ctx, "vehicle.read")) items.push({ href: "/vehicles", label: "Vehicles" });
+    if (can(ctx, "customer.read")) items.push({ href: "/customers", label: "Customers" });
+    if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
+    if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
+    if (can(ctx, "expense.read")) items.push({ href: "/bills", label: "Bills", count: (await expenseSummary(ctx)).overdueCount });
+  } else {
+    if (can(ctx, "customer.read")) items.push({ href: "/customers", label: "Customers" });
+    if (can(ctx, "product.read")) items.push({ href: "/products", label: "Products", count: stock ? (counts.lowStock ?? 0) : 0 });
+    if (can(ctx, "sales_order.read")) items.push({ href: "/sales", label: "Sales", count: counts.readyToShip ?? 0 });
+    if (can(ctx, "sales_order.read")) items.push({ href: "/invoices", label: "Invoices", count: counts.overdueInvoices ?? 0 });
+    if (can(ctx, "purchase_order.read")) items.push({ href: "/purchasing", label: "Purchasing" });
+    if (can(ctx, "expense.read")) items.push({ href: "/bills", label: "Bills", count: (await expenseSummary(ctx)).overdueCount });
+    // Warehouse appears when at least one of its jobs is switched on and this person can do it.
+    const warehouseJobs =
+      stock &&
+      ((featureOn(ctx.features, "picking") && can(ctx, "sales_order.ship")) ||
+        (featureOn(ctx.features, "putaway") && can(ctx, "purchase_order.receive")) ||
+        (featureOn(ctx.features, "counts") && can(ctx, "stock.adjust")) ||
+        (featureOn(ctx.features, "warehouse") && can(ctx, "product.read")));
+    if (warehouseJobs) items.push({ href: "/warehouse", label: "Warehouse" });
+    if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
+    if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
+  }
   // Settings is for the people who run the company; the setup guide is tucked under it.
   if (can(ctx, "settings.manage")) items.push({ href: "/settings", label: "Settings", children: [{ href: "/welcome", label: "Setup guide" }] });
   // Ava sits beside every screen rather than having a page of her own.
@@ -50,6 +58,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <Sidebar
         items={items}
         company={membership.orgName}
+        product={product}
         footer={
           <Link href="/account" className="account account-card" aria-label={`Your profile: ${membership.userName}`}>
             <Avatar name={membership.userName} />

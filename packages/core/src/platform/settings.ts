@@ -9,6 +9,9 @@ import {
   isFeature,
   NEEDS_STOCK,
   parseFeatures,
+  effectiveFeatures,
+  productOf,
+  ADD_ONS,
   type BusinessType,
   type FeatureId,
 } from "./features";
@@ -20,8 +23,8 @@ export type Settings = {
   features: Record<FeatureId, boolean>;
 };
 
-function effective(stored: unknown): Record<FeatureId, boolean> {
-  const set = parseFeatures(stored);
+function effective(stored: unknown, type: BusinessType = "distributor"): Record<FeatureId, boolean> {
+  const set = effectiveFeatures(type, parseFeatures(stored));
   return Object.fromEntries(FEATURES.map((id) => [id, featureOn(set, id)])) as Record<FeatureId, boolean>;
 }
 
@@ -34,10 +37,8 @@ export async function getSettings(ctx: Ctx): Promise<Settings> {
     );
     const row = result.rows[0];
     if (!row) throw new Error("Company not found");
-    return {
-      businessType: isBusinessType(row.business_type) ? row.business_type : "distributor",
-      features: effective(row.features),
-    };
+    const type = isBusinessType(row.business_type) ? row.business_type : "distributor";
+    return { businessType: type, features: effective(row.features, type) };
   });
 }
 
@@ -51,6 +52,11 @@ export async function setBusinessType(ctx: Ctx, type: string): Promise<Settings>
       "select business_type, features from organizations where id = $1 for update",
       [ctx.orgId],
     );
+    // A product is a membership, not a setting: nobody moves a company into or out of Dealer Terminal from here.
+    const was = before.rows[0]?.business_type;
+    if (productOf(type) === "dealer" || (isBusinessType(was ?? "") && productOf(was as BusinessType) === "dealer")) {
+      throw new ValidationError("businessType", "Dealer Terminal is a separate membership. Contact support to change the product.");
+    }
     await tx.query("update organizations set business_type = $2, features = $3, updated_at = now() where id = $1", [
       ctx.orgId,
       type,
@@ -82,6 +88,8 @@ export async function setFeature(ctx: Ctx, feature: string, on: boolean): Promis
     const row = current.rows[0];
     if (!row) throw new Error("Company not found");
     const stored = parseFeatures(row.features);
+    if (isBusinessType(row.business_type) && productOf(row.business_type) === "dealer") throw new ValidationError("feature", "Dealer Terminal's tools are set by the membership.");
+    if (ADD_ONS.includes(feature)) throw new ValidationError("feature", "That is part of a separate membership, not a switch.");
     if (on && NEEDS_STOCK.includes(feature) && stored.stock === false) {
       throw new ValidationError("feature", "Turn on Stock and shipping first.");
     }

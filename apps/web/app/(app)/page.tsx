@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { can, getBriefing, getHomeLayout, HERO_RANGES, isChartPeriod, isWidget, type HeroRange, type WidgetId } from "@bos/core";
+import { can, getBriefing, productOf, getHomeLayout, HERO_RANGES, isChartPeriod, isWidget, type HeroRange, type WidgetId } from "@bos/core";
 import { ModeSwitch } from "../../components/ModeSwitch";
+import { DealerHome } from "../../components/DealerHome";
 import { BriefingPanel } from "../../components/BriefingPanel";
 import { Widget, WIDGET_INFO } from "../../components/home/widgets";
 import { assistantConfigured } from "../../lib/assistant";
@@ -51,7 +52,8 @@ function WidgetMenu({ options, replacing }: { options: WidgetId[]; replacing: Wi
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ edit?: string; add?: string; replace?: string; range?: string; chart?: string; error?: string }> }) {
   const { ctx, membership } = await requireSession();
   const params = await searchParams;
-  const edit = params.edit === "1";
+  const dealer = productOf(membership.businessType ?? "distributor") === "dealer";
+  const edit = params.edit === "1" && !dealer;
   const requested = Number(params.range);
   const range: HeroRange = (HERO_RANGES as readonly number[]).includes(requested) ? (requested as HeroRange) : 30;
   const view = { range, chart: params.chart && isChartPeriod(params.chart) ? params.chart : ("30d" as const), edit };
@@ -89,14 +91,18 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </>
         ) : (
           <>
-            <Link href="/?edit=1" className="btn btn-glass">
-              Customize
-            </Link>
-            {can(ctx, "sales_order.write") && (
+            {!dealer && (
+              <Link href="/?edit=1" className="btn btn-glass">
+                Customize
+              </Link>
+            )}
+            {dealer ? (
+              <Link href="/vehicles/new" className="btn btn-primary">Add vehicle by VIN</Link>
+            ) : can(ctx, "sales_order.write") ? (
               <Link href="/sales/new" className="btn btn-primary">
                 New order
               </Link>
-            )}
+            ) : null}
           </>
         )}
       </header>
@@ -114,6 +120,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         />
       )}
 
+      {dealer ? (
+        <DealerHome ctx={ctx} />
+      ) : (
       <div className="dash">
         {layout.widgets.map((id, index) => {
           const info = WIDGET_INFO[id];
@@ -168,6 +177,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </section>
         )}
       </div>
+      )}
     </>
   );
 }

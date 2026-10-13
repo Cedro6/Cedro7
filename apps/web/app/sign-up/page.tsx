@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BUSINESS_TYPES, CURRENCIES, signupLinkValid, timeZones, TYPE_FEATURES } from "@bos/core";
+import { BUSINESS_TYPES, CURRENCIES, productOf, signupLinkValid, timeZones, TYPE_FEATURES } from "@bos/core";
 import { SignUpForm } from "../../components/SignUpForm";
 import { FEATURE_TEXT, TYPE_TEXT } from "../../lib/features";
 import { pool } from "../../lib/pool";
@@ -24,12 +24,12 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
         ) : (
           <>
             <h1>Set up your company</h1>
-            <p className="muted">About two minutes. Your company starts empty, with only the tools that fit your kind of business switched on.</p>
+            <p className="muted">About two minutes. Pick the product, then the kind of business, and your company starts with the tools that fit.</p>
             <SignUpForm
               token={token}
               zones={timeZones()}
               currencies={CURRENCIES.map((code) => ({ code, label: `${code} (${(0).toLocaleString("en-US", { style: "currency", currency: code, maximumFractionDigits: 0 }).replace(/[\d\s]/g, "")})` }))}
-              kinds={BUSINESS_TYPES.map((id) => ({ id, name: TYPE_TEXT[id].name, about: TYPE_TEXT[id].about, tools: TYPE_FEATURES[id].map((f) => FEATURE_TEXT[f].name) }))}
+              kinds={BUSINESS_TYPES.map((id) => ({ id, name: TYPE_TEXT[id].name, about: TYPE_TEXT[id].about, product: productOf(id), tools: TYPE_FEATURES[id].map((f) => FEATURE_TEXT[f].name) }))}
             />
           </>
         )}

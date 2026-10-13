@@ -1,5 +1,5 @@
 import { withTenant, type Pool } from "@bos/db/runtime";
-import { isBusinessType, parseFeatures, type BusinessType, type FeatureSet } from "./features";
+import { effectiveFeatures, isBusinessType, parseFeatures, type BusinessType, type FeatureSet } from "./features";
 import { DEFAULT_CURRENCY, DEFAULT_TIME_ZONE, isCurrency, isTimeZone } from "./locale";
 import { isRole, type Role } from "./permissions";
 
@@ -60,7 +60,7 @@ export async function currentMembership(pool: Pool, orgId: string, userId: strin
       orgName: row.org_name,
       role: row.role,
       businessType: isBusinessType(row.business_type) ? row.business_type : "distributor",
-      features: parseFeatures(row.features),
+      features: effectiveFeatures(isBusinessType(row.business_type) ? row.business_type : "distributor", parseFeatures(row.features)),
       timeZone: isTimeZone(row.timezone) ? row.timezone : DEFAULT_TIME_ZONE,
       currency: isCurrency(row.currency) ? row.currency : DEFAULT_CURRENCY,
     };

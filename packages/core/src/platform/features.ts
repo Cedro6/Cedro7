@@ -26,6 +26,17 @@ export type FeatureSet = Partial<Record<FeatureId, boolean>>;
 export const BUSINESS_TYPES = ["distributor", "retail", "warehouse", "sales", "contractor", "dealer"] as const;
 export type BusinessType = (typeof BUSINESS_TYPES)[number];
 
+/**
+ * Products. Cedro Terminal is the business system, with a business type that sets the starting
+ * switches. Dealer Terminal is a separate membership: its tools are fixed by the product, and a
+ * company does not move between products from its own settings.
+ */
+export const PRODUCTS = ["cedro", "dealer"] as const;
+export type Product = (typeof PRODUCTS)[number];
+export const productOf = (type: BusinessType): Product => (type === "dealer" ? "dealer" : "cedro");
+/** The business types a Cedro Terminal company may choose between. */
+export const CEDRO_TYPES: readonly BusinessType[] = ["distributor", "retail", "warehouse", "sales", "contractor"];
+
 /** What each business type starts with. */
 export const TYPE_FEATURES: Record<BusinessType, readonly FeatureId[]> = {
   distributor: FEATURES.filter((f) => f !== "dealer"),
@@ -61,6 +72,11 @@ export function featureOn(features: FeatureSet | undefined, id: FeatureId): bool
 export function featuresFor(type: BusinessType): Record<FeatureId, boolean> {
   const on = TYPE_FEATURES[type];
   return Object.fromEntries(FEATURES.map((id) => [id, on.includes(id)])) as Record<FeatureId, boolean>;
+}
+
+/** The switches that apply: a Dealer Terminal company's are fixed by the product, whatever is stored. */
+export function effectiveFeatures(type: BusinessType, stored: FeatureSet): FeatureSet {
+  return productOf(type) === "dealer" ? featuresFor("dealer") : { ...stored, dealer: false };
 }
 
 /** Reads whatever is stored and keeps only known switches with true or false values. */
