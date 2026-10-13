@@ -1,15 +1,18 @@
 import { currencyOf, moneyText } from "../platform/locale";
 import { randomUUID } from "node:crypto";
 import { withTenant } from "@bos/db/runtime";
-import { getInvoice, PAYMENT_METHODS, recordPayment } from "../billing/invoices";
+import { createInvoice } from "../billing/invoices";
+import { createExpense, EXPENSE_CATEGORIES, isExpenseCategory } from "../billing/expenses";
+import { customerPricesInTx } from "../sales/pricing";
+import { createReturn, listReturnable } from "../sales/returns";
 import { getProduct } from "../catalog/products";
-import { createCustomer, getCustomer, saveContact } from "../crm/customers";
-import { createReminder, listTeam, clock } from "../crm/reminders";
+import { createCustomer, getCustomer, saveContact, updateCustomer } from "../crm/customers";
+import { createReminder, listReminders, listTeam, clock, setReminderDone } from "../crm/reminders";
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
 import { featureOn } from "../platform/features";
 import { can } from "../platform/permissions";
-import { createPurchaseOrder, getSupplier } from "../purchasing/orders";
+import { getSupplier } from "../purchasing/orders";
 import { adjustStock, StockInputError, InsufficientStockError } from "../inventory/ledger";
 import { cancelOrder, confirmOrder, createQuote, getOrder, shipOrder } from "../sales/orders";
 
@@ -275,6 +278,181 @@ export const ASSISTANT_ACTIONS: AssistantAction[] = [
     apply: async (ctx, payload) => {
       await createReminder(ctx, payload as Parameters<typeof createReminder>[1]);
       return { message: "Reminder added.", link: `/calendar?month=${String(payload.dueOn).slice(0, 7)}&day=${String(payload.dueOn)}` };
+    },
+  },
+  {
+    name: "propose_invoice",
+    description:
+      "Prepare a hand-written invoice for a customer, for the person to confirm. Use it for goods or services sold without an order; a shipped order is invoiced by itself. Prices always come from the customer's price list: you cannot set a price, discount or tax. Look up the customer and product ids first.",
+    input_schema: {
+      type: "object",
+      properties: { customer_id: { type: "string" }, lines: lineSchema, notes: { type: "string" } },
+      required: ["customer_id", "lines"],
+    },
+    allowed: (ctx) => can(ctx, "invoice.write") && can(ctx, "customer.read") && can(ctx, "product.read"),
+    describe: async (ctx, input) => {
+      const customer = await getCustomer(ctx, str(input.customer_id, 36));
+      if (!customer) throw bad("I could not find that customer.");
+      const lines = readLines(input.lines);
+      const ids = [...new Set(lines.map((l) => l.productId))];
+      const prices = await withTenant(ctx.pool, ctx.orgId, (tx) => customerPricesInTx(tx, customer.id, ids));
+      const parts: string[] = [];
+      const priced: { description: string; qty: number; unitPrice: number; productId: string }[] = [];
+      let total = 0;
+      for (const line of lines) {
+        const product = await getProduct(ctx, line.productId);
+        const unitPrice = prices.get(line.productId);
+        if (!product || unitPrice === undefined) throw bad("I could not find one of those products.");
+        priced.push({ description: product.name, qty: line.qty, unitPrice, productId: product.id });
+        total += line.qty * unitPrice;
+        parts.push(`${qtyText(line.qty)} × ${product.name} at ${moneyText(unitPrice, currencyOf(ctx))}`);
+      }
+      const notes = str(input.notes, 500);
+      return {
+        payload: { customerId: customer.id, lines: priced, ...(notes ? { notes } : {}) },
+        summary: `Invoice ${customer.name} for ${parts.join(", ")}: ${moneyText(Math.round(total * 100) / 100, currencyOf(ctx))} before tax, on their usual terms.${notes ? ` Note: "${notes}"` : ""}`,
+      };
+    },
+    apply: async (ctx, payload) => {
+      const made = await createInvoice(ctx, payload as Parameters<typeof createInvoice>[1]);
+      return { message: `Invoice ${made.number} raised for ${moneyText(made.amount, currencyOf(ctx))}. Nothing has been sent or charged.`, link: `/invoices/${made.id}` };
+    },
+  },
+  {
+    name: "propose_return",
+    description:
+      "Prepare to take goods back on a shipped order, for the person to confirm. Say which products and how many, and why. The goods go back into stock when restock is true. No credit or refund is given: that is the person's decision afterwards. Needs the order id from list_orders.",
+    input_schema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string" },
+        lines: lineSchema,
+        reason: { type: "string" },
+        restock: { type: "boolean", description: "True when the goods are fit to sell again. Default true." },
+      },
+      required: ["order_id", "lines", "reason"],
+    },
+    allowed: (ctx) => featureOn(ctx.features, "returns") && can(ctx, "sales_order.write"),
+    describe: async (ctx, input) => {
+      const order = await getOrder(ctx, str(input.order_id, 36));
+      if (!order) throw bad("I could not find that order.");
+      const reason = str(input.reason, 200);
+      if (!reason) throw bad("Say why the goods came back.");
+      const returnable = await listReturnable(ctx, order.id);
+      const lines = readLines(input.lines);
+      const parts: string[] = [];
+      const picked: { orderLineId: string; qty: number }[] = [];
+      for (const line of lines) {
+        const match = returnable.find((r) => r.productId === line.productId);
+        if (!match) throw bad(`${order.number} has no shipped line for one of those products.`);
+        if (line.qty > match.left) throw bad(`Only ${qtyText(match.left)} of ${match.name} can still come back on ${order.number}.`);
+        picked.push({ orderLineId: match.orderLineId, qty: line.qty });
+        parts.push(`${qtyText(line.qty)} × ${match.name}`);
+      }
+      const restock = input.restock !== false;
+      return {
+        payload: { orderId: order.id, lines: picked, reason, restock, idempotencyKey: randomUUID() },
+        summary: `Take back ${parts.join(", ")} on ${order.number} from ${order.customerName} because "${reason}"${restock ? ", and put the goods back into stock" : ", not fit to restock"}. No credit or refund: you decide that afterwards.`,
+      };
+    },
+    apply: async (ctx, payload) => {
+      const { orderId, ...rest } = payload as { orderId: string } & Parameters<typeof createReturn>[2];
+      const made = await createReturn(ctx, orderId, { ...rest, credit: false });
+      return { message: `Return ${made.number} recorded: ${qtyText(made.units)} units worth ${moneyText(made.value, currencyOf(ctx))}${made.restocked ? ", back in stock" : ""}. No credit has been given.`, link: `/sales/${orderId}` };
+    },
+  },
+  {
+    name: "propose_bill",
+    description:
+      "Prepare to file a supplier's bill or a running cost, for the person to confirm. Filing records that it is owed; it is never paid here. Give the amount, what it is for, the date and a category. Look up the supplier id with find_suppliers when it is from a supplier.",
+    input_schema: {
+      type: "object",
+      properties: {
+        description: { type: "string" },
+        amount: { type: "number", description: "The total on the bill, tax included." },
+        category: { type: "string", enum: [...EXPENSE_CATEGORIES] },
+        incurred_on: { type: "string", description: "The bill's date, YYYY-MM-DD." },
+        due_on: { type: "string", description: "Optional, YYYY-MM-DD." },
+        supplier_id: { type: "string" },
+        reference: { type: "string", description: "The supplier's invoice number, if any." },
+      },
+      required: ["description", "amount", "category", "incurred_on"],
+    },
+    allowed: (ctx) => featureOn(ctx.features, "expenses") && can(ctx, "expense.write"),
+    describe: async (ctx, input) => {
+      const description = str(input.description, 200);
+      const amount = Number(input.amount);
+      const category = input.category;
+      const incurredOn = str(input.incurred_on, 10);
+      const dueOn = str(input.due_on, 10);
+      const reference = str(input.reference, 100);
+      if (!description) throw bad("Say what the bill is for.");
+      if (!Number.isFinite(amount) || amount <= 0) throw bad("The amount must be more than zero.");
+      if (!isExpenseCategory(category)) throw bad(`Pick one of these categories: ${EXPENSE_CATEGORIES.join(", ")}.`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(incurredOn)) throw bad("I need the bill's date as YYYY-MM-DD.");
+      if (dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(dueOn)) throw bad("I need the due date as YYYY-MM-DD.");
+      const supplierId = str(input.supplier_id, 36);
+      const supplier = supplierId ? await getSupplier(ctx, supplierId) : null;
+      if (supplierId && !supplier) throw bad("I could not find that supplier.");
+      return {
+        payload: { description, amount, category, incurredOn, ...(dueOn ? { dueOn } : {}), ...(supplier ? { supplierId: supplier.id } : {}), ...(reference ? { reference } : {}) },
+        summary: `File a bill${supplier ? ` from ${supplier.name}` : ""} for ${moneyText(amount, currencyOf(ctx))}: "${description}" under ${category}, dated ${incurredOn}${dueOn ? `, due ${dueOn}` : ""}${reference ? `, ref ${reference}` : ""}. It is filed as owed, not paid.`,
+      };
+    },
+    apply: async (ctx, payload) => {
+      const made = await createExpense(ctx, payload as Parameters<typeof createExpense>[1]);
+      return { message: "Bill filed as owed. Paying it is done on the Bills screen.", link: `/bills/${made.id}` };
+    },
+  },
+  {
+    name: "propose_reminder_done",
+    description: "Prepare to mark a reminder as done, for the person to confirm. Needs the reminder id from list_reminders.",
+    input_schema: { type: "object", properties: { reminder_id: { type: "string" } }, required: ["reminder_id"] },
+    allowed: (ctx) => featureOn(ctx.features, "calendar"),
+    describe: async (ctx, input) => {
+      const id = str(input.reminder_id, 36);
+      const reminder = (await listReminders(ctx, { openOnly: true })).find((r) => r.id === id);
+      if (!reminder) throw bad("I could not find an open reminder with that id.");
+      return { payload: { reminderId: reminder.id }, summary: `Mark the reminder "${reminder.title}"${reminder.customerName ? ` (${reminder.customerName})` : ""} as done.` };
+    },
+    apply: async (ctx, payload) => {
+      await setReminderDone(ctx, String(payload.reminderId), true);
+      return { message: "Reminder marked done.", link: "/calendar" };
+    },
+  },
+  {
+    name: "propose_customer_update",
+    description:
+      "Prepare a change to a customer's details (name, payment terms, billing or shipping address), for the person to confirm. Give only the fields that change. Needs the customer id from find_customers. Tax status and prices are not changed here.",
+    input_schema: {
+      type: "object",
+      properties: { customer_id: { type: "string" }, name: { type: "string" }, payment_terms: { type: "string" }, billing_address: { type: "string" }, shipping_address: { type: "string" } },
+      required: ["customer_id"],
+    },
+    allowed: (ctx) => can(ctx, "customer.write"),
+    describe: async (ctx, input) => {
+      const customer = await getCustomer(ctx, str(input.customer_id, 36));
+      if (!customer) throw bad("I could not find that customer.");
+      const changes: string[] = [];
+      const next = {
+        name: input.name !== undefined ? str(input.name) : customer.name,
+        paymentTerms: input.payment_terms !== undefined ? str(input.payment_terms, 50) : customer.paymentTerms ?? undefined,
+        billingAddress: input.billing_address !== undefined ? str(input.billing_address, 500) : customer.billingAddress ?? undefined,
+        shippingAddress: input.shipping_address !== undefined ? str(input.shipping_address, 500) : customer.shippingAddress ?? undefined,
+        taxExempt: customer.taxExempt,
+      };
+      if (input.name !== undefined && next.name !== customer.name) changes.push(`name to "${next.name}"`);
+      if (input.payment_terms !== undefined && next.paymentTerms !== (customer.paymentTerms ?? "")) changes.push(`payment terms to "${next.paymentTerms || "none"}"`);
+      if (input.billing_address !== undefined && next.billingAddress !== (customer.billingAddress ?? "")) changes.push(`billing address to "${next.billingAddress || "none"}"`);
+      if (input.shipping_address !== undefined && next.shippingAddress !== (customer.shippingAddress ?? "")) changes.push(`shipping address to "${next.shippingAddress || "none"}"`);
+      if (!next.name) throw bad("The customer needs a name.");
+      if (changes.length === 0) throw bad("Nothing would change. Say what should be different.");
+      return { payload: { customerId: customer.id, ...next }, summary: `Change ${customer.name}: ${changes.join("; ")}.` };
+    },
+    apply: async (ctx, payload) => {
+      const { customerId, ...rest } = payload as { customerId: string } & Parameters<typeof updateCustomer>[2];
+      await updateCustomer(ctx, customerId, rest);
+      return { message: "Customer updated.", link: `/customers/${customerId}` };
     },
   },
 ];

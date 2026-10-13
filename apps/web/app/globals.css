@@ -2400,3 +2400,6 @@ a.account-card:hover .account-name { text-decoration: underline; }
 .rpt-graph-note { margin: 0; font-size: 13px; }
 .briefing-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .briefing-min { display: inline-flex; align-items: center; gap: 6px; }
+.ava-nudge { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--ground); }
+.ava-due { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(229, 72, 77, 0.14); border: 1px solid rgba(229, 72, 77, 0.35); font-size: 14px; }
+.ava-all { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 14px; font-size: 13px; }

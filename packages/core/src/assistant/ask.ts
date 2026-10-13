@@ -150,7 +150,7 @@ export async function ask(
         const action = actions.find((a) => a.name === call.name);
         if (action) {
           try {
-            if (proposals.length >= 3) throw new ValidationError("assistant", "That is enough changes for one request. Ask for the rest separately.");
+            if (proposals.length >= 5) throw new ValidationError("assistant", "That is enough changes for one request. Ask for the rest separately.");
             const proposal = await propose(ctx, action, call.input ?? {});
             proposals.push(proposal);
             results.push({ type: "tool_result", tool_use_id: call.id, content: `Prepared and shown to the person, waiting for them to confirm. Nothing has changed yet. It reads: ${proposal.summary}` });
