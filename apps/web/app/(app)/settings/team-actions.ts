@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createPasswordLink, ForbiddenError, inviteMember, updateMember, ValidationError } from "@bos/core";
+import { createPasswordLink, ForbiddenError, inviteMember, resetMemberTwoStep, updateMember, ValidationError } from "@bos/core";
 import { requireSession } from "../../../lib/session";
 
 export type TeamState = { error: string; notice: string; link: string; linkFor: string };
@@ -49,6 +49,11 @@ export async function changeMember(_previous: TeamState, form: FormData): Promis
   const { ctx } = await requireSession();
   const status = form.get("status");
   try {
+    if (form.get("resetTwoStep") === "1") {
+      await resetMemberTwoStep(ctx, String(form.get("userId") ?? ""));
+      revalidatePath("/settings");
+      return { ...blank, notice: "Two-step verification is off for them. They sign in with just their password until they set it up again." };
+    }
     await updateMember(ctx, String(form.get("userId") ?? ""), status ? { status: String(status) } : { role: String(form.get("role") ?? "") });
     revalidatePath("/", "layout");
     return { ...blank, notice: status === "suspended" ? "Suspended. They can no longer sign in." : status ? "Reactivated." : "Role saved." };

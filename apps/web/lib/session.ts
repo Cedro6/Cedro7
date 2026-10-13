@@ -63,6 +63,38 @@ export async function startSession(userId: string, orgId: string, version = 0): 
   });
 }
 
+const PENDING = "bos_2step";
+
+/**
+ * After a correct password for someone with two-step verification on: a five-minute pass to the
+ * code screen. It is not a session and opens nothing until the code is checked.
+ */
+export async function startPending(userId: string, orgId: string, version: number): Promise<void> {
+  const payload = `${userId}.${orgId}.${version}.${Date.now() + 5 * 60_000}`;
+  (await cookies()).set(PENDING, `${payload}.${sign(`2step:${payload}`)}`, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: inProduction() && process.env.INSECURE_COOKIES !== "1",
+    path: "/",
+    maxAge: 5 * 60,
+  });
+}
+
+export async function readPending(): Promise<{ userId: string; orgId: string; version: number } | null> {
+  const raw = (await cookies()).get(PENDING)?.value;
+  const [userId, orgId, version, expires, signature] = raw?.split(".") ?? [];
+  if (!userId || !orgId || !version || !expires || !signature) return null;
+  const expected = Buffer.from(sign(`2step:${userId}.${orgId}.${version}.${expires}`));
+  const given = Buffer.from(signature);
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+  if (!(Number(expires) > Date.now())) return null;
+  return { userId, orgId, version: Number(version) };
+}
+
+export async function clearPending(): Promise<void> {
+  (await cookies()).delete(PENDING);
+}
+
 export async function endSession(): Promise<void> {
   (await cookies()).delete(COOKIE);
 }

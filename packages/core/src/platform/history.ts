@@ -93,6 +93,9 @@ const WHAT: Record<string, string> = {
   "member.invited": "invited",
   "member.updated": "changed the role or access of",
   "member.password_link": "made a password link for",
+  "member.two_step_on": "turned on two-step verification for",
+  "member.two_step_off": "turned off two-step verification for",
+  "member.two_step_reset": "reset two-step verification for",
   "assistant.confirmed": "confirmed a change the assistant prepared",
 };
 
