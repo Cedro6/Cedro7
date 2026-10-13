@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { isPlatformAdmin } from "../../lib/platform";
 import { can, expenseSummary, featureOn, overview } from "@bos/core";
 import { Avatar } from "../../components/Avatar";
 import { Main } from "../../components/Main";
@@ -51,6 +52,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             <ModeSwitch />
             <div className="account-links">
               {can(ctx, "settings.manage") && <Link href="/settings">Settings</Link>}
+              {isPlatformAdmin(membership.userEmail) && <Link href="/platform">Platform</Link>}
               <Link href="/account">Password</Link>
               <form action={signOut}>
                 <button type="submit">Sign out</button>

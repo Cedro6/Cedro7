@@ -61,6 +61,7 @@ describe("migrations", () => {
       "0025_returns.sql",
       "0026_reminder_time.sql",
       "0027_two_step.sql",
+      "0028_sign_up.sql",
     ]);
   });
 

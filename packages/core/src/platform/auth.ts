@@ -14,6 +14,7 @@ export type Membership = {
   features?: FeatureSet;
   timeZone?: string;
   currency?: string;
+  userEmail?: string;
 };
 
 /** The companies a person belongs to, looked up by email at sign-in. */
@@ -35,8 +36,8 @@ export async function membershipsByEmail(pool: Pool, email: string): Promise<Mem
 /** Re-reads the person's current role on every request, so a role change or suspension applies at once. */
 export async function currentMembership(pool: Pool, orgId: string, userId: string): Promise<Membership | null> {
   return withTenant(pool, orgId, async (tx) => {
-    const result = await tx.query<{ user_name: string; org_name: string; role: string; business_type: string; features: unknown; timezone: string; currency: string }>(
-      `select u.name as user_name, o.name as org_name, m.role, o.business_type, o.features, o.timezone, trim(o.base_currency) as currency
+    const result = await tx.query<{ user_name: string; org_name: string; role: string; business_type: string; features: unknown; timezone: string; currency: string; email: string }>(
+      `select u.email, u.name as user_name, o.name as org_name, m.role, o.business_type, o.features, o.timezone, trim(o.base_currency) as currency
        from memberships m
        join users u on u.id = m.user_id
        join organizations o on o.id = m.org_id
@@ -48,6 +49,7 @@ export async function currentMembership(pool: Pool, orgId: string, userId: strin
     return {
       userId,
       userName: row.user_name,
+      userEmail: row.email,
       orgId,
       orgName: row.org_name,
       role: row.role,

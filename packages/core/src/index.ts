@@ -240,3 +240,7 @@ export { createReturn, listReturnable, listReturns, type OrderReturn, type Retur
 export { search, SEARCH_MIN, type SearchGroup, type SearchHit } from "./platform/search";
 export { HISTORY_AREAS, HISTORY_PAGE, isHistoryArea, listHistory, type HistoryArea, type HistoryEntry } from "./platform/history";
 export { beginTwoStep, confirmTwoStep, disableTwoStep, pendingTwoStep, resetMemberTwoStep, totpCode, totpStep, twoStepStatus, verifyTwoStep, type TwoStepCheck, type TwoStepStatus } from "./platform/twostep";
+export {
+  checkSignup, createSignupLink, listCompanies, listSignupLinks, revokeSignupLink, signUp, signupLinkValid,
+  type PlatformCompany, type SignupInput, type SignupLink,
+} from "./platform/signup";
