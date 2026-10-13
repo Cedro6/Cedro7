@@ -98,6 +98,10 @@ export {
 export { getSettings, setBusinessType, setFeature, type Settings } from "./platform/settings";
 export { overview, type Overview } from "./platform/overview";
 export { isReportPeriod, report, REPORT_PERIODS, type Report, type ReportPeriod } from "./platform/reports";
+export {
+  analysis, ANALYSIS_PRESETS, COMPARE_MODES, compareRange, daysIn, isAnalysisPreset, isCompareMode, resolveRange, today,
+  type Analysis, type AnalysisPreset, type Bucket, type CompareMode, type DateRange, type Pair,
+} from "./platform/analysis";
 export { attention, salesTrend, type AttentionItem, type SalesTrend } from "./platform/home";
 export {
   can,
