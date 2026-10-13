@@ -9,7 +9,7 @@ import { AssistantText } from "./AssistantText";
 type Change = { id: string; summary: string; state: "waiting" | "working" | "done" | "declined" | "failed"; message?: string; link?: string };
 type Turn = { id: number; question: string; answer?: string; error?: string; lookups?: number; changes: Change[] };
 /** What this person's role lets them do, so Ava only suggests things she can actually help with. */
-export type AvaAbilities = { sales: boolean; ship: boolean; stock: boolean; reports: boolean; customers: boolean; invoices: boolean; calendar: boolean };
+export type AvaAbilities = { sales: boolean; ship: boolean; stock: boolean; reports: boolean; customers: boolean; invoices: boolean; calendar: boolean; dealer?: boolean; lot?: boolean };
 
 type Recognition = { lang: string; interimResults: boolean; continuous: boolean; start(): void; stop(): void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null };
 
@@ -43,6 +43,16 @@ export function spokenPart(answer: string): string {
 /** Things worth asking on the screen that is open, limited to what this person can do. */
 function suggestionsFor(path: string, title: string, can: AvaAbilities): string[] {
   const s: (string | false)[] = [];
+  if (can.dealer) {
+    const record = /^\/[a-z]+\/[0-9a-f]{8}-/.test(path);
+    if (path.startsWith("/vehicles/") && record) s.push("What does this car still need before it can be sold?", "Write a short listing description for this car", Boolean(can.lot) && "Put this car on the lot", can.calendar && "Remind me to follow up on this car on Friday");
+    else if (path.startsWith("/vehicles")) s.push("What has been on the lot longest?", "Which cars have no asking price or title number?", "Find me a truck under 100,000 miles");
+    else if (path.startsWith("/deals/") && record) s.push("What is still owed on this deal?", "What do the title forms still need?", "Draft a text telling the buyer their car is ready");
+    else if (path.startsWith("/deals")) s.push("Which deals still have money owed?", "Which deals are ready to deliver?", "How many cars did we sell this month?");
+    else if (path.startsWith("/customers/") && record) s.push(`Has ${title} bought from us before?`, can.calendar && `Remind me to call ${title} next week`);
+    else s.push("What needs my attention on the lot today?", "Which deals still have money owed?", "What has been on the lot longest?", "How many cars did we sell this month?");
+    return s.filter((x): x is string => Boolean(x)).slice(0, 4);
+  }
   const record = /^\/[a-z]+\/[0-9a-f-]{36}/.test(path);
   if (path.startsWith("/customers/") && record) s.push(`What does ${title} owe us?`, can.sales && `Make a quote for ${title}`, can.calendar && `Remind me to call ${title} next week`, "Draft an email asking how their last order went");
   else if (path.startsWith("/customers")) s.push("Which customers have gone quiet?", can.invoices && "Who owes us the most?", can.customers && "Add a new customer");

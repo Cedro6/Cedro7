@@ -240,3 +240,42 @@ describe("the dealer's sales chart", () => {
     expect(await dealSalesSeries(as("owner", { dealer: false }), "30d")).toBeNull();
   });
 });
+
+describe("Ava on a dealer account", () => {
+  it("is offered car and deal tools, not orders, invoices or stock, and can never touch money", async () => {
+    const { toolsFor, actionsFor } = await import("../src/index");
+    const dealer = as("owner", { dealer: true, calendar: true, expenses: true, stock: false, purchasing: false });
+    const tools = toolsFor(dealer).map((t) => t.name);
+    expect(tools).toEqual(expect.arrayContaining(["lot_attention", "find_vehicles", "vehicle_detail", "find_deals", "deal_detail", "dealer_sales", "find_customers"]));
+    expect(tools).not.toEqual(expect.arrayContaining([expect.stringMatching(/^(needs_attention|list_orders|list_invoices|find_products|business_report|customer_account)$/)]));
+    const actions = actionsFor(dealer).map((a) => a.name);
+    expect(actions).toEqual(expect.arrayContaining(["propose_vehicle_status", "propose_vehicle_details", "propose_deal", "propose_deliver_deal"]));
+    expect(actions).not.toEqual(expect.arrayContaining([expect.stringMatching(/quote|ship_order|invoice|return|stock_adjustment|payment|price/)]));
+    // A Cedro account sees none of the dealer tools.
+    expect(toolsFor(as("owner", { dealer: false })).map((t) => t.name)).not.toContain("find_vehicles");
+  });
+
+  it("starts a deal only at the asking price, and refuses a price, a car with none, or delivery before payment", async () => {
+    const { ask, confirmProposal } = await import("../src/index");
+    const who = { company: "Test Motors", person: "Dee", monthlyLimit: 1000 };
+    const usage = { input_tokens: 1, output_tokens: 1 };
+    const once = (name: string, input: Record<string, unknown>) => {
+      let n = 0;
+      return (async () => (n++ === 0 ? { stop_reason: "tool_use", usage, content: [{ type: "tool_use" as const, id: "x", name, input }] } : { stop_reason: "end_turn", usage, content: [{ type: "text" as const, text: "ok" }] })) as never;
+    };
+    const priced = await createVehicle(as("owner"), { specs: { make: "Mazda", model: "3" }, own: { status: "on_lot", askingPrice: 9995, mileage: 61000 } });
+    const unpriced = await createVehicle(as("owner"), { specs: { make: "Kia", model: "Rio" }, own: { status: "on_lot" } });
+    const cut = await ask(as("owner"), { ...who, question: "x" }, once("propose_deal", { vehicle_id: priced.id, buyer_name: "Ann Lee", sale_price: 8000 }));
+    expect(cut.proposals).toHaveLength(0);
+    const none = await ask(as("owner"), { ...who, question: "x" }, once("propose_deal", { vehicle_id: unpriced.id, buyer_name: "Ann Lee" }));
+    expect(none.proposals).toHaveLength(0);
+    const fair = await ask(as("owner"), { ...who, question: "x" }, once("propose_deal", { vehicle_id: priced.id, buyer_name: "Ann Lee" }));
+    expect(fair.proposals[0]!.summary).toContain("asking price of $9,995.00");
+    const done = await confirmProposal(as("owner"), fair.proposals[0]!.id);
+    const deal = (await getDeal(as("owner"), done.link.split("/").pop()!))!;
+    expect(deal.salePrice).toBe(9995);
+    expect(deal.odometer).toBe(61000);
+    const early = await ask(as("owner"), { ...who, question: "x" }, once("propose_deliver_deal", { deal_id: deal.id }));
+    expect(early.proposals).toHaveLength(0);
+  });
+});

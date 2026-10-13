@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { assistantUsage, can, expenseSummary, featureOn, listReminders, overview, productOf } from "@bos/core";
@@ -12,6 +13,14 @@ import { Sidebar, type NavItem } from "../../components/Sidebar";
 import { requireSession } from "../../lib/session";
 
 export const dynamic = "force-dynamic";
+
+/** Dealer Terminal accounts carry their own name and mark in the browser tab. */
+export async function generateMetadata(): Promise<Metadata> {
+  const { membership } = await requireSession({ setupAllowed: true });
+  return productOf(membership.businessType ?? "distributor") === "dealer"
+    ? { title: "Dealer Terminal", icons: { icon: "/brand/dealer-terminal-icon.png", apple: "/brand/dealer-terminal-icon.png" } }
+    : {};
+}
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const { ctx, membership } = await requireSession({ setupAllowed: true });
@@ -86,6 +95,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             customers: can(ctx, "customer.write"),
             invoices: can(ctx, "sales_order.read"),
             calendar: featureOn(ctx.features, "calendar"),
+            dealer: product === "dealer",
+            lot: product === "dealer" && can(ctx, "vehicle.write"),
           }}
         />
       </Suspense>

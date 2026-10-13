@@ -44,7 +44,15 @@ export function Sidebar({ items, company, product, footer }: { items: NavItem[];
     <nav aria-label="Main" className="glass sidebar">
       <div className="brand">
         <span>
-          {product === "dealer" ? "Dealer Terminal" : "Cedro Terminal"}
+          {product === "dealer" ? (
+            <>
+              {/* The Dealer Terminal mark: white on dark, a dark copy for light mode. */}
+              <img src="/brand/dealer-terminal-white.png" alt="Dealer Terminal" className="brand-logo brand-logo-on-dark" width={760} height={217} />
+              <img src="/brand/dealer-terminal-dark.png" alt="" aria-hidden="true" className="brand-logo brand-logo-on-light" width={760} height={217} />
+            </>
+          ) : (
+            "Cedro Terminal"
+          )}
           <small>{company}</small>
         </span>
       </div>
