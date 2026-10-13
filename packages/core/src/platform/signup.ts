@@ -22,6 +22,13 @@ export async function createSignupLink(pool: Pool, createdBy: string, note: stri
   return { token, expiresAt: made.rows[0]!.expires };
 }
 
+/** A link for someone signing themselves up, with nobody behind it. Used once, straight away. */
+export async function openSignupLink(pool: Pool): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  await pool.query("select signup_invite_create($1, $2, $3)", [tokenHash(token), "Signed up from the website", null]);
+  return token;
+}
+
 export async function signupLinkValid(pool: Pool, token: string): Promise<boolean> {
   if (!TOKEN.test(token)) return false;
   return Boolean((await pool.query<{ ok: boolean }>("select signup_invite_valid($1) as ok", [tokenHash(token)])).rows[0]?.ok);

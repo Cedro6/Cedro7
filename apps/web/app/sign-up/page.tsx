@@ -10,7 +10,8 @@ export const metadata = { referrer: "no-referrer" as const, robots: { index: fal
 
 export default async function SignUpPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
   const { token = "" } = await searchParams;
-  const valid = await signupLinkValid(pool, token);
+  // With a link the company is invited; without one, anyone may sign up and the product is theirs to pick.
+  const valid = token === "" || (await signupLinkValid(pool, token));
   return (
     <main className="sign-in">
       <section className={`glass panel sign-in-card ${valid ? "signup-card" : ""}`}>
