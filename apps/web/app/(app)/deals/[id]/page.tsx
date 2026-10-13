@@ -80,12 +80,12 @@ export default async function DealPage({ params, searchParams }: { params: Promi
           <ul className="comp-list">
             <li>
               <div><strong>Buyers Guide (FTC window form)</strong><div className="muted">Required on every used car. Print it, display it in the window, and give the buyer a copy.</div></div>
-              <Link href={`/deals/${deal.id}/buyers-guide`} className="btn btn-glass btn-small" target="_blank">Open</Link>
+              <Link href={`/deals/${deal.id}/buyers-guide`} className="btn btn-glass btn-small">Open</Link>
             </li>
             {Object.entries(FLORIDA_FORMS).map(([key, f]) => (
               <li key={key}>
                 <div><strong>{f.title}</strong><div className="muted">{f.about}</div></div>
-                <a href={`/deals/${deal.id}/forms/${key}`} className="btn btn-glass btn-small" target="_blank" rel="noreferrer">Fill and open</a>
+                <Link href={`/deals/${deal.id}/documents/${key}`} className="btn btn-glass btn-small">Fill and open</Link>
               </li>
             ))}
           </ul>

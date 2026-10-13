@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can, getCompanyProfile, getDeal, getDealerSettings } from "@bos/core";
+import { BackToDeal } from "../../../../../components/BackToDeal";
 import { PrintButton } from "../../../../../components/PrintButton";
 import { requireSession } from "../../../../../lib/session";
 
@@ -22,6 +23,7 @@ export default async function BuyersGuidePage({ params }: { params: Promise<{ id
           <div className="eyebrow"><Link href="/deals">Deals</Link> / <Link href={`/deals/${id}`}>{deal.number}</Link></div>
           <h1>Buyers Guide</h1>
         </div>
+        <BackToDeal id={id} number={deal.number} />
         <PrintButton />
       </header>
       <section className="paper guide">

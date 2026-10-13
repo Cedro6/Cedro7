@@ -4,7 +4,7 @@ import { todayHere } from "../../../../../../lib/locale";
 import { requireSession } from "../../../../../../lib/session";
 
 /** One of Florida's title forms, filled from the deal, as a PDF to print and sign. */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string; form: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string; form: string }> }) {
   const { ctx } = await requireSession();
   const { id, form } = await params;
   if (!can(ctx, "vehicle.read") || !isFloridaForm(form)) return new Response("Not found", { status: 404 });
@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const bytes = await fillFloridaForm(form, { deal, company, dealer, today: todayHere() });
     return new Response(Buffer.from(bytes), {
-      headers: { "content-type": "application/pdf", "content-disposition": `inline; filename="${deal.number}-HSMV-${form}.pdf"`, "cache-control": "no-store" },
+      headers: { "content-type": "application/pdf", "content-disposition": `${new URL(request.url).searchParams.has("download") ? "attachment" : "inline"}; filename="${deal.number}-HSMV-${form}.pdf"`, "cache-control": "no-store" },
     });
   } catch (error) {
     console.error("florida form failed", form, error);
