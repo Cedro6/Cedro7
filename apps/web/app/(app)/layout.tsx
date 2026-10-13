@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { isPlatformAdmin } from "../../lib/platform";
 import { assistantUsage, can, expenseSummary, featureOn, getBriefing, overview } from "@bos/core";
 import { Suspense } from "react";
 import { Ava } from "../../components/Ava";
@@ -8,10 +7,8 @@ import { assistantConfigured, monthlyLimit } from "../../lib/assistant";
 import { voiceConfigured } from "../../lib/voice";
 import { Avatar } from "../../components/Avatar";
 import { Main } from "../../components/Main";
-import { ModeSwitch } from "../../components/ModeSwitch";
 import { Sidebar, type NavItem } from "../../components/Sidebar";
 import { requireSession } from "../../lib/session";
-import { signOut } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +34,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (warehouseJobs) items.push({ href: "/warehouse", label: "Warehouse" });
   if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
   if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
+  // Settings is for the people who run the company; the setup guide is tucked under it.
+  if (can(ctx, "settings.manage")) items.push({ href: "/settings", label: "Settings", children: [{ href: "/welcome", label: "Setup guide" }] });
   // Ava sits beside every screen rather than having a page of her own.
   const avaOn = assistantConfigured();
   const [usage, briefing] = await Promise.all([assistantUsage(ctx, monthlyLimit()), avaOn ? getBriefing(ctx) : null]);
@@ -47,25 +46,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         items={items}
         company={membership.orgName}
         footer={
-          <div className="account">
+          <Link href="/account" className="account account-card" aria-label={`Your profile: ${membership.userName}`}>
             <Avatar name={membership.userName} />
             <div className="account-text">
-              <Link href="/account" className="account-name account-link">
-                {membership.userName}
-              </Link>
+              <div className="account-name">{membership.userName}</div>
               <div className="muted">{role}</div>
             </div>
-            <ModeSwitch />
-            <div className="account-links">
-              {can(ctx, "settings.manage") && <Link href="/settings">Settings</Link>}
-              {isPlatformAdmin(membership.userEmail) && <Link href="/platform">Platform</Link>}
-              <Link href="/account">Password</Link>
-              {can(ctx, "settings.manage") && <Link href="/welcome">Setup guide</Link>}
-              <form action={signOut}>
-                <button type="submit">Sign out</button>
-              </form>
-            </div>
-          </div>
+          </Link>
         }
       />
       <Main>{children}</Main>

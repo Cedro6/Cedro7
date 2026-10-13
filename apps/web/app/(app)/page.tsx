@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { can, getBriefing, getHomeLayout, HERO_RANGES, isChartPeriod, isWidget, type HeroRange, type WidgetId } from "@bos/core";
+import { ModeSwitch } from "../../components/ModeSwitch";
 import { BriefingPanel } from "../../components/BriefingPanel";
 import { Widget, WIDGET_INFO } from "../../components/home/widgets";
 import { assistantConfigured } from "../../lib/assistant";
@@ -81,6 +82,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 </button>
               </form>
             )}
+            <ModeSwitch />
             <Link href="/" className="btn btn-primary">
               Done
             </Link>

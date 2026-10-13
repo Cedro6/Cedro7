@@ -35,3 +35,4 @@ export const SparkIcon = ({ fill = "#0d0e0d" }: { fill?: string }) => (
     <path d="M10 2l1.9 5.1L17 9l-5.1 1.9L10 16l-1.9-5.1L3 9l5.1-1.9z" />
   </svg>
 );
+export const SettingsIcon = () => <Icon><circle cx="10" cy="10" r="2.6" /><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" /></Icon>;
