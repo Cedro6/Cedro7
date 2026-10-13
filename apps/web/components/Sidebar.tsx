@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
-  AssistantIcon,
   BillsIcon,
   CalendarIcon,
   CustomersIcon,
@@ -29,7 +28,6 @@ const ICONS: Record<string, ReactNode> = {
   "/warehouse": <WarehouseIcon />,
   "/calendar": <CalendarIcon />,
   "/reports": <ReportsIcon />,
-  "/assistant": <AssistantIcon />,
 };
 
 /** One entry per screen this person may open. The server decides the list from their role and the company's features. */

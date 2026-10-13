@@ -171,6 +171,7 @@ export {
   type ModelCall,
   type ModelRequest,
   type ModelResponse,
+  type Screen,
 } from "./assistant/ask";
 export { ASSISTANT_TOOLS, toolsFor } from "./assistant/tools";
 export { ASSISTANT_ACTIONS, actionsFor, confirmProposal, dismissProposal, type Proposal } from "./assistant/actions";
