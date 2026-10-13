@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { can, getBriefing, getHomeLayout, HERO_RANGES, isWidget, type HeroRange, type WidgetId } from "@bos/core";
+import { can, getBriefing, getHomeLayout, HERO_RANGES, isChartPeriod, isWidget, type HeroRange, type WidgetId } from "@bos/core";
 import { BriefingPanel } from "../../components/BriefingPanel";
 import { Widget, WIDGET_INFO } from "../../components/home/widgets";
 import { assistantConfigured } from "../../lib/assistant";
@@ -47,12 +47,13 @@ function WidgetMenu({ options, replacing }: { options: WidgetId[]; replacing: Wi
   );
 }
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<{ edit?: string; add?: string; replace?: string; range?: string; error?: string }> }) {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ edit?: string; add?: string; replace?: string; range?: string; chart?: string; error?: string }> }) {
   const { ctx, membership } = await requireSession();
   const params = await searchParams;
   const edit = params.edit === "1";
   const requested = Number(params.range);
   const range: HeroRange = (HERO_RANGES as readonly number[]).includes(requested) ? (requested as HeroRange) : 30;
+  const view = { range, chart: params.chart && isChartPeriod(params.chart) ? params.chart : ("30d" as const), edit };
   const [layout, briefing] = await Promise.all([getHomeLayout(ctx, membership.businessType), assistantConfigured() ? getBriefing(ctx) : null]);
   const replacing = edit && params.replace && isWidget(params.replace) && layout.widgets.includes(params.replace) ? params.replace : null;
   const adding = edit && params.add === "1";
@@ -142,7 +143,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 </div>
               )}
               {replacing === id && <WidgetMenu options={layout.available} replacing={id} />}
-              <Widget id={id} ctx={ctx} range={range} edit={edit} />
+              <Widget id={id} ctx={ctx} view={view} />
             </div>
           );
         })}

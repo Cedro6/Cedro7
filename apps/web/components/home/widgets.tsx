@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
-  attention, calendarEntries, can, dailySales, featureOn, headline, heroFigures, listInvoices, listOrders, listProducts, orderHeatmap,
-  putawayList, report, type Ctx, type HeroRange, type WidgetId,
+  attention, calendarEntries, can, featureOn, headline, heroFigures, listInvoices, listOrders, listProducts, orderHeatmap,
+  putawayList, report, salesSeries, type ChartPeriod, type Ctx, type HeroRange, type WidgetId,
 } from "@bos/core";
 import { formatMoney, formatQty } from "../../lib/format";
 import { AreaChart, BarList, Sparkline } from "./charts";
@@ -14,6 +14,14 @@ const todayIso = () => new Date().toLocaleDateString("en-CA", { timeZone: ZONE }
 const ago = (date: Date) => {
   const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
   return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+};
+
+/** What the person has chosen on Home, carried in the address so a choice on one card keeps the others. */
+export type HomeView = { range: HeroRange; chart: ChartPeriod; edit: boolean };
+const homeHref = (view: HomeView, change: Partial<HomeView>) => {
+  const next = { ...view, ...change };
+  const parts = [next.range !== 30 ? `range=${next.range}` : "", next.chart !== "30d" ? `chart=${next.chart}` : "", next.edit ? "edit=1" : ""].filter(Boolean);
+  return parts.length ? `/?${parts.join("&")}` : "/";
 };
 
 /** What each card is called, what it shows, and how wide it sits. */
@@ -47,11 +55,10 @@ function Panel({ title, right, children }: { title: ReactNode; right?: ReactNode
 }
 const Empty = ({ children }: { children: ReactNode }) => <p className="muted">{children}</p>;
 
-async function Hero({ ctx, range, edit }: { ctx: Ctx; range: HeroRange; edit: boolean }) {
-  const hero = await heroFigures(ctx, range);
+async function Hero({ ctx, view }: { ctx: Ctx; view: HomeView }) {
+  const hero = await heroFigures(ctx, view.range);
   if (!hero) return null;
   const [dollars, cents] = formatMoney(hero.total).split(".");
-  const href = (days: number) => `/?range=${days}${edit ? "&edit=1" : ""}`;
   return (
     <section className="hero">
       <div className="hero-main">
@@ -99,7 +106,7 @@ async function Hero({ ctx, range, edit }: { ctx: Ctx; range: HeroRange; edit: bo
         <div className="hero-range">
           <div className="segmented" role="group" aria-label="Period">
             {([[7, "Week"], [30, "Month"], [60, "60 days"]] as const).map(([days, label]) => (
-              <Link key={days} href={href(days)} aria-current={days === hero.days ? "true" : undefined} scroll={false}>
+              <Link key={days} href={homeHref(view, { range: days })} aria-current={days === hero.days ? "true" : undefined} scroll={false}>
                 {label}
               </Link>
             ))}
@@ -165,22 +172,44 @@ async function Tiles({ ctx }: { ctx: Ctx }) {
   );
 }
 
-async function SalesChart({ ctx }: { ctx: Ctx }) {
-  const series = (await dailySales(ctx, 30)) ?? [];
-  const total = series.reduce((s, d) => s + d.total, 0);
+const CHART_LABEL: Record<ChartPeriod, { tab: string; title: string; empty: string }> = {
+  "30d": { tab: "30 days", title: "Sales, last 30 days", empty: "No orders confirmed in the last 30 days." },
+  quarter: { tab: "Quarter", title: "Sales, this quarter", empty: "No orders confirmed this quarter yet." },
+  ytd: { tab: "Year to date", title: "Sales, year to date", empty: "No orders confirmed this year yet." },
+};
+async function SalesChart({ ctx, view }: { ctx: Ctx; view: HomeView }) {
+  const data = await salesSeries(ctx, view.chart);
+  if (!data) return null;
+  const text = CHART_LABEL[data.period];
+  const last = data.points.at(-1)?.total ?? 0;
   return (
     <section className="glass panel">
       <div className="panel-head">
         <div>
-          <h2 className="title">Sales, last 30 days</h2>
-          <div className="muted">Orders confirmed, before tax</div>
+          <h2 className="title">{text.title}</h2>
+          <div className="muted">
+            {shortDay(data.from)} to {shortDay(data.to)} · orders confirmed, before tax{data.bucket === "week" ? " · by week" : ""}
+          </div>
         </div>
-        <div className="chart-total">
-          <span className="numeral numeral-md">{whole(total)}</span>
-          <span className="muted">total · {whole(series.at(-1)?.total ?? 0)} today</span>
+        <div className="segmented" role="group" aria-label="Chart period">
+          {(["30d", "quarter", "ytd"] as const).map((period) => (
+            <Link key={period} href={homeHref(view, { chart: period })} aria-current={period === data.period ? "true" : undefined} scroll={false}>
+              {CHART_LABEL[period].tab}
+            </Link>
+          ))}
         </div>
       </div>
-      {total > 0 ? <AreaChart series={series} label={`Daily sales for the last 30 days, ${whole(total)} in total`} /> : <Empty>No orders confirmed in the last 30 days.</Empty>}
+      <div className="chart-total">
+        <span className="numeral numeral-md">{whole(data.total)}</span>
+        <span className="muted">
+          total · {whole(last)} {data.bucket === "week" ? "this week" : "today"}
+        </span>
+      </div>
+      {data.total > 0 && data.points.length > 1 ? (
+        <AreaChart series={data.points} label={`${text.title}: ${whole(data.total)} in total, shown ${data.bucket === "week" ? "week by week" : "day by day"}`} />
+      ) : (
+        <Empty>{data.total > 0 ? `${whole(data.total)} so far. The chart appears from the second day.` : text.empty}</Empty>
+      )}
     </section>
   );
 }
@@ -456,11 +485,11 @@ async function Quotes({ ctx }: { ctx: Ctx }) {
 }
 
 /** Draws one Home card. */
-export function Widget({ id, ctx, range, edit }: { id: WidgetId; ctx: Ctx; range: HeroRange; edit: boolean }) {
+export function Widget({ id, ctx, view }: { id: WidgetId; ctx: Ctx; view: HomeView }) {
   switch (id) {
-    case "hero": return <Hero ctx={ctx} range={range} edit={edit} />;
+    case "hero": return <Hero ctx={ctx} view={view} />;
     case "tiles": return <Tiles ctx={ctx} />;
-    case "sales": return <SalesChart ctx={ctx} />;
+    case "sales": return <SalesChart ctx={ctx} view={view} />;
     case "invoices": return <RecentInvoices ctx={ctx} />;
     case "attention": return <Attention ctx={ctx} />;
     case "today": return <Today ctx={ctx} />;

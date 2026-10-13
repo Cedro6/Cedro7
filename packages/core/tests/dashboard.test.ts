@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
   changeHomeLayout, confirmOrder, createQuote, dailySales, defaultHome, getHomeLayout, headline, heroFigures, listCustomers, listProducts,
-  orderHeatmap, ValidationError, widgetAllowed, WIDGETS, type Ctx, type Role,
+  orderHeatmap, salesSeries, ValidationError, widgetAllowed, WIDGETS, type Ctx, type Role,
 } from "../src/index";
 
 let owner: Pool;
@@ -124,5 +124,30 @@ describe("home figures", () => {
     expect(map.grid).toHaveLength(map.hours.length);
     expect(map.grid[map.hours.indexOf(10)]![2]).toBeGreaterThanOrEqual(1); // Wednesday, 10 am
     expect(map.busiest).toBe(Math.max(...map.grid.flat()));
+  });
+
+  it("charts 30 days by day, the quarter by day and the year by week, each adding up to its total", async () => {
+    const product = (await listProducts(as("owner")))[0]!;
+    const customer = (await listCustomers(as("owner")))[0]!;
+    const quote = await createQuote(as("sales"), { customerId: customer.id, lines: [{ productId: product.id, qty: 1, unitPrice: 40 }] });
+    await confirmOrder(as("sales"), quote.id);
+    const cal = (await owner.query("select (now() at time zone 'America/New_York')::date as today, date_trunc('quarter', now() at time zone 'America/New_York')::date as q, date_trunc('year', now() at time zone 'America/New_York')::date as y, (now() at time zone 'America/New_York')::date - date_trunc('quarter', now() at time zone 'America/New_York')::date as qdays, (now() at time zone 'America/New_York')::date - date_trunc('year', now() at time zone 'America/New_York')::date as ydays")).rows[0];
+    const iso = (d: Date) => d.toLocaleDateString("en-CA");
+    const month = (await salesSeries(as("owner"), "30d"))!;
+    expect([month.bucket, month.points.length, month.to]).toEqual(["day", 30, iso(cal.today)]);
+    const quarter = (await salesSeries(as("owner"), "quarter"))!;
+    expect([quarter.bucket, quarter.from, quarter.points.length]).toEqual(["day", iso(cal.q), cal.qdays + 1]);
+    const year = (await salesSeries(as("owner"), "ytd"))!;
+    expect([year.bucket, year.from, year.points[0]!.date]).toEqual(["week", iso(cal.y), iso(cal.y)]);
+    expect(year.points.length).toBeLessThanOrEqual(Math.ceil((cal.ydays + 1) / 7) + 1);
+    for (const s of [month, quarter, year]) expect(s.points.reduce((n, p) => n + p.total, 0)).toBeCloseTo(s.total, 2);
+    expect(year.total).toBeGreaterThanOrEqual(quarter.total);
+    expect(month.total).toBeCloseTo((await dailySales(as("owner"), 30))!.reduce((n, d) => n + d.total, 0), 2);
+    // An order from last year is in none of them.
+    const old = await createQuote(as("sales"), { customerId: customer.id, lines: [{ productId: product.id, qty: 1, unitPrice: 999 }] });
+    await confirmOrder(as("sales"), old.id);
+    await owner.query("update sales_orders set confirmed_at = $2::date - 5 where id = $1", [old.id, iso(cal.y)]);
+    expect((await salesSeries(as("owner"), "ytd"))!.total).toBeCloseTo(year.total, 2);
+    expect(await salesSeries(as("viewer", { stock: true }), "ytd")).not.toBeNull();
   });
 });
