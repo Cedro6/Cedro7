@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, getPurchaseOrder } from "@bos/core";
+import { can, getPurchaseOrder, listExpensesForPurchaseOrder } from "@bos/core";
+import { BillStatus } from "../../../../components/BillStatus";
 import { PoStatusBadge } from "../../../../components/PoStatusBadge";
 import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
@@ -38,6 +39,9 @@ export default async function PurchaseOrderPage({
   const cancellable = ["draft", "pending_approval", "approved", "sent"].includes(order.status);
   const outstanding = order.unitsOrdered - order.unitsReceived;
   const showCost = order.total !== null;
+  const canSeeBills = can(ctx, "expense.read");
+  const canBill = can(ctx, "expense.write");
+  const bills = canSeeBills ? await listExpensesForPurchaseOrder(ctx, order.id) : [];
 
   return (
     <>
@@ -187,6 +191,31 @@ export default async function PurchaseOrderPage({
         </section>
 
         <aside className="grow-2 stack-panels">
+          {canSeeBills && (
+            <section className="glass panel">
+              <div className="panel-head">
+                <h2 className="label">Supplier bills</h2>
+                {canBill && order.status !== "cancelled" && order.status !== "draft" && (
+                  <Link href={`/bills/new?po=${order.id}`} className="btn btn-glass btn-small">Record the bill</Link>
+                )}
+              </div>
+              {bills.length === 0 ? (
+                <p className="muted">No bill recorded for this order yet.</p>
+              ) : (
+                <div className="rows">
+                  {bills.map((b) => (
+                    <div className="row" key={b.id}>
+                      <div className="row-text">
+                        <Link href={`/bills/${b.id}`} className="row-link">{b.reference || b.description}</Link>
+                        <div className="muted"><BillStatus bill={b} /></div>
+                      </div>
+                      <span className="strong">{formatMoney(b.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
           {showCost && (
             <section className="glass panel">
               <h2 className="label">Order total</h2>

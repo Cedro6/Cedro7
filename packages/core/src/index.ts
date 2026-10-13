@@ -48,6 +48,9 @@ export {
   PAYMENT_METHODS,
   raiseCredit,
   recordPayment,
+  refundCredit,
+  listRefunds,
+  type Refund,
   requestDeposit,
   termsDays,
   useCustomerCredit,
@@ -233,8 +236,8 @@ export {
   type ImportKind, type ImportPlan, type ImportRow,
 } from "./platform/importing";
 export {
-  createExpense, EXPENSE_CATEGORIES, EXPENSE_FILTERS, expenseSummary, getExpense, isExpenseCategory, listExpenses, payExpense, STOCK_CATEGORY, voidExpense,
-  type Expense, type ExpenseCategory, type ExpenseFilter, type ExpenseInput, type ExpenseSummary,
+  createExpense, EXPENSE_CATEGORIES, EXPENSE_FILTERS, expenseSummary, getExpense, isExpenseCategory, listExpensePayments, listExpenses, listExpensesForPurchaseOrder, payExpense, STOCK_CATEGORY, voidExpense,
+  type Expense, type ExpenseCategory, type ExpensePayment, type ExpenseFilter, type ExpenseInput, type ExpenseSummary,
 } from "./billing/expenses";
 export { createReturn, listReturnable, listReturns, type OrderReturn, type Returnable, type ReturnLine } from "./sales/returns";
 export { search, SEARCH_MIN, type SearchGroup, type SearchHit } from "./platform/search";

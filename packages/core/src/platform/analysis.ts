@@ -109,7 +109,14 @@ export type Analysis = {
     customers: Pair;
     /** Of those, the ones whose first ever order falls in the dates. */
     newCustomers: Pair;
-    /** Sales less what each product cost on the day its order was confirmed. Null when the role may not see cost. */
+    /** Goods customers sent back in the dates, at the price they paid, before tax. Counted by the date of the return. */
+    returns: Pair;
+    /** Sales less returns. */
+    net: Pair;
+    /**
+     * Sales less what the goods cost on the day each order was confirmed, less the margin given up on returns
+     * (all of the sale when the goods were not fit to restock). Null when the role may not see cost.
+     */
     margin: Pair | null;
   };
   /** One step per day, week or month. `was` lines up step for step with the comparison dates. */
@@ -128,6 +135,8 @@ export type Analysis = {
     collected: Pair;
     /** Credit notes raised in the dates. */
     credits: Pair;
+    /** Money paid back to customers in the dates. */
+    refunded: Pair;
     /** Average days from invoice to payment, for payments received in the dates. Null when there were none. */
     daysToPay: { now: number | null; was: number | null };
     /** What customers owe today, by how late it is. Not tied to the dates. */
@@ -215,6 +224,21 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
       dates,
     );
 
+    // Returns count on the day the goods came back. A return gives up the sale's margin; when the goods
+    // could not be restocked their cost is lost as well, so the whole sale comes off.
+    const back = await tx.query<Record<"value" | "value0" | "hit" | "hit0", number>>(
+      `select coalesce(sum(v) filter (where cur), 0)::float8 as value, coalesce(sum(v) filter (where not cur), 0)::float8 as value0,
+              coalesce(sum(hit) filter (where cur), 0)::float8 as hit, coalesce(sum(hit) filter (where not cur), 0)::float8 as hit0
+         from (select ${NOW("r.returned_at")} as cur, rl.qty * l.unit_price as v,
+                      case when r.restocked then rl.qty * (l.unit_price - coalesce(l.unit_cost, p.cost)) else rl.qty * l.unit_price end as hit
+                 from returns r join return_lines rl on rl.return_id = r.id
+                 join sales_order_lines l on l.id = rl.order_line_id join products p on p.id = l.product_id
+                where ${EITHER("r.returned_at")}) x`,
+      dates,
+    );
+    const ret = back.rows[0]!;
+    const margin = { now: t.margin - ret.hit, was: t.margin0 - ret.hit0 };
+
     const daily = await tx.query<{ day: string; cur: boolean; total: number }>(
       `select to_char(day, 'YYYY-MM-DD') as day, cur, sum(amount)::float8 as total from (${LINES}) x group by day, cur`,
       dates,
@@ -263,13 +287,15 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
       dates,
     );
 
-    const money = await tx.query<Record<"invoiced" | "invoiced0" | "collected" | "collected0" | "credits" | "credits0", number> & { days: number | null; days0: number | null }>(
+    const money = await tx.query<Record<"invoiced" | "invoiced0" | "collected" | "collected0" | "credits" | "credits0" | "refunded" | "refunded0", number> & { days: number | null; days0: number | null }>(
       `select (select coalesce(sum(amount), 0) from invoices where voided_at is null and ${NOW("issued_at")})::float8 as invoiced,
               (select coalesce(sum(amount), 0) from invoices where voided_at is null and ${WAS("issued_at")})::float8 as invoiced0,
               (select coalesce(sum(amount), 0) from payments where ${NOW("paid_at")})::float8 as collected,
               (select coalesce(sum(amount), 0) from payments where ${WAS("paid_at")})::float8 as collected0,
               (select coalesce(sum(amount), 0) from credit_notes where ${NOW("created_at")})::float8 as credits,
               (select coalesce(sum(amount), 0) from credit_notes where ${WAS("created_at")})::float8 as credits0,
+              (select coalesce(sum(amount), 0) from credit_refunds where ${NOW("paid_at")})::float8 as refunded,
+              (select coalesce(sum(amount), 0) from credit_refunds where ${WAS("paid_at")})::float8 as refunded0,
               (select avg(greatest(extract(epoch from p.paid_at - i.issued_at) / 86400, 0)) from payments p join invoices i on i.id = p.invoice_id
                 where ${NOW("p.paid_at")})::float8 as days,
               (select avg(greatest(extract(epoch from p.paid_at - i.issued_at) / 86400, 0)) from payments p join invoices i on i.id = p.invoice_id
@@ -366,8 +392,8 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
         dates,
       );
       const unpaid = await tx.query<{ owed: number; overdue: number }>(
-        `select coalesce(sum(amount), 0)::float8 as owed,
-                coalesce(sum(amount) filter (where due_on < (now() at time zone '${zoneOf(ctx)}')::date), 0)::float8 as overdue
+        `select coalesce(sum((amount - coalesce((select sum(p.amount) from expense_payments p where p.expense_id = expenses.id), 0))), 0)::float8 as owed,
+                coalesce(sum((amount - coalesce((select sum(p.amount) from expense_payments p where p.expense_id = expenses.id), 0))) filter (where due_on < (now() at time zone '${zoneOf(ctx)}')::date), 0)::float8 as overdue
            from expenses where voided_at is null and paid_on is null`,
       );
       const isStock = (name: string) => name === "Stock purchases";
@@ -377,7 +403,7 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
         running,
         stockPurchases: pair(total("now", true), total("was", true)),
         categories: byCategory.rows.map((r) => ({ name: r.name, amount: pair(r.now, r.was) })),
-        profit: seeCost ? pair(t.margin - running.now, t.margin0 - (running.was ?? 0)) : null,
+        profit: seeCost ? pair(margin.now - running.now, margin.was - (running.was ?? 0)) : null,
         owed: unpaid.rows[0]!.owed,
         overdue: unpaid.rows[0]!.overdue,
       };
@@ -395,7 +421,9 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
         units: pair(t.units, t.units0),
         customers: pair(t.cust, t.cust0),
         newCustomers: pair(fresh.rows[0]!.now, fresh.rows[0]!.was),
-        margin: seeCost ? pair(t.margin, t.margin0) : null,
+        returns: pair(ret.value, ret.value0),
+        net: pair(t.rev - ret.value, t.rev0 - ret.value0),
+        margin: seeCost ? pair(margin.now, margin.was) : null,
       },
       trend,
       products: products.rows.map((p) => ({
@@ -409,6 +437,7 @@ export async function analysis(ctx: Ctx, input: { range: DateRange; mode?: Compa
         invoiced: pair(m.invoiced, m.invoiced0),
         collected: pair(m.collected, m.collected0),
         credits: pair(m.credits, m.credits0),
+        refunded: pair(m.refunded, m.refunded0),
         daysToPay: { now: m.days, was: compare ? m.days0 : null },
         owed: { ...o, total: o.current + o.late30 + o.late60 + o.older },
         debtors: debtors.rows,

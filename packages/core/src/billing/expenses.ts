@@ -29,9 +29,13 @@ export type Expense = {
   description: string;
   reference: string | null;
   amount: number;
+  /** Paid so far, and what is still owed. A voided entry owes nothing. */
+  paid: number;
+  balance: number;
   /** Dates are YYYY-MM-DD. */
   incurredOn: string;
   dueOn: string | null;
+  /** The date the last of it was paid. Null while anything is still owed. */
   paidOn: string | null;
   paidMethod: string | null;
   voided: boolean;
@@ -60,6 +64,8 @@ const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Dat
 const select = (ctx: Ctx) => `
   select e.id, e.supplier_id as "supplierId", s.name as "supplierName", e.purchase_order_id as "purchaseOrderId", po.number as "purchaseOrderNumber",
          e.category, e.description, e.reference, e.amount::float8 as amount,
+         coalesce((select sum(p.amount) from expense_payments p where p.expense_id = e.id), 0)::float8 as paid,
+         case when e.voided_at is not null then 0 else e.amount - coalesce((select sum(p.amount) from expense_payments p where p.expense_id = e.id), 0) end::float8 as balance,
          to_char(e.incurred_on, 'YYYY-MM-DD') as "incurredOn", to_char(e.due_on, 'YYYY-MM-DD') as "dueOn", to_char(e.paid_on, 'YYYY-MM-DD') as "paidOn",
          e.paid_method as "paidMethod", e.voided_at is not null as voided, e.void_reason as "voidReason",
          case when e.paid_on is null and e.voided_at is null and e.due_on is not null
@@ -115,25 +121,53 @@ export async function createExpense(ctx: Ctx, input: ExpenseInput): Promise<{ id
       [ctx.orgId, supplierId, e.purchaseOrderId, e.category, e.description, e.reference, e.amount, e.incurredOn, e.dueOn, e.paidOn, e.paidMethod, ctx.userId],
     );
     const id = created.rows[0]!.id;
+    if (e.paidOn) {
+      await tx.query("insert into expense_payments (org_id, expense_id, amount, paid_on, method, recorded_by) values ($1, $2, $3, $4, $5, $6)", [ctx.orgId, id, e.amount, e.paidOn, e.paidMethod, ctx.userId]);
+    }
     await audit(tx, ctx, "expense.created", id, { description: e.description, category: e.category, amount: e.amount, paid: Boolean(e.paidOn) });
     return { id };
   });
 }
 
-/** Marks a bill as paid in full. A bill is paid once; paying it again is refused. */
-export async function payExpense(ctx: Ctx, id: string, input: { paidOn: string; method?: string }): Promise<void> {
+export type ExpensePayment = { amount: number; paidOn: string; method: string | null; recordedBy: string | null };
+
+/**
+ * Records a payment on a bill: all of what is owed, or part of it when an amount is given.
+ * A bill cannot be paid more than it is for. It counts as paid when nothing is left owing.
+ */
+export async function payExpense(ctx: Ctx, id: string, input: { paidOn: string; method?: string; amount?: number }): Promise<{ paid: number; balance: number }> {
   requirePermission(ctx, "expense.write");
   if (!UUID.test(id)) throw new ValidationError("id", "Bill not found.");
   if (!isDate(input.paidOn)) throw new ValidationError("paidOn", "Enter the date it was paid.");
   const method = input.method?.trim().slice(0, 40) || null;
-  await withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const row = await tx.query<{ paid: boolean; voided: boolean }>("select paid_on is not null as paid, voided_at is not null as voided from expenses where id = $1 for update", [id]);
+  const given = input.amount;
+  if (given !== undefined && (!Number.isFinite(given) || given <= 0 || Math.abs(Math.round(given * 100) - given * 100) > 1e-6)) {
+    throw new ValidationError("amount", "Enter the amount paid, in dollars and cents.");
+  }
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const row = await tx.query<{ amount: number; voided: boolean }>("select amount::float8 as amount, voided_at is not null as voided from expenses where id = $1 for update", [id]);
     if (!row.rows[0]) throw new ValidationError("id", "Bill not found.");
     if (row.rows[0].voided) throw new StateError("This bill was voided, so it cannot be paid.");
-    if (row.rows[0].paid) throw new StateError("This bill is already marked as paid.");
-    await tx.query("update expenses set paid_on = $2, paid_method = $3 where id = $1", [id, input.paidOn, method]);
-    await audit(tx, ctx, "expense.paid", id, { paidOn: input.paidOn, method });
+    const sofar = (await tx.query<{ paid: number }>("select coalesce(sum(amount), 0)::float8 as paid from expense_payments where expense_id = $1", [id])).rows[0]!.paid;
+    const owed = Math.round((row.rows[0].amount - sofar) * 100) / 100;
+    if (owed <= 0) throw new StateError("This bill is already paid in full.");
+    const paying = given === undefined ? owed : Math.round(given * 100) / 100;
+    if (paying > owed) throw new ValidationError("amount", `Only ${owed.toFixed(2)} is still owed on this bill.`);
+    await tx.query("insert into expense_payments (org_id, expense_id, amount, paid_on, method, recorded_by) values ($1, $2, $3, $4, $5, $6)", [ctx.orgId, id, paying, input.paidOn, method, ctx.userId]);
+    const balance = Math.round((owed - paying) * 100) / 100;
+    if (balance === 0) await tx.query("update expenses set paid_on = $2, paid_method = $3 where id = $1", [id, input.paidOn, method]);
+    await audit(tx, ctx, "expense.paid", id, { amount: paying, paidOn: input.paidOn, method, balance });
+    return { paid: paying, balance };
   });
+}
+
+/** The payments recorded on one bill, oldest first. */
+export async function listExpensePayments(ctx: Ctx, id: string): Promise<ExpensePayment[]> {
+  requirePermission(ctx, "expense.read");
+  if (!UUID.test(id)) return [];
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => (await tx.query<ExpensePayment>(
+    `select p.amount::float8 as amount, to_char(p.paid_on, 'YYYY-MM-DD') as "paidOn", p.method, u.name as "recordedBy"
+       from expense_payments p left join users u on u.id = p.recorded_by where p.expense_id = $1 order by p.paid_on, p.created_at`, [id])).rows);
 }
 
 /** Cancels a bill or expense entered by mistake. The record stays, and stops counting everywhere. */
@@ -154,6 +188,13 @@ export async function voidExpense(ctx: Ctx, id: string, reason: string): Promise
 
 export const EXPENSE_FILTERS = ["unpaid", "paid", "all", "voided"] as const;
 export type ExpenseFilter = (typeof EXPENSE_FILTERS)[number];
+
+/** Every bill raised against one purchase order, voided ones included, newest first. */
+export async function listExpensesForPurchaseOrder(ctx: Ctx, purchaseOrderId: string): Promise<Expense[]> {
+  requirePermission(ctx, "expense.read");
+  if (!UUID.test(purchaseOrderId)) return [];
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => (await tx.query<Expense>(`${select(ctx)} where e.purchase_order_id = $1 order by e.incurred_on desc, e.created_at desc`, [purchaseOrderId])).rows);
+}
 
 export async function listExpenses(ctx: Ctx, filter: ExpenseFilter = "unpaid"): Promise<Expense[]> {
   requirePermission(ctx, "expense.read");
@@ -181,7 +222,7 @@ export type ExpenseSummary = {
   overdueCount: number;
   /** Due in the next 7 days, today included. */
   dueSoon: number;
-  /** Paid so far this calendar month. */
+  /** Payments made so far this calendar month, part payments included. */
   paidThisMonth: number;
 };
 
@@ -190,12 +231,13 @@ export async function expenseSummary(ctx: Ctx): Promise<ExpenseSummary> {
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const r = await tx.query<ExpenseSummary>(
       `with t as (select (now() at time zone '${zoneOf(ctx)}')::date as today)
-       select coalesce(sum(amount) filter (where paid_on is null), 0)::float8 as owed,
+       select coalesce(sum((amount - coalesce((select sum(p.amount) from expense_payments p where p.expense_id = expenses.id), 0))) filter (where paid_on is null), 0)::float8 as owed,
               count(*) filter (where paid_on is null)::int as unpaid,
-              coalesce(sum(amount) filter (where paid_on is null and due_on < t.today), 0)::float8 as overdue,
+              coalesce(sum((amount - coalesce((select sum(p.amount) from expense_payments p where p.expense_id = expenses.id), 0))) filter (where paid_on is null and due_on < t.today), 0)::float8 as overdue,
               count(*) filter (where paid_on is null and due_on < t.today)::int as "overdueCount",
-              coalesce(sum(amount) filter (where paid_on is null and due_on between t.today and t.today + 6), 0)::float8 as "dueSoon",
-              coalesce(sum(amount) filter (where paid_on >= date_trunc('month', t.today)), 0)::float8 as "paidThisMonth"
+              coalesce(sum((amount - coalesce((select sum(p.amount) from expense_payments p where p.expense_id = expenses.id), 0))) filter (where paid_on is null and due_on between t.today and t.today + 6), 0)::float8 as "dueSoon",
+              (select coalesce(sum(p.amount), 0) from expense_payments p join expenses x on x.id = p.expense_id, t t2
+                where x.voided_at is null and p.paid_on >= date_trunc('month', t2.today))::float8 as "paidThisMonth"
          from expenses, t where voided_at is null`,
     );
     return r.rows[0]!;

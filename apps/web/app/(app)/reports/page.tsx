@@ -141,6 +141,8 @@ function Overview({ data, view }: { data: Analysis; view: ReportView }) {
         <Tile label="Average order" pair={s.average} format={whole} />
         <Tile label="Units sold" pair={s.units} format={formatQty} />
         {s.margin && <Tile label="Margin" pair={s.margin} format={whole} note="Sales less cost of goods" />}
+        {(s.returns.now > 0 || (s.returns.was ?? 0) > 0) && <Tile label="Returns" pair={s.returns} format={whole} good="down" note="Goods sent back, before tax" />}
+        {(s.returns.now > 0 || (s.returns.was ?? 0) > 0) && <Tile label="Sales after returns" pair={s.net} format={whole} />}
         <Tile label="Customers buying" pair={s.customers} format={count} />
         <Tile label="New customers" pair={s.newCustomers} format={count} />
       </div>
@@ -189,6 +191,7 @@ function Money({ data, view }: { data: Analysis; view: ReportView }) {
         <Tile label="Invoiced" pair={m.invoiced} format={whole} note="Tax included" />
         <Tile label="Payments received" pair={m.collected} format={whole} />
         <Tile label="Credit notes" pair={m.credits} format={whole} good="down" />
+        <Tile label="Refunds paid" pair={m.refunded} format={whole} good="down" note="Money paid back to customers" />
         <div className="glass panel tile">
           <h2 className="label">Days to get paid</h2>
           <div className="numeral">{m.daysToPay.now === null ? "–" : days(m.daysToPay.now)}</div>
@@ -276,14 +279,14 @@ function Profit({ data, costs, view }: { data: Analysis; costs: NonNullable<Anal
             <table className="compact rpt-table rpt-sum">
               <tbody>
                 <tr><th scope="row">Sales, before tax</th><td className="num">{whole(data.sales.revenue.now)}</td></tr>
-                <tr><th scope="row">Less cost of the goods sold</th><td className="num">− {whole(data.sales.revenue.now - margin.now)}</td></tr>
+                <tr><th scope="row">Less cost of the goods sold, and margin given up on returns</th><td className="num">− {whole(data.sales.revenue.now - margin.now)}</td></tr>
                 <tr><th scope="row">Margin</th><td className="num">{whole(margin.now)}</td></tr>
                 <tr><th scope="row">Less running costs</th><td className="num">− {whole(costs.running.now)}</td></tr>
                 <tr className="rpt-total"><th scope="row">Profit</th><td className="num">{whole(costs.profit.now)}</td></tr>
               </tbody>
             </table>
           </div>
-          <p className="muted footnote">Cost of goods is what each product cost on the day its order was confirmed. Costs count by the date of the bill or purchase, paid or not. This is a working figure, not a tax return.</p>
+          <p className="muted footnote">Cost of goods is what each product cost on the day its order was confirmed. Costs count by the date of the bill or purchase, paid or not. A return takes its margin back off; goods not fit to restock take the whole sale off. This is a working figure, not a tax return.</p>
         </section>
       )}
       <PairTable

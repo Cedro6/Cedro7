@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
-  analysis, can, createExpense, expenseSummary, ForbiddenError, getExpense, listExpenses, listPurchaseOrders, listSuppliers, payExpense, resolveRange, StateError,
+  analysis, can, createExpense, expenseSummary, listExpensePayments, ForbiddenError, getExpense, listExpenses, listPurchaseOrders, listSuppliers, payExpense, resolveRange, StateError,
   today, ValidationError, voidExpense, type Ctx, type ExpenseInput, type Role,
 } from "../src/index";
 
@@ -140,5 +140,43 @@ describe("profit in the report", () => {
     expect((await analysis(as("sales"), { range })).costs).toBeNull();
     expect((await analysis(as("owner", { expenses: false }), { range })).costs).toBeNull();
     expect((await analysis(as("purchasing"), { range })).costs!.profit).not.toBeNull();
+  });
+});
+
+describe("part payments", () => {
+  it("pays a bill in parts and counts it as paid only when nothing is left", async () => {
+    const before = await expenseSummary(as("owner"));
+    const { id } = await createExpense(as("owner"), bill({ description: "Insurance in instalments", category: "Insurance", amount: 900, dueOn: day(-1) }));
+    expect(await getExpense(as("owner"), id)).toMatchObject({ paid: 0, balance: 900 });
+    expect(await payExpense(as("owner"), id, { paidOn: today(), amount: 300, method: "Card" })).toEqual({ paid: 300, balance: 600 });
+    expect(await getExpense(as("owner"), id)).toMatchObject({ paid: 300, balance: 600, paidOn: null, daysLate: 1 });
+    const mid = await expenseSummary(as("owner"));
+    expect(mid.owed - before.owed).toBe(600);
+    expect(mid.overdue - before.overdue).toBe(600);
+    expect(mid.paidThisMonth - before.paidThisMonth).toBe(300);
+    expect((await listExpenses(as("owner"), "unpaid")).map((e) => e.id)).toContain(id);
+    await expect(payExpense(as("owner"), id, { paidOn: today(), amount: 600.01 })).rejects.toThrow(/Only 600.00/);
+    await expect(payExpense(as("owner"), id, { paidOn: today(), amount: 0 })).rejects.toBeInstanceOf(ValidationError);
+    await expect(payExpense(as("owner"), id, { paidOn: today(), amount: 1.005 })).rejects.toBeInstanceOf(ValidationError);
+    // With no amount given, the rest is paid.
+    expect(await payExpense(as("owner"), id, { paidOn: today(), method: "Check" })).toEqual({ paid: 600, balance: 0 });
+    expect(await getExpense(as("owner"), id)).toMatchObject({ paid: 900, balance: 0, paidOn: today(), paidMethod: "Check", daysLate: 0 });
+    expect((await listExpensePayments(as("owner"), id)).map((p) => [p.amount, p.method])).toEqual([[300, "Card"], [600, "Check"]]);
+    await expect(payExpense(as("owner"), id, { paidOn: today() })).rejects.toBeInstanceOf(StateError);
+    expect((await expenseSummary(as("owner"))).owed).toBe(before.owed);
+    expect((await analysis(as("owner"), { range: resolveRange("30d", today()) })).costs!.owed).toBe((await expenseSummary(as("owner"))).owed);
+  });
+
+  it("records one payment for something entered as already paid, and drops a voided part-paid bill from what is owed", async () => {
+    const paid = await createExpense(as("owner"), bill({ description: "Paid at the till", amount: 42, paidOn: day(-2), paidMethod: "Cash" }));
+    expect(await listExpensePayments(as("owner"), paid.id)).toMatchObject([{ amount: 42, paidOn: day(-2), method: "Cash" }]);
+    const before = await expenseSummary(as("owner"));
+    const { id } = await createExpense(as("owner"), bill({ description: "Wrong supplier", amount: 500 }));
+    await payExpense(as("owner"), id, { paidOn: today(), amount: 100 });
+    await voidExpense(as("owner"), id, "Entered against the wrong supplier");
+    const after = await expenseSummary(as("owner"));
+    expect(after.owed).toBe(before.owed);
+    expect(after.paidThisMonth).toBe(before.paidThisMonth);
+    expect(await getExpense(as("owner"), id)).toMatchObject({ voided: true, balance: 0 });
   });
 });

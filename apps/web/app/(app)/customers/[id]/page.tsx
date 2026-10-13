@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, customerStatement, featureOn, getCustomer, listOrders, listPriceLists, listReminders, listTeam } from "@bos/core";
+import { can, customerStatement, featureOn, getCustomer, listRefunds, listOrders, listPriceLists, listReminders, listTeam } from "@bos/core";
 import { ReminderList } from "../../../../components/ReminderList";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import { Avatar } from "../../../../components/Avatar";
 import { formatMoney } from "../../../../lib/format";
+import { randomUUID } from "node:crypto";
 import { requireSession } from "../../../../lib/session";
+import { refund } from "../../invoices/actions";
+import { zone } from "../../../../lib/locale";
 import { assignPriceList } from "../../sales/actions";
 import { todayHere } from "../../../../lib/locale";
 
@@ -29,6 +32,8 @@ export default async function CustomerPage({
   const [reminders, team] = calendar ? await Promise.all([listReminders(ctx, { customerId: id }), listTeam(ctx)]) : [[], []];
   const today = todayHere();
   const statement = can(ctx, "sales_order.read") ? await customerStatement(ctx, id) : null;
+  const refunds = statement ? await listRefunds(ctx, id) : [];
+  const paidOn = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: zone() });
   const since = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
     customer.createdAt,
   );
@@ -88,6 +93,45 @@ export default async function CustomerPage({
           <div className="numeral numeral-md">{since}</div>
         </div>
       </div>
+      {statement && (statement.credit > 0 || refunds.length > 0) && (
+        <section className="glass panel" id="credit">
+          <div className="panel-head">
+            <div>
+              <h2 className="title">Credit on account</h2>
+              <div className="muted">
+                {statement.credit > 0 ? `${formatMoney(statement.credit)} in credit. It comes off their next invoice, or you can pay it back.` : "No credit at the moment."}
+              </div>
+            </div>
+          </div>
+          {statement.credit > 0 && can(ctx, "invoice.write") && (
+            <details className="return-form">
+              <summary className="btn btn-glass btn-small">Pay a refund</summary>
+              <form action={refund} className="form-row bill-inline">
+                <input type="hidden" name="customerId" value={customer.id} />
+                <input type="hidden" name="requestId" value={randomUUID()} />
+                <label className="field grow"><span>Amount</span><input name="amount" required inputMode="decimal" defaultValue={statement.credit.toFixed(2)} /></label>
+                <label className="field grow"><span>Paid back by</span><input name="method" required maxLength={40} placeholder="Check, bank transfer, cash" /></label>
+                <label className="field grow"><span>Reference (optional)</span><input name="reference" maxLength={100} /></label>
+                <button type="submit" className="btn btn-primary">Record refund</button>
+              </form>
+              <p className="muted">This records the refund and takes it off their credit. Send the money the way you normally pay people.</p>
+            </details>
+          )}
+          {refunds.length > 0 && (
+            <div className="rows">
+              {refunds.map((r, i) => (
+                <div className="row" key={i}>
+                  <div className="row-text">
+                    <div className="row-title">Refund by {r.method.toLowerCase()}{r.reference ? ` · ${r.reference}` : ""}</div>
+                    <div className="muted">{paidOn.format(r.paidAt)}{r.paidBy ? ` · ${r.paidBy}` : ""}</div>
+                  </div>
+                  <span className="strong">{formatMoney(r.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       {priceLists.length > 0 && (
         <section className="glass panel">
           <div className="panel-head">

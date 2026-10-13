@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createExpense, ForbiddenError, payExpense, StateError, ValidationError, voidExpense } from "@bos/core";
+import { createExpense, ForbiddenError, moneyText, payExpense, StateError, ValidationError, voidExpense } from "@bos/core";
 import { requireSession } from "../../../lib/session";
 
 function friendly(error: unknown): string {
@@ -23,13 +23,15 @@ export async function saveBill(form: FormData): Promise<void> {
       incurredOn: text(form, "incurredOn"),
       dueOn: paid ? undefined : text(form, "dueOn"),
       supplierId: text(form, "supplierId"),
+      purchaseOrderId: text(form, "purchaseOrderId"),
       reference: text(form, "reference"),
       paidOn: paid ? text(form, "paidOn") || text(form, "incurredOn") : undefined,
       paidMethod: paid ? text(form, "paidMethod") : undefined,
     });
     target = `/bills/${id}?notice=${encodeURIComponent("Saved.")}`;
   } catch (error) {
-    target = `/bills/new?error=${encodeURIComponent(friendly(error))}`;
+    const po = text(form, "purchaseOrderId");
+    target = `/bills/new?${po ? `po=${encodeURIComponent(po)}&` : ""}error=${encodeURIComponent(friendly(error))}`;
   }
   redirect(target);
 }
@@ -48,7 +50,16 @@ async function act(form: FormData, done: string, run: (id: string) => Promise<vo
 
 export async function markPaid(form: FormData): Promise<void> {
   const { ctx } = await requireSession();
-  await act(form, "Marked as paid.", (id) => payExpense(ctx, id, { paidOn: text(form, "paidOn"), method: text(form, "method") }));
+  const id = text(form, "id");
+  let query: string;
+  try {
+    const amount = text(form, "amount").replace(/[$,\s]/g, "");
+    const done = await payExpense(ctx, id, { paidOn: text(form, "paidOn"), method: text(form, "method"), amount: amount === "" ? undefined : Number(amount) });
+    query = `notice=${encodeURIComponent(done.balance > 0 ? `Payment recorded. ${moneyText(done.balance, ctx.currency)} still owed.` : "Payment recorded. This bill is paid.")}`;
+  } catch (error) {
+    query = `error=${encodeURIComponent(friendly(error))}`;
+  }
+  redirect(`/bills/${encodeURIComponent(id)}?${query}`);
 }
 
 export async function voidBill(form: FormData): Promise<void> {
