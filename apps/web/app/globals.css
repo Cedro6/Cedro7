@@ -2118,3 +2118,11 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
   color: var(--link); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none;
 }
 .account-links a:hover, .account-links button:hover { text-decoration: underline; }
+
+/* Sales chart: the line draws on, the fill fades in and the end dot pops, each time the period changes. */
+.chart-animated .chart-line { animation: draw 1.3s cubic-bezier(0.45, 0, 0.2, 1) both; }
+.chart-animated .chart-area { animation: fade-in 0.9s ease 0.7s both; }
+.chart-animated .chart-dot { transform-box: fill-box; transform-origin: center; animation: pop-in 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) 1.2s both; }
+@media (prefers-reduced-motion: reduce) {
+  .chart-animated .chart-line, .chart-animated .chart-area, .chart-animated .chart-dot { animation: none; }
+}
