@@ -9,8 +9,8 @@ export const MAX_SPOKEN = 400;
 
 // Soft and natural: enough variation to sound like a person, steady enough to stay calm, a touch slower than normal speech.
 const SETTINGS = { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 0.95 };
-// "Sarah", ElevenLabs' soft-spoken American default voice. Set ELEVENLABS_VOICE_ID to use any other voice from their library.
-const DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
+// The voice the owner chose by ear (ElevenLabs lists this ID as "Jessica"). Set ELEVENLABS_VOICE_ID to use any other voice from their library.
+const DEFAULT_VOICE = "cgSgspJ2msm6clMCkdW9";
 // Multilingual v2 sounds more natural than the faster Flash models, which the default voices are also tuned for.
 const DEFAULT_MODEL = "eleven_multilingual_v2";
 
