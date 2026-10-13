@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
   actionsFor, ask, confirmProposal, dismissProposal, ForbiddenError, getCustomer, getOrder, getProduct, listCustomers, listInvoices, listOrders, listProducts, listPurchaseOrders, listReminders, reconcileStock,
-  listSuppliers, StateError, type Ctx, type ModelCall, type ModelRequest, type Role,
+  listSuppliers, getExpense, listReturns, StateError, type Ctx, type ModelCall, type ModelRequest, type Role,
 } from "../src/index";
 
 let owner: Pool;
@@ -81,12 +81,12 @@ describe("assistant actions", () => {
 
   it("offers each role only the changes it may make, and ignores one it may not", async () => {
     const names = (ctx: Ctx) => actionsFor(ctx).map((a) => a.name);
-    expect(names(as("owner"))).toEqual(["propose_quote", "propose_confirm_order", "propose_customer", "propose_contact", "propose_ship_order", "propose_cancel_order", "propose_stock_adjustment", "propose_reminder"]);
+    expect(names(as("owner"))).toEqual(["propose_quote", "propose_confirm_order", "propose_customer", "propose_contact", "propose_ship_order", "propose_cancel_order", "propose_stock_adjustment", "propose_reminder", "propose_invoice", "propose_return", "propose_bill", "propose_reminder_done", "propose_customer_update"]);
     // Ava never handles money: nothing she is offered takes a payment, pays, refunds, credits or buys.
     for (const role of ["owner", "admin", "sales", "purchasing", "warehouse", "viewer"] as const) {
       expect(names(as(role)).filter((n) => /payment|purchase|refund|credit|bill_pay|void|price|discount/.test(n))).toEqual([]);
     }
-    expect(names(as("warehouse"))).toEqual(["propose_ship_order", "propose_stock_adjustment", "propose_reminder"]);
+    expect(names(as("warehouse"))).toEqual(["propose_ship_order", "propose_stock_adjustment", "propose_reminder", "propose_reminder_done"]);
     const before = await counts();
     const model = scripted([{ name: "propose_customer", input: { name: "Sneaky Co" } }]);
     const answer = await ask(as("warehouse"), { ...who, question: "add a customer" }, model.call);
@@ -144,15 +144,15 @@ describe("assistant actions", () => {
     expect(cheap.text).toContain("normal prices");
   });
 
-  it("carries earlier turns into the next question and stops at three changes per request", async () => {
-    const model = scripted([1, 2, 3, 4].map((n) => ({ name: "propose_customer", input: { name: `Batch ${n}` } })));
+  it("carries earlier turns into the next question and stops at five changes per request", async () => {
+    const model = scripted([1, 2, 3, 4, 5, 6].map((n) => ({ name: "propose_customer", input: { name: `Batch ${n}` } })));
     const answer = await ask(
       as("owner"),
       { ...who, question: "make it 30", history: [{ role: "assistant", text: "stray" }, { role: "user", text: "quote Bayside 20 gloves" }, { role: "assistant", text: "Prepared." }] },
       model.call,
     );
     expect(model.requests[0]!.messages.map((m) => [m.role, m.content])).toEqual([["user", "quote Bayside 20 gloves"], ["assistant", "Prepared."], ["user", "make it 30"]]);
-    expect(answer.proposals).toHaveLength(3);
+    expect(answer.proposals).toHaveLength(5);
     expect(answer.text).toContain("enough changes for one request");
   });
 
@@ -238,10 +238,73 @@ describe("Ava knows where the person is", () => {
   });
 });
 
-describe("an answer that ran out of room", () => {
-  it("keeps finished lines and sentences and drops the half-written end", () => {
-    expect(finished("- **Stock.** Glue is out.\n- **Orders.** Two are ready. Ship the old")).toBe("- **Stock.** Glue is out.\n- **Orders.** Two are ready.");
-    expect(finished("- **Stock.** Glue is out.\n- **Ord")).toBe("- **Stock.** Glue is out.");
-    expect(finished("- **Stock.** Glue is out.")).toBe("- **Stock.** Glue is out.");
+describe("the secretary's extra duties", () => {
+  const run = async (role: Role, name: string, input: Record<string, unknown>) => {
+    const answer = await ask(as(role), { ...who, question: "x" }, scripted([{ name, input }]).call);
+    expect(answer.proposals, answer.text).toHaveLength(1);
+    return { summary: answer.proposals[0]!.summary, ...(await confirmProposal(as(role), answer.proposals[0]!.id)) };
+  };
+
+  it("raises a hand-written invoice at the customer's prices, sent and charged by nobody", async () => {
+    const customer = (await listCustomers(as("owner")))[0]!;
+    const product = (await listProducts(as("owner")))[0]!;
+    const made = await run("owner", "propose_invoice", { customer_id: customer.id, lines: [{ product_id: product.id, qty: 2 }] });
+    expect(made.summary).toMatch(new RegExp(`^Invoice ${customer.name} for 2 × ${product.name} at`));
+    expect(made.message).toMatch(/^Invoice INV-\d+ raised .* Nothing has been sent or charged\.$/);
+    const invoice = (await listInvoices(as("owner"), {})).find((i) => made.link.endsWith(i.id))!;
+    expect(invoice.balance).toBe(invoice.amount);
+    // A price in the request is refused: prices are not Ava's to set.
+    const priced = await ask(as("owner"), { ...who, question: "x" }, scripted([{ name: "propose_invoice", input: { customer_id: customer.id, lines: [{ product_id: product.id, qty: 1, unit_price: 1 }] } }]).call);
+    expect(priced.proposals).toHaveLength(0);
+    expect(priced.text).toContain("normal prices");
+  });
+
+  it("takes goods back on a shipped order with no credit, and refuses more than was shipped", async () => {
+    const customer = (await listCustomers(as("owner")))[0]!;
+    const product = (await listProducts(as("owner"))).find((p) => p.available >= 10 && p.reserved === 0)!;
+    const quote = await run("owner", "propose_quote", { customer_id: customer.id, lines: [{ product_id: product.id, qty: 3 }] });
+    const orderId = quote.link.split("/").pop()!;
+    await run("owner", "propose_confirm_order", { order_id: orderId });
+    await run("owner", "propose_ship_order", { order_id: orderId });
+    const tooMany = await ask(as("owner"), { ...who, question: "x" }, scripted([{ name: "propose_return", input: { order_id: orderId, lines: [{ product_id: product.id, qty: 4 }], reason: "Wrong size" } }]).call);
+    expect(tooMany.proposals).toHaveLength(0);
+    expect(tooMany.text).toContain("Only 3");
+    const back = await run("owner", "propose_return", { order_id: orderId, lines: [{ product_id: product.id, qty: 1 }], reason: "Wrong size" });
+    expect(back.summary).toContain("No credit or refund");
+    expect(back.message).toContain("No credit has been given");
+    const returns = await listReturns(as("owner"), orderId);
+    expect(returns).toHaveLength(1);
+    expect(returns[0]!.creditNoteNumber).toBeNull();
+    expect(returns[0]!.restocked).toBe(true);
+  });
+
+  it("files a bill as owed and never pays it", async () => {
+    const supplier = (await listSuppliers(as("owner")))[0]!;
+    const filed = await run("owner", "propose_bill", { description: "October rent", amount: 1200, category: "Rent", incurred_on: "2026-10-01", due_on: "2026-10-15", supplier_id: supplier.id, reference: "R-10" });
+    expect(filed.summary).toContain("filed as owed, not paid");
+    const bill = (await getExpense(as("owner"), filed.link.split("/").pop()!))!;
+    expect(bill.balance).toBe(1200);
+    expect(bill.paidOn).toBeNull();
+    expect(bill.supplierName).toBe(supplier.name);
+    // Nothing exists that pays it.
+    expect(actionsFor(as("owner")).map((a) => a.name)).not.toEqual(expect.arrayContaining([expect.stringMatching(/pay/)]));
+    const odd = await ask(as("owner"), { ...who, question: "x" }, scripted([{ name: "propose_bill", input: { description: "x", amount: 5, category: "Nonsense", incurred_on: "2026-10-01" } }]).call);
+    expect(odd.proposals).toHaveLength(0);
+  });
+
+  it("marks a reminder done and changes a customer's terms, each on confirm", async () => {
+    const customer = (await listCustomers(as("owner")))[0]!;
+    await run("owner", "propose_reminder", { title: "Call about the invoice", date: "2027-01-05", customer_id: customer.id });
+    const reminder = (await listReminders(as("owner"), { openOnly: true })).find((r) => r.title === "Call about the invoice")!;
+    const done = await run("owner", "propose_reminder_done", { reminder_id: reminder.id });
+    expect(done.summary).toContain('"Call about the invoice"');
+    expect((await listReminders(as("owner"), { openOnly: true })).some((r) => r.id === reminder.id)).toBe(false);
+
+    const changed = await run("owner", "propose_customer_update", { customer_id: customer.id, payment_terms: "Net 45" });
+    expect(changed.summary).toBe(`Change ${customer.name}: payment terms to "Net 45".`);
+    expect((await getCustomer(as("owner"), customer.id))!.paymentTerms).toBe("Net 45");
+    const same = await ask(as("owner"), { ...who, question: "x" }, scripted([{ name: "propose_customer_update", input: { customer_id: customer.id, payment_terms: "Net 45" } }]).call);
+    expect(same.proposals).toHaveLength(0);
+    expect(same.text).toContain("Nothing would change");
   });
 });

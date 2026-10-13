@@ -60,7 +60,9 @@ function suggestionsFor(path: string, title: string, can: AvaAbilities): string[
   return s.filter((x): x is string => Boolean(x)).slice(0, 4);
 }
 
-export function Ava({ firstName, on, left, limit, voice, abilities }: {
+export function Ava({ firstName, on, left, limit, voice, abilities, due }: {
+  /** Reminders for this person due today or overdue. */
+  due: number;
   firstName: string; on: boolean; left: number; limit: number;
   /** True when Ava's own voice is set up. Without it she stays silent and says why. */
   voice: boolean; abilities: AvaAbilities;
@@ -174,6 +176,21 @@ export function Ava({ firstName, on, left, limit, voice, abilities }: {
       patch(turnId, change.id, { state: "failed", message: "That could not be done just now. Nothing was changed." });
     }
   }
+  // One job, one OK: the waiting steps run in order, stopping at the first that fails.
+  async function confirmAll(turnId: number) {
+    const turn = turns.find((t) => t.id === turnId);
+    for (const change of turn?.changes.filter((c) => c.state === "waiting") ?? []) {
+      patch(turnId, change.id, { state: "working" });
+      try {
+        const result = await confirmChange(change.id);
+        patch(turnId, change.id, result.ok ? { state: "done", message: result.message, link: result.link } : { state: "failed", message: result.message });
+        if (!result.ok) break;
+      } catch {
+        patch(turnId, change.id, { state: "failed", message: "That could not be done just now. Nothing was changed." });
+        break;
+      }
+    }
+  }
   async function decline(turnId: number, change: Change) {
     patch(turnId, change.id, { state: "declined" });
     try { await dismissChange(change.id); } catch { /* it simply expires if this does not reach the server */ }
@@ -209,11 +226,12 @@ export function Ava({ firstName, on, left, limit, voice, abilities }: {
       <button type="button" className="ava-launch" onClick={() => show(true)} aria-label="Open Ava, your assistant">
         <span className="ava-orb" aria-hidden="true" />
         <span className="ava-launch-name">Ava</span>
+        {due > 0 && <span className="ava-nudge" aria-label={`${due} ${due === 1 ? "reminder is" : "reminders are"} due`}>{due > 9 ? "9+" : due}</span>}
       </button>
     );
   }
 
-  const ideas = suggestionsFor(pathname, title, abilities);
+  const ideas = [...(due > 0 && abilities.calendar ? ["What is due today?"] : []), ...suggestionsFor(pathname, title, abilities)].slice(0, 4);
   return (
     <aside id="assistant" className="glass" aria-label="Ava, your assistant">
       <div className="as-head">
@@ -239,6 +257,7 @@ export function Ava({ firstName, on, left, limit, voice, abilities }: {
             ) : (
               <>
                 <p className="muted">I can find things, keep track, and prepare the paperwork for you to confirm. Ask me, or tell me what to do.</p>
+                {due > 0 && <p className="ava-due">{due === 1 ? "You have a reminder due today." : `You have ${due} reminders due today or overdue.`}</p>}
                 <div className="as-suggestions">
                   {ideas.map((q) => (
                     <button key={q} type="button" className="as-suggestion" onClick={() => void send(q)} disabled={pending}>{q}</button>
@@ -255,6 +274,12 @@ export function Ava({ firstName, on, left, limit, voice, abilities }: {
             <div className="as-msg as-bot">
               {turn.error && <p className="error">{turn.error}</p>}
               {turn.answer && <div className="as-text"><AssistantText text={turn.answer} /></div>}
+              {turn.changes.filter((c) => c.state === "waiting").length > 1 && (
+                <div className="ava-all">
+                  <span className="muted">{turn.changes.filter((c) => c.state === "waiting").length} steps waiting for your OK.</span>
+                  <button type="button" className="btn btn-primary btn-small" onClick={() => void confirmAll(turn.id)}>Confirm all</button>
+                </div>
+              )}
               {turn.changes.map((change) => (
                 <div key={change.id} className={`as-approval is-${change.state === "working" ? "waiting" : change.state}`}>
                   <div className="as-approval-label">{change.state === "done" ? "Done" : change.state === "declined" ? "Not done" : change.state === "failed" ? "Could not be done" : "Needs your OK"}</div>

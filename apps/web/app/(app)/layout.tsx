@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { assistantUsage, can, expenseSummary, featureOn, overview } from "@bos/core";
+import { assistantUsage, can, expenseSummary, featureOn, listReminders, overview } from "@bos/core";
+import { todayHere } from "../../lib/locale";
 import { Suspense } from "react";
 import { Ava } from "../../components/Ava";
 import { assistantConfigured, monthlyLimit } from "../../lib/assistant";
@@ -39,6 +40,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // Ava sits beside every screen rather than having a page of her own.
   const avaOn = assistantConfigured();
   const usage = await assistantUsage(ctx, monthlyLimit());
+  // Reminders for this person that are due today or overdue show as a nudge on Ava's button.
+  const due = featureOn(ctx.features, "calendar") ? (await listReminders(ctx, { to: todayHere(), openOnly: true, mineOnly: true })).length : 0;
   const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);
   return (
     <div className="shell">
@@ -63,6 +66,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           left={Math.max(usage.limit - usage.questions, 0)}
           limit={usage.limit}
           voice={voiceConfigured()}
+          due={due}
           abilities={{
             sales: can(ctx, "sales_order.write"),
             ship: can(ctx, "sales_order.ship"),
