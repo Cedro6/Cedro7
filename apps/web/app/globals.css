@@ -1457,6 +1457,14 @@ body {
 .dash-full { flex: 1 1 100%; }
 .dash-wide { flex: 3 1 520px; }
 .dash-narrow { flex: 2 1 340px; }
+/* Two half cards share a row on a wide screen and stack on a narrow one. */
+.dash-item.dash-half { flex: 1 1 calc(50% - var(--gap)); min-width: min(100%, 440px); }
+.dash-half > .panel { container-type: inline-size; }
+.dash-half .panel-head { flex-wrap: nowrap; align-items: flex-start; gap: 12px; }
+.dash-half .panel-head > div:first-child { min-width: 0; flex: 1 1 auto; }
+.dash-half .panel-head .segmented { flex-shrink: 0; }
+@container (max-width: 470px) { .dash-half .panel-head { flex-wrap: wrap; } }
+.segmented-compact a { padding-inline: 10px; }
 .dash-item.is-editing { padding: 8px; margin: -8px; border: 1px dashed rgba(var(--w), 0.35); border-radius: 34px; }
 .widget-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 8px; }
 .widget-name { font-weight: 600; font-size: 14px; }
@@ -1515,6 +1523,7 @@ body {
 .widget-thumb i:nth-child(3) { width: 45%; background: rgba(var(--w), 0.5); }
 .widget-thumb-narrow { width: 34px; }
 .widget-thumb-full { width: 64px; }
+.widget-thumb-half { width: 44px; }
 .notice-edit { background: rgba(124, 77, 255, 0.2); color: #d9ccff; }
 
 /* Lime only on the mini graphs; every bar is purple */

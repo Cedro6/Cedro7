@@ -22,15 +22,15 @@ const shortMoney = (n: number) => (n >= 1000 ? `${symbol()}${(n / 1000).toFixed(
 const shortDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** A smooth area chart of a daily series, plotted to one scale with labelled gridlines. */
-export function AreaChart({ series, label, animate, tick = shortDay }: { series: { date: string; total: number }[]; label: string; animate?: string; tick?: (iso: string) => string }) {
-  const W = 720, H = 250, left = 46, right = 16, top = 26, bottom = 30;
+export function AreaChart({ series, label, animate, tick = shortDay, compact = false }: { series: { date: string; total: number }[]; label: string; animate?: string; tick?: (iso: string) => string; /** Drawn for a half-width card: narrower, shorter, labels the same size. */ compact?: boolean }) {
+  const W = compact ? 480 : 720, H = compact ? 210 : 250, left = 46, right = 16, top = 26, bottom = 30;
   const max = niceMax(Math.max(...series.map((d) => d.total)));
   const x = (i: number) => left + (i * (W - left - right)) / Math.max(1, series.length - 1);
   const y = (v: number) => top + (1 - v / max) * (H - top - bottom);
   const points = series.map((d, i): [number, number] => [x(i), y(d.total)]);
   const line = smoothPath(points);
   const [lx, ly] = points.at(-1)!;
-  const every = Math.ceil(series.length / 6);
+  const every = Math.ceil(series.length / (compact ? 4 : 6));
   return (
     <svg key={animate} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className={animate ? "chart chart-animated" : "chart"}>
       <defs>
@@ -76,14 +76,14 @@ const countMax = (value: number) => {
  * Columns for a count per day, week or month, drawn to one scale from zero. The count is printed above
  * any column that has one, so a single deal on one day is never just a sliver.
  */
-export function CountBars({ series, label, animate, tick = shortDay }: { series: { date: string; count: number }[]; label: string; animate?: string; tick?: (iso: string) => string }) {
-  const W = 720, H = 250, left = 46, right = 16, top = 26, bottom = 30;
+export function CountBars({ series, label, animate, tick = shortDay, compact = false }: { series: { date: string; count: number }[]; label: string; animate?: string; tick?: (iso: string) => string; compact?: boolean }) {
+  const W = compact ? 480 : 720, H = compact ? 210 : 250, left = 46, right = 16, top = 26, bottom = 30;
   const max = countMax(Math.max(...series.map((d) => d.count)));
   const slot = (W - left - right) / series.length;
   const bar = Math.max(2, Math.min(36, slot * 0.62));
   const x = (i: number) => left + slot * i + slot / 2;
   const y = (v: number) => top + (1 - v / max) * (H - top - bottom);
-  const every = Math.ceil(series.length / 6);
+  const every = Math.ceil(series.length / (compact ? 4 : 6));
   return (
     <svg key={animate} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className={animate ? "chart chart-animated" : "chart"}>
       {[0, 0.5, 1].map((f) => (

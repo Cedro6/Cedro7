@@ -3,12 +3,12 @@ import { dealerAttention, dealSeries, DEALER_PERIODS, listDeals, listReminders, 
 import { AreaChart, CountBars } from "./home/charts";
 import { todayHere, whole } from "../lib/locale";
 
-const PERIOD: Record<DealerPeriod, { tab: string; words: string }> = {
-  "7d": { tab: "7 days", words: "last 7 days" },
-  "30d": { tab: "30 days", words: "last 30 days" },
-  quarter: { tab: "Quarter", words: "this quarter" },
-  ytd: { tab: "Year to date", words: "year to date" },
-  "12m": { tab: "12 months", words: "last 12 months" },
+const PERIOD: Record<DealerPeriod, { tab: string; name: string; words: string }> = {
+  "7d": { tab: "7D", name: "7 days", words: "last 7 days" },
+  "30d": { tab: "30D", name: "30 days", words: "last 30 days" },
+  quarter: { tab: "QTR", name: "This quarter", words: "this quarter" },
+  ytd: { tab: "YTD", name: "Year to date", words: "year to date" },
+  "12m": { tab: "12M", name: "12 months", words: "last 12 months" },
 };
 const shortDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const shortMonth = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
@@ -27,9 +27,9 @@ const homeHref = (choice: Choice, change: Partial<Pick<Choice, "sales" | "deals"
 
 function Periods({ choice, which, label }: { choice: Choice; which: "sales" | "deals"; label: string }) {
   return (
-    <div className="segmented" role="group" aria-label={label}>
+    <div className="segmented segmented-compact" role="group" aria-label={label}>
       {DEALER_PERIODS.map((p) => (
-        <Link key={p} href={homeHref(choice, { [which]: p })} aria-current={p === choice[which] ? "true" : undefined} scroll={false}>{PERIOD[p].tab}</Link>
+        <Link key={p} href={homeHref(choice, { [which]: p })} aria-current={p === choice[which] ? "true" : undefined} aria-label={PERIOD[p].name} title={PERIOD[p].name} scroll={false}>{PERIOD[p].tab}</Link>
       ))}
     </div>
   );
@@ -39,23 +39,22 @@ function Periods({ choice, which, label }: { choice: Choice; which: "sales" | "d
 async function DealerSalesChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
   const data = await dealSeries(ctx, choice.sales);
   if (!data) return null;
-  const last = data.points.at(-1)?.total ?? 0;
-  const [by, now] = BUCKET[data.bucket];
+  const [by] = BUCKET[data.bucket];
   const tick = data.bucket === "month" ? shortMonth : shortDay;
   return (
     <section className="glass panel">
       <div className="panel-head">
         <div>
           <h2 className="title">Sales, {PERIOD[data.period].words}</h2>
-          <div className="muted">{span(data)} · cars delivered, sale price before tax and fees · {by}</div>
+          <div className="muted">{span(data)} · cars delivered · {by}</div>
         </div>
         <Periods choice={choice} which="sales" label="Sales chart period" />
       </div>
       <div className="chart-total">
         <span className="numeral numeral-md">{whole(data.total)}</span>
-        <span className="muted">total · {data.cars} {data.cars === 1 ? "car" : "cars"} delivered · {whole(last)} {now}</span>
+        <span className="muted">before tax and fees · {data.cars} {data.cars === 1 ? "car" : "cars"} delivered</span>
       </div>
-      <AreaChart animate={`s${data.period}`} series={data.points} tick={tick} label={`Sales, ${PERIOD[data.period].words}: ${whole(data.total)} from ${data.cars} cars delivered, shown ${by}`} />
+      <AreaChart compact animate={`s${data.period}`} series={data.points} tick={tick} label={`Sales, ${PERIOD[data.period].words}: ${whole(data.total)} from ${data.cars} cars delivered, shown ${by}`} />
       {data.total === 0 && <p className="muted">No cars delivered in this period yet. A sale shows here on the day its deal is delivered.</p>}
     </section>
   );
@@ -72,7 +71,7 @@ async function DealCountChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
       <div className="panel-head">
         <div>
           <h2 className="title">Deals, {PERIOD[data.period].words}</h2>
-          <div className="muted">{span(data)} · deals written, cancelled left out · {by}</div>
+          <div className="muted">{span(data)} · deals written · {by}</div>
         </div>
         <Periods choice={choice} which="deals" label="Deals chart period" />
       </div>
@@ -80,7 +79,7 @@ async function DealCountChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
         <span className="numeral numeral-md">{data.deals}</span>
         <span className="muted">{data.deals === 1 ? "deal" : "deals"} written · {data.deals - data.open} delivered · {data.open} still open</span>
       </div>
-      <CountBars animate={`d${data.period}`} series={data.points.map((p) => ({ date: p.date, count: p.deals }))} tick={tick} label={`Deals ${PERIOD[data.period].words}: ${data.deals} written, ${data.open} still open, shown ${by}`} />
+      <CountBars compact animate={`d${data.period}`} series={data.points.map((p) => ({ date: p.date, count: p.deals }))} tick={tick} label={`Deals ${PERIOD[data.period].words}: ${data.deals} written, ${data.open} still open, shown ${by}`} />
       {data.deals === 0 && <p className="muted">No deals written in this period yet.</p>}
     </section>
   );

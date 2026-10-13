@@ -40,7 +40,7 @@ function WidgetMenu({ options, replacing }: { options: WidgetId[]; replacing: Wi
                 <span className="row-title">{info.name}</span>
                 <span className="muted">{info.about}</span>
               </span>
-              <span className="badge">{info.size === "full" ? "Full width" : info.size === "wide" ? "Wide" : "Compact"}</span>
+              <span className="badge">{info.size === "full" ? "Full width" : info.size === "wide" ? "Wide" : info.size === "half" ? "Half width" : "Compact"}</span>
             </button>
           );
         })}
