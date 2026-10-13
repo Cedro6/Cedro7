@@ -203,9 +203,10 @@ export async function invoiceShipmentInTx(
     unit_price: number;
     list_price: number;
     discount_pct: number;
+    taxable: boolean;
   }>(
     `select l.id, l.product_id, p.name, l.unit_price::float8 as unit_price, l.list_price::float8 as list_price,
-            l.discount_pct::float8 as discount_pct
+            l.discount_pct::float8 as discount_pct, l.taxable
      from sales_order_lines l join products p on p.id = l.product_id
      where l.order_id = $1 order by l.position`,
     [input.orderId],
@@ -217,7 +218,8 @@ export async function invoiceShipmentInTx(
     return { ...row, qty: line.qty, amount: cents(line.qty * row.unit_price) };
   });
   const subtotal = cents(lines.reduce((sum, line) => sum + line.amount, 0));
-  const tax = cents(subtotal * header.tax_rate);
+  // Tax is charged only on the lines that are taxed.
+  const tax = cents(cents(lines.filter((line) => line.taxable).reduce((sum, line) => sum + line.amount, 0)) * header.tax_rate);
   const gross = cents(subtotal + tax);
   const deposit = await tx.query<{ left: number }>(
     `select (coalesce((select sum(amount) from invoices where order_id = $1 and kind = 'deposit' and voided_at is null), 0)
@@ -284,9 +286,10 @@ export async function requestDeposit(
     throw new ValidationError("percent", "Enter a deposit between 1 and 99 percent.");
   }
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const order = await tx.query<{ status: string; customer_id: string; tax_rate: number; subtotal: number }>(
+    const order = await tx.query<{ status: string; customer_id: string; tax_rate: number; subtotal: number; taxable: number }>(
       `select o.status, o.customer_id, o.tax_rate::float8 as tax_rate,
-              coalesce((select sum(round(l.qty * l.unit_price, 2)) from sales_order_lines l where l.order_id = o.id), 0)::float8 as subtotal
+              coalesce((select sum(round(l.qty * l.unit_price, 2)) from sales_order_lines l where l.order_id = o.id), 0)::float8 as subtotal,
+              coalesce((select sum(round(l.qty * l.unit_price, 2)) from sales_order_lines l where l.order_id = o.id and l.taxable), 0)::float8 as taxable
        from sales_orders o where o.id = $1 for update of o`,
       [orderId],
     );
@@ -300,7 +303,7 @@ export async function requestDeposit(
       [orderId],
     );
     if (existing.rowCount) throw new StateError("This order already has a deposit invoice.");
-    const total = cents(row.subtotal + cents(row.subtotal * row.tax_rate));
+    const total = cents(row.subtotal + cents(row.taxable * row.tax_rate));
     const amount = cents((total * percent) / 100);
     if (amount <= 0) throw new StateError("The order total is zero, so there is nothing to bill.");
     const number = await nextNumber(tx, ctx.orgId, "invoice", "INV");
@@ -371,7 +374,11 @@ export async function createInvoice(
       )).rows[0]?.tax ?? 0;
     const lines = input.lines.map((line) => ({ ...line, amount: cents(line.qty * line.unitPrice) }));
     const subtotal = cents(lines.reduce((sum, line) => sum + line.amount, 0));
-    const tax = cents((subtotal * taxPercent) / 100);
+    // A line for a product that is not taxed carries no tax; lines typed in freely are taxed.
+    const linked = lines.flatMap((line) => (line.productId ? [line.productId] : []));
+    const untaxed = new Set(linked.length ? (await tx.query<{ id: string }>("select id from products where id = any($1::uuid[]) and not taxable", [linked])).rows.map((r) => r.id) : []);
+    const taxed = cents(lines.filter((line) => !line.productId || !untaxed.has(line.productId)).reduce((sum, line) => sum + line.amount, 0));
+    const tax = cents((taxed * taxPercent) / 100);
     const gross = cents(subtotal + tax);
     const number = await nextNumber(tx, ctx.orgId, "invoice", "INV");
     const created = await tx.query<{ id: string }>(

@@ -119,6 +119,9 @@ export default async function PurchasingPage({ searchParams }: { searchParams: P
         <div className="panel-head">
           <h2 className="title">Suppliers</h2>
           {canWrite && (
+            <Link href="/import?kind=suppliers" className="btn btn-glass btn-small">Import</Link>
+          )}
+          {canWrite && (
             <Link href="/purchasing/suppliers/new" className="btn btn-glass btn-small">
               New supplier
             </Link>

@@ -28,6 +28,7 @@ export type Supplier = {
   phone: string | null;
   paymentTerms: string | null;
   leadTimeDays: number | null;
+  address: string | null;
 };
 
 export type PurchaseOrderSummary = {
@@ -135,7 +136,7 @@ export async function listSuppliers(ctx: Ctx): Promise<Supplier[]> {
   requirePermission(ctx, "purchase_order.read");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<Supplier>(
-      `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays"
+      `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays", address
        from suppliers where status = 'active' order by lower(name) limit 500`,
     );
     return result.rows;
@@ -144,7 +145,7 @@ export async function listSuppliers(ctx: Ctx): Promise<Supplier[]> {
 
 export async function createSupplier(
   ctx: Ctx,
-  input: { name: string; email?: string; phone?: string; paymentTerms?: string; leadTimeDays?: number },
+  input: { name: string; email?: string; phone?: string; paymentTerms?: string; leadTimeDays?: number; address?: string },
 ): Promise<{ id: string }> {
   requirePermission(ctx, "purchase_order.write");
   const name = input.name.trim();
@@ -156,8 +157,8 @@ export async function createSupplier(
   }
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const created = await tx.query<{ id: string }>(
-      `insert into suppliers (org_id, name, email, phone, payment_terms, lead_time_days)
-       values ($1, $2, $3, $4, $5, $6) returning id`,
+      `insert into suppliers (org_id, name, email, phone, payment_terms, lead_time_days, address)
+       values ($1, $2, $3, $4, $5, $6, $7) returning id`,
       [
         ctx.orgId,
         name,
@@ -165,6 +166,7 @@ export async function createSupplier(
         input.phone?.trim().slice(0, 50) || null,
         input.paymentTerms?.trim().slice(0, 50) || null,
         lead ?? null,
+        input.address?.trim().slice(0, 500) || null,
       ],
     );
     const id = created.rows[0]!.id;
@@ -182,7 +184,7 @@ export async function getSupplier(ctx: Ctx, id: string): Promise<(Supplier & { s
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<Supplier & { status: "active" | "archived" }>(
-      `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays", status
+      `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays", address, status
        from suppliers where id = $1`,
       [id],
     );
@@ -194,7 +196,7 @@ export async function listArchivedSuppliers(ctx: Ctx): Promise<Supplier[]> {
   requirePermission(ctx, "purchase_order.read");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<Supplier>(
-      `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays"
+      `select id, name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays", address
        from suppliers where status = 'archived' order by lower(name) limit 500`,
     );
     return result.rows;
@@ -204,7 +206,7 @@ export async function listArchivedSuppliers(ctx: Ctx): Promise<Supplier[]> {
 export async function updateSupplier(
   ctx: Ctx,
   id: string,
-  input: { name: string; email?: string; phone?: string; paymentTerms?: string; leadTimeDays?: number },
+  input: { name: string; email?: string; phone?: string; paymentTerms?: string; leadTimeDays?: number; address?: string },
 ): Promise<void> {
   requirePermission(ctx, "purchase_order.write");
   const name = input.name.trim();
@@ -217,8 +219,8 @@ export async function updateSupplier(
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ValidationError("id", "Supplier not found.");
   await withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const done = await tx.query(
-      `update suppliers set name = $2, email = $3, phone = $4, payment_terms = $5, lead_time_days = $6, updated_at = now() where id = $1`,
-      [id, name, input.email?.trim().slice(0, 200) || null, input.phone?.trim().slice(0, 50) || null, input.paymentTerms?.trim().slice(0, 50) || null, lead ?? null],
+      `update suppliers set name = $2, email = $3, phone = $4, payment_terms = $5, lead_time_days = $6, address = case when $7 then $8 else address end, updated_at = now() where id = $1`,
+      [id, name, input.email?.trim().slice(0, 200) || null, input.phone?.trim().slice(0, 50) || null, input.paymentTerms?.trim().slice(0, 50) || null, lead ?? null, input.address !== undefined, input.address?.trim().slice(0, 500) || null],
     );
     if (done.rowCount === 0) throw new ValidationError("id", "Supplier not found.");
     await tx.query(

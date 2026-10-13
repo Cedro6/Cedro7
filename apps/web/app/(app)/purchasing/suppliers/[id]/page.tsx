@@ -44,6 +44,10 @@ export default async function EditSupplierPage({ params, searchParams }: { param
             <input name="paymentTerms" maxLength={50} placeholder="Net 30" defaultValue={supplier.paymentTerms ?? ""} />
           </label>
           <label className="field">
+            <span>Address (printed on purchase orders)</span>
+            <textarea name="address" rows={3} maxLength={500} defaultValue={supplier.address ?? ""} />
+          </label>
+          <label className="field">
             <span>Lead time in days</span>
             <input name="leadTimeDays" type="number" min="0" max="730" step="1" inputMode="numeric" defaultValue={supplier.leadTimeDays ?? ""} />
           </label>

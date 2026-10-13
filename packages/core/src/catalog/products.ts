@@ -14,6 +14,8 @@ export type ProductSummary = {
   /** Null when the role may not see cost. */
   cost: number | null;
   reorderPoint: number | null;
+  /** False for goods that are never charged tax. */
+  taxable: boolean;
   onHand: number;
   reserved: number;
   available: number;
@@ -29,7 +31,7 @@ const PRODUCT_SQL = `
   select p.id, p.sku, p.name, p.category, p.shelf_location as "shelfLocation", p.barcode,
          p.price::float8 as price,
          case when $1 then p.cost::float8 end as cost,
-         p.reorder_point::float8 as "reorderPoint",
+         p.reorder_point::float8 as "reorderPoint", p.taxable,
          coalesce(s.on_hand, 0)::float8 as "onHand",
          coalesce(s.reserved, 0)::float8 as reserved,
          coalesce(s.on_hand - s.reserved, 0)::float8 as available,
@@ -85,6 +87,8 @@ export type ProductInput = {
   reorderPoint?: number | null;
   /** Left out, the barcode is kept as it is; blank clears it. */
   barcode?: string;
+  /** Left out, a new product is taxed and an existing one keeps its setting. */
+  taxable?: boolean;
 };
 
 function cleanProduct(input: ProductInput) {
@@ -100,7 +104,7 @@ function cleanProduct(input: ProductInput) {
   if (reorder !== null && (!Number.isFinite(reorder) || reorder < 0)) throw new ValidationError("reorderPoint", "Enter a reorder point of zero or more.");
   const barcode = input.barcode === undefined ? undefined : input.barcode.replace(/\s+/g, "") || null;
   if (barcode && !/^[A-Za-z0-9._-]{3,64}$/.test(barcode)) throw new ValidationError("barcode", "A barcode is 3 to 64 letters and digits.");
-  return { barcode, sku, name, category: input.category?.trim().slice(0, 100) || null, price: input.price, cost: input.cost, shelfLocation: input.shelfLocation?.trim().slice(0, 50) || null, reorder };
+  return { barcode, sku, name, category: input.category?.trim().slice(0, 100) || null, price: input.price, cost: input.cost, shelfLocation: input.shelfLocation?.trim().slice(0, 50) || null, reorder, taxable: input.taxable };
 }
 
 const isDuplicate = (error: unknown) => typeof error === "object" && error !== null && (error as { code?: string }).code === "23505";
@@ -115,9 +119,9 @@ export async function createProduct(ctx: Ctx, input: ProductInput): Promise<{ id
   try {
     return await withTenant(ctx.pool, ctx.orgId, async (tx) => {
       const created = await tx.query<{ id: string }>(
-        `insert into products (org_id, sku, name, category, price, cost, shelf_location, reorder_point, barcode)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
-        [ctx.orgId, p.sku, p.name, p.category, p.price, can(ctx, "product.cost.view") ? (p.cost ?? 0) : 0, p.shelfLocation, p.reorder, p.barcode ?? null],
+        `insert into products (org_id, sku, name, category, price, cost, shelf_location, reorder_point, barcode, taxable)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id`,
+        [ctx.orgId, p.sku, p.name, p.category, p.price, can(ctx, "product.cost.view") ? (p.cost ?? 0) : 0, p.shelfLocation, p.reorder, p.barcode ?? null, p.taxable ?? true],
       );
       const id = created.rows[0]!.id;
       await tx.query(
@@ -144,9 +148,9 @@ export async function updateProduct(ctx: Ctx, id: string, input: ProductInput): 
         `update products set sku = $2, name = $3, category = $4, price = $5,
                 cost = case when $9 then $6 else cost end,
                 shelf_location = $7, reorder_point = $8,
-                barcode = case when $10 then $11 else barcode end, updated_at = now()
+                barcode = case when $10 then $11 else barcode end, taxable = coalesce($12, taxable), updated_at = now()
           where id = $1`,
-        [id, p.sku, p.name, p.category, p.price, p.cost ?? 0, p.shelfLocation, p.reorder, can(ctx, "product.cost.view") && p.cost !== undefined, p.barcode !== undefined, p.barcode ?? null],
+        [id, p.sku, p.name, p.category, p.price, p.cost ?? 0, p.shelfLocation, p.reorder, can(ctx, "product.cost.view") && p.cost !== undefined, p.barcode !== undefined, p.barcode ?? null, p.taxable ?? null],
       );
       if (done.rowCount === 0) throw new ValidationError("id", "Product not found.");
       await tx.query(

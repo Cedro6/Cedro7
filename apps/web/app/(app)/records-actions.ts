@@ -59,6 +59,7 @@ function productInput(form: FormData): ProductInput {
     price: Number(text(form, "price") || "0"), cost: optionalNumber(form, "cost"),
     shelfLocation: text(form, "shelfLocation"), reorderPoint: reorder === undefined ? null : reorder,
     barcode: text(form, "barcode"),
+    taxable: text(form, "taxableSent") === "1" ? form.get("taxable") === "1" : undefined,
   };
 }
 
@@ -93,7 +94,7 @@ export async function editSupplier(form: FormData): Promise<void> {
   const { ctx } = await requireSession();
   const id = text(form, "id");
   await run(`/purchasing/suppliers/${id}`, "Supplier saved.", () =>
-    updateSupplier(ctx, id, { name: text(form, "name"), email: text(form, "email"), phone: text(form, "phone"), paymentTerms: text(form, "paymentTerms"), leadTimeDays: optionalNumber(form, "leadTimeDays") }), "/purchasing");
+    updateSupplier(ctx, id, { name: text(form, "name"), email: text(form, "email"), phone: text(form, "phone"), paymentTerms: text(form, "paymentTerms"), address: text(form, "address"), leadTimeDays: optionalNumber(form, "leadTimeDays") }), "/purchasing");
 }
 
 export async function archiveSupplier(form: FormData): Promise<void> {

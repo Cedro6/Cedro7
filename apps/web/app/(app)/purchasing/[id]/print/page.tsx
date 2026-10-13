@@ -44,6 +44,7 @@ export default async function PurchaseOrderPrintPage({ params }: { params: Promi
           <div>
             <div className="paper-label">To</div>
             <div className="paper-strong">{order.supplierName}</div>
+            {supplier?.address && <div className="address">{supplier.address}</div>}
             {supplier && (supplier.email || supplier.phone) && <div>{[supplier.email, supplier.phone].filter(Boolean).join(" · ")}</div>}
             {supplier?.paymentTerms && <div className="paper-muted">Terms: {supplier.paymentTerms}</div>}
           </div>

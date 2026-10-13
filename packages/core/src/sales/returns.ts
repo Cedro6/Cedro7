@@ -41,7 +41,7 @@ function requireReturns(ctx: Ctx, write: boolean): void {
 const RETURNABLE = `
   select l.id as "orderLineId", l.product_id as "productId", p.sku, p.name, l.qty_shipped::float8 as shipped,
          coalesce((select sum(rl.qty) from return_lines rl where rl.order_line_id = l.id), 0)::float8 as returned,
-         l.unit_price::float8 as "unitPrice", l.unit_cost::float8 as "unitCost"
+         l.unit_price::float8 as "unitPrice", l.unit_cost::float8 as "unitCost", l.taxable
     from sales_order_lines l join products p on p.id = l.product_id
    where l.order_id = $1 order by l.position`;
 
@@ -117,7 +117,7 @@ export async function createReturn(
       const a = again.rows[0];
       return { id: a.id, number: a.number, units: 0, value: 0, restocked: a.restocked, creditNoteNumber: a.cn, creditAmount: a.amount ?? 0, replayed: true };
     }
-    const lines = await tx.query<Omit<Returnable, "left"> & { unitCost: number | null }>(RETURNABLE, [orderId]);
+    const lines = await tx.query<Omit<Returnable, "left"> & { unitCost: number | null; taxable: boolean }>(RETURNABLE, [orderId]);
     const byId = new Map(lines.rows.map((l) => [l.orderLineId, l]));
     for (const l of asked) {
       const line = byId.get(l.orderLineId);
@@ -134,7 +134,9 @@ export async function createReturn(
     let creditAmount = 0;
     let creditNoteId: string | null = null;
     if (input.credit && value > 0) {
-      creditAmount = cents(value + cents(value * head.tax_rate));
+      // The tax given back is the tax that was charged: none on lines that were not taxed.
+      const taxedValue = cents(asked.filter((l) => byId.get(l.orderLineId)!.taxable).reduce((n, l) => n + l.qty * byId.get(l.orderLineId)!.unitPrice, 0));
+      creditAmount = cents(value + cents(taxedValue * head.tax_rate));
       // Taken off the order's oldest unpaid invoice when there is one; otherwise kept on the customer's account.
       const unpaid = await tx.query<{ id: string }>(
         `select i.id from invoices i

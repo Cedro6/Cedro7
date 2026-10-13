@@ -181,6 +181,7 @@ export default async function OrderPage({
                     )}
                     <td className="num">
                       {formatMoney(line.unitPrice)}
+                      {!line.taxable && order.taxRate > 0 && <div className="muted">Not taxed</div>}
                       {line.discountPercent > 0 ? (
                         <div className="muted">
                           {formatQty(line.discountPercent)}% off {formatMoney(line.listPrice)}
