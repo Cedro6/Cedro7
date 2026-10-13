@@ -62,7 +62,7 @@ function suggestionsFor(path: string, title: string, can: AvaAbilities): string[
 
 export function Ava({ firstName, on, left, limit, voice, briefing, abilities }: {
   firstName: string; on: boolean; left: number; limit: number;
-  /** True when Ava's own voice is set up. Without it the browser's voice is used. */
+  /** True when Ava's own voice is set up. Without it she stays silent and says why. */
   voice: boolean; briefing: string; abilities: AvaAbilities;
 }) {
   const pathname = usePathname();
@@ -72,6 +72,7 @@ export function Ava({ firstName, on, left, limit, voice, briefing, abilities }: 
   const [pending, setPending] = useState(false);
   const [remaining, setRemaining] = useState(left);
   const [aloud, setAloud] = useState(false);
+  const [voiceNote, setVoiceNote] = useState("");
   const [listening, setListening] = useState(false);
   const [canListen, setCanListen] = useState(false);
   const [title, setTitle] = useState("");
@@ -113,29 +114,27 @@ export function Ava({ firstName, on, left, limit, voice, briefing, abilities }: 
   const quiet = () => {
     audio.current?.pause();
     audio.current = null;
-    try { window.speechSynthesis?.cancel(); } catch { /* nothing was speaking */ }
   };
 
   const say = useCallback(async (answer: string) => {
     const text = spokenPart(answer);
     if (!text) return;
     quiet();
+    setVoiceNote("");
     try {
-      const response = voice ? await fetch("/ava/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) }) : null;
-      if (response && response.status === 200) {
-        const player = new Audio(URL.createObjectURL(await response.blob()));
-        audio.current = player;
-        await player.play();
+      const response = await fetch("/ava/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+      if (response.status !== 200) {
+        const told = (await response.json().catch(() => null)) as { problem?: string } | null;
+        setVoiceNote(told?.problem ?? "Ava could not speak just now.");
         return;
       }
-    } catch { /* fall through to the browser's voice */ }
-    try {
-      const words = new SpeechSynthesisUtterance(text);
-      words.rate = 0.95;
-      words.pitch = 1;
-      window.speechSynthesis.speak(words);
-    } catch { /* this browser cannot speak; the answer is on screen */ }
-  }, [voice]);
+      const player = new Audio(URL.createObjectURL(await response.blob()));
+      audio.current = player;
+      await player.play();
+    } catch {
+      setVoiceNote("Ava could not speak just now. Your browser may be blocking sound on this site.");
+    }
+  }, []);
 
   const patch = (turnId: number, changeId: string, update: Partial<Change>) =>
     setTurns((now) => now.map((t) => (t.id === turnId ? { ...t, changes: t.changes.map((c) => (c.id === changeId ? { ...c, ...update } : c)) } : t)));
@@ -157,7 +156,7 @@ export function Ava({ firstName, on, left, limit, voice, briefing, abilities }: 
       const result = await askAssistant(asked, history, { path: pathname, title });
       setTurns((now) => now.map((t) => (t.id === id ? { ...t, answer: result.answer, error: result.error, lookups: result.lookups, changes: result.proposals.map((p) => ({ ...p, state: "waiting" as const })) } : t)));
       if (!result.error) setRemaining((n) => Math.max(n - 1, 0));
-      if (aloud && result.answer) void say(result.answer);
+      if (aloud && voice && result.answer) void say(result.answer);
     } catch {
       setTurns((now) => now.map((t) => (t.id === id ? { ...t, error: "I could not be reached. Check your connection and try again." } : t)));
     } finally {
@@ -293,6 +292,7 @@ export function Ava({ firstName, on, left, limit, voice, briefing, abilities }: 
         <div ref={end} />
       </div>
 
+      {voiceNote && <p className="ava-voice-note" role="status">{voiceNote}</p>}
       <form className="as-form" onSubmit={(event) => { event.preventDefault(); void send(box.current?.value ?? ""); }}>
         <label className="sr-only" htmlFor="ava-input">Message Ava</label>
         <textarea

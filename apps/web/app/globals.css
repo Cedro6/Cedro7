@@ -2273,3 +2273,5 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .ava-mic.is-live { background: #e5484d; color: #fff; animation: ava-pulse 1.2s ease-in-out infinite; }
 @keyframes ava-pulse { 50% { box-shadow: 0 0 0 8px rgba(229, 72, 77, 0.18); } }
 @media (max-width: 860px) { .ava-launch-name { display: none; } .ava-launch { padding: 6px; } }
+.ava-voice-note { margin: 0; padding: 8px 18px; font-size: 12px; color: #f5b461; }
+:root[data-mode="light"] .ava-voice-note { color: #9a5b00; }
