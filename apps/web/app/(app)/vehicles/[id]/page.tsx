@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { can, featureOn, getVehicle, VEHICLE_STATUS_TEXT, type VehicleStatus } from "@bos/core";
+import { can, featureOn, getVehicle, openDealFor, VEHICLE_STATUS_TEXT, type VehicleStatus } from "@bos/core";
 import { OwnFields, SpecFields } from "../../../../components/VehicleFields";
 import { currency, whole } from "../../../../lib/locale";
 import { requireSession } from "../../../../lib/session";
@@ -20,6 +20,7 @@ export default async function VehiclePage({ params, searchParams }: { params: Pr
   const { error, notice } = await searchParams;
   const car = await getVehicle(ctx, id);
   if (!car) notFound();
+  const deal = await openDealFor(ctx, car.id);
   const write = can(ctx, "vehicle.write");
   const showCost = can(ctx, "product.cost.view");
   const name = [car.year, car.make, car.model, car.trim].filter(Boolean).join(" ") || "Vehicle";
@@ -31,9 +32,14 @@ export default async function VehiclePage({ params, searchParams }: { params: Pr
           <div className="eyebrow"><Link href="/vehicles">Vehicles</Link> · {car.stockNumber}</div>
           <h1>{name}</h1>
         </div>
-        {write && (NEXT[car.status] ?? []).map((step) => (
+        {deal ? (
+          <Link href={`/deals/${deal.id}`} className="btn btn-primary">Open deal {deal.number}</Link>
+        ) : write && car.status !== "sold" && car.status !== "removed" ? (
+          <Link href={`/deals/new?vehicle=${car.id}`} className="btn btn-primary">Start a deal</Link>
+        ) : null}
+        {write && (NEXT[car.status] ?? []).filter((step) => step.to !== "sold").map((step) => (
           <form key={step.to} action={setVehicleStatus.bind(null, car.id, step.to)}>
-            <button type="submit" className={`btn ${step.to === "sold" || step.to === "on_lot" ? "btn-primary" : "btn-glass"}`}>{step.label}</button>
+            <button type="submit" className="btn btn-glass">{step.label}</button>
           </form>
         ))}
         {write && car.status !== "removed" && car.status !== "sold" && (

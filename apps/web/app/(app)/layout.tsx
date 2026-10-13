@@ -22,7 +22,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const items: NavItem[] = [{ href: "/", label: "Home" }];
   if (product === "dealer") {
     // Dealer Terminal: a fixed set of tools, in the order a lot works.
-    if (can(ctx, "vehicle.read")) items.push({ href: "/vehicles", label: "Vehicles" });
+    if (can(ctx, "vehicle.read")) items.push({ href: "/vehicles", label: "Vehicles" }, { href: "/deals", label: "Deals" });
     if (can(ctx, "customer.read")) items.push({ href: "/customers", label: "Customers" });
     if (featureOn(ctx.features, "calendar")) items.push({ href: "/calendar", label: "Calendar" });
     if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });

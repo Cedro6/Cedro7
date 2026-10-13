@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { FEATURES, ForbiddenError, MAX_LOGO_LENGTH, setCompanyLogo, setRequireTwoStep, updateCompanyProfile, updateRegion, isBusinessType, isFeature, setBusinessType, setFeature, StateError, TYPE_FEATURES, ValidationError } from "@bos/core";
+import { FEATURES, ForbiddenError, MAX_LOGO_LENGTH, setCompanyLogo, setRequireTwoStep, updateCompanyProfile, updateRegion, isBusinessType, isFeature, setBusinessType, setFeature, StateError, TYPE_FEATURES, ValidationError , updateDealerSettings } from "@bos/core";
 import { FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
 
@@ -89,6 +89,23 @@ export async function saveLogo(form: FormData): Promise<void> {
       await setCompanyLogo(ctx, `data:${file.type};base64,${data}`);
       query = `notice=${encodeURIComponent("Logo saved. It now prints on your invoices.")}`;
     }
+  } catch (error) {
+    query = `error=${encodeURIComponent(friendly(error))}`;
+  }
+  revalidatePath("/", "layout");
+  redirect(`/settings?${query}`);
+}
+
+export async function saveDealer(form: FormData): Promise<void> {
+  const { ctx } = await requireSession();
+  let query: string;
+  try {
+    const n = (k: string) => { const t = field(form, k).trim().replace(/[,$%]/g, ""); return t === "" ? 0 : Number(t); };
+    await updateDealerSettings(ctx, {
+      licence: field(form, "licence"), county: field(form, "county"), surtaxPct: n("surtaxPct"), dealerFee: n("dealerFee"), tagTitleFees: n("tagTitleFees"),
+      stockNumberStyle: field(form, "stockNumberStyle") === "vin6" ? "vin6" : "counter", stockNumberPrefix: field(form, "stockNumberPrefix"),
+    });
+    query = `notice=${encodeURIComponent("Dealer settings saved.")}`;
   } catch (error) {
     query = `error=${encodeURIComponent(friendly(error))}`;
   }

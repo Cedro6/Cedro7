@@ -2425,3 +2425,12 @@ a.account-card:hover .account-name { text-decoration: underline; }
 :root[data-mode="light"] .veh-from-missing { background: rgba(200, 120, 20, 0.14); color: #9a5b00; }
 .dash-half { flex: 1 1 300px; }
 .plain-list { margin: 8px 0 0; padding-left: 18px; line-height: 1.8; }
+.deal-sum { max-width: 520px; font-variant-numeric: tabular-nums; }
+.deal-sum > div { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.deal-sum .deal-sub { color: var(--ink-2); }
+.deal-sum .deal-total { font-weight: 700; font-size: 17px; border-bottom: 2px solid var(--line); }
+.deal-pay { margin-top: 14px; align-items: flex-end; }
+.paper-totals-wide { max-width: 520px; }
+.paper-sign { display: flex; flex-wrap: wrap; gap: 24px 40px; margin-top: 40px; }
+.paper-sign > div { flex: 1 1 180px; }
+.sign-line { height: 28px; border-bottom: 1px solid #171813; margin-bottom: 6px; }
