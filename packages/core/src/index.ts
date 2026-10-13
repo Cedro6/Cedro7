@@ -264,6 +264,7 @@ export {
   planVehicleImport, runVehicleImport, lotSummary,
   type VehicleStatus, type VehicleOwnInput, type Vehicle, type VehicleSummary, type VinLookup, type VehicleImportRow,
 } from "./dealer/vehicles";
+export { dealerAttention, type DealerAttention } from "./dealer/attention";
 export {
   DEAL_STATUSES, ODOMETER_BRANDS, ODOMETER_TEXT, dealMoney, createDeal, updateDeal, recordDealPayment, deliverDeal, cancelDeal, getDeal, listDeals, openDealFor,
   getDealerSettings, updateDealerSettings, dealSalesSeries, dealSeries, DEALER_PERIODS, isDealerPeriod, type DealerPeriod, type DealSeries,

@@ -39,6 +39,13 @@ export const WIDGET_INFO: Record<WidgetId, { name: string; about: string; size: 
   "low-stock": { name: "Low stock", about: "Products at or under their reorder point", size: "narrow" },
   putaway: { name: "To put away", about: "Deliveries received but not yet on the shelf", size: "narrow" },
   quotes: { name: "Open quotes", about: "Quotes waiting on the customer, oldest first", size: "narrow" },
+  "lot-tiles": { name: "Headline numbers", about: "Cars on the lot, cars over 60 days, money in stock and reminders due", size: "full" },
+  "dealer-sales": { name: "Sales chart", about: "Money from cars delivered, from 7 days to 12 months", size: "full" },
+  "dealer-deals": { name: "Deals chart", about: "How many deals were written, and how many are still open, from 7 days to 12 months", size: "full" },
+  "lot-attention": { name: "Needs attention", about: "Money owed, deals ready to deliver, title paperwork gaps and cars sitting too long", size: "narrow" },
+  "open-deals": { name: "Open deals", about: "Deals not yet delivered, with what each buyer still owes", size: "wide" },
+  "newest-cars": { name: "Newest on the lot", about: "The latest cars in, with mileage, asking price and status", size: "wide" },
+  "aged-cars": { name: "Been here longest", about: "Cars on hand 60 days or more, oldest first", size: "narrow" },
 };
 
 function Panel({ title, right, children }: { title: ReactNode; right?: ReactNode; children: ReactNode }) {
