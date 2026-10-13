@@ -5,9 +5,9 @@ import { pool } from "../../../lib/pool";
 import { requireSession } from "../../../lib/session";
 import { changePassword, startSetup, turnOffTwoStep } from "./actions";
 
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
-  const { ctx, membership } = await requireSession();
-  const { error, notice } = await searchParams;
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string; required?: string }> }) {
+  const { ctx, membership } = await requireSession({ setupAllowed: true });
+  const { error, notice, required } = await searchParams;
   const hasPassword = (await sessionVersion(pool, ctx.userId)) > 0;
   const twoStep = hasPassword ? await twoStepStatus(pool, ctx.userId) : { on: false, recoveryLeft: 0 };
   const pending = hasPassword && !twoStep.on ? await pendingTwoStep(ctx, "Cedro Terminal") : null;
@@ -23,6 +23,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           <h1>{membership.userName}</h1>
         </div>
       </header>
+      {required && hasPassword && !twoStep.on && <p className="error">{membership.orgName} requires two-step verification. Set it up below to carry on. It takes about a minute.</p>}
       {error && <p className="error">{error}</p>}
       {notice && !error && <p className="notice">{notice}</p>}
       <section className="glass panel form-panel">

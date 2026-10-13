@@ -6,7 +6,7 @@ import { beginTwoStep, changeOwnPassword, confirmTwoStep, disableTwoStep, Valida
 import { requireSession, startSession } from "../../../lib/session";
 
 export async function changePassword(form: FormData): Promise<void> {
-  const { ctx } = await requireSession();
+  const { ctx } = await requireSession({ setupAllowed: true });
   const next = String(form.get("next") ?? "");
   let message = "";
   if (next !== String(form.get("again") ?? "")) message = "The two new passwords do not match.";
@@ -26,7 +26,7 @@ export async function changePassword(form: FormData): Promise<void> {
 const ISSUER = "Cedro Terminal";
 
 export async function startSetup(): Promise<void> {
-  const { ctx } = await requireSession();
+  const { ctx } = await requireSession({ setupAllowed: true });
   let message = "";
   try {
     await beginTwoStep(ctx, ISSUER);
@@ -42,7 +42,7 @@ export type SetupState = { error: string; codes: string[] };
 
 /** Checks the first code. On success the recovery codes go straight back to the page, never into an address. */
 export async function confirmSetup(_previous: SetupState, form: FormData): Promise<SetupState> {
-  const { ctx } = await requireSession();
+  const { ctx } = await requireSession({ setupAllowed: true });
   try {
     const { recoveryCodes } = await confirmTwoStep(ctx, String(form.get("code") ?? ""));
     return { error: "", codes: recoveryCodes };
@@ -53,7 +53,7 @@ export async function confirmSetup(_previous: SetupState, form: FormData): Promi
 }
 
 export async function turnOffTwoStep(form: FormData): Promise<void> {
-  const { ctx } = await requireSession();
+  const { ctx } = await requireSession({ setupAllowed: true });
   let message = "";
   try {
     await disableTwoStep(ctx, { password: String(form.get("password") ?? ""), code: String(form.get("code") ?? "") });

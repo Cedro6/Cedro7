@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
 import {
-  adjustStock, confirmOrder, createCustomer, createProduct, createQuote, createSignupLink, currentMembership, getRegion, getSettings, listCompanies, listCustomers,
+  adjustStock, beginTwoStep, confirmTwoStep, platformResetTwoStep, setCompanySuspended, setRequireTwoStep, totpCode, totpStep, twoStepStatus, confirmOrder, createCustomer, createProduct, createQuote, createSignupLink, currentMembership, getRegion, getSettings, listCompanies, listCustomers,
   listHistory, listProducts, listSignupLinks, revokeSignupLink, signInWithPassword, signUp, signupLinkValid, TYPE_FEATURES, ValidationError, type Ctx, type SignupInput,
 } from "../src/index";
 
@@ -112,5 +112,43 @@ describe("sign-up by invitation", () => {
     await expect(app.query("select * from signup_invites")).rejects.toThrow(/permission denied/);
     const stored = (await owner.query("select token_hash from signup_invites where id = $1", [row.id])).rows[0].token_hash;
     expect(stored).not.toContain(link.token);
+  });
+});
+
+describe("running the service", () => {
+  it("suspends a company and switches it back on, deleting nothing", async () => {
+    const link = await createSignupLink(app, userId, "Suspend me");
+    const s = await signUp(app, link.token, input({ company: "Lapsed Ltd", email: "owner@lapsed.test" }));
+    expect((await currentMembership(app, s.orgId, s.userId))!.suspended).toBe(false);
+    expect(await setCompanySuspended(app, s.orgId, true)).toBe(true);
+    expect((await currentMembership(app, s.orgId, s.userId))!.suspended).toBe(true);
+    expect((await listCompanies(app)).find((c) => c.id === s.orgId)!.suspended).toBe(true);
+    // Other companies carry on.
+    const first = (await owner.query<{ id: string }>("select id from organizations where slug = 'harbor-supply'")).rows[0]!.id;
+    expect((await currentMembership(app, first, userId))!.suspended).toBe(false);
+    expect(await setCompanySuspended(app, s.orgId, false)).toBe(true);
+    expect((await currentMembership(app, s.orgId, s.userId))!.suspended).toBe(false);
+    expect(await setCompanySuspended(app, "00000000-0000-4000-8000-000000000000", true)).toBe(false);
+    expect(await setCompanySuspended(app, "nope", true)).toBe(false);
+  });
+
+  it("lets a company require two-step verification, but only once the person asking uses it", async () => {
+    const link = await createSignupLink(app, userId, "Strict");
+    const s = await signUp(app, link.token, input({ company: "Strict Co", email: "owner@strict.test" }));
+    const ctx: Ctx = { pool: app, orgId: s.orgId, userId: s.userId, role: "owner" };
+    await expect(setRequireTwoStep(ctx, true)).rejects.toThrow(/your own login first/);
+    const setup = await beginTwoStep(ctx, "Cedro Terminal");
+    await confirmTwoStep(ctx, totpCode(setup.secret, totpStep()));
+    await setRequireTwoStep(ctx, true);
+    expect((await currentMembership(app, s.orgId, s.userId))!.requireTwoStep).toBe(true);
+    await expect(setRequireTwoStep({ ...ctx, role: "sales" }, false)).rejects.toThrow();
+    // Locked out with nobody above them: whoever runs the service can reset their two-step.
+    expect((await twoStepStatus(app, s.userId)).on).toBe(true);
+    expect(await platformResetTwoStep(app, "Owner@Strict.test")).toBe(true);
+    expect((await twoStepStatus(app, s.userId)).on).toBe(false);
+    expect(await platformResetTwoStep(app, "owner@strict.test")).toBe(false);
+    expect(await platformResetTwoStep(app, "not an email")).toBe(false);
+    await setRequireTwoStep(ctx, false);
+    expect((await currentMembership(app, s.orgId, s.userId))!.requireTwoStep).toBe(false);
   });
 });

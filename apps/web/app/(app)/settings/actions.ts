@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { FEATURES, ForbiddenError, MAX_LOGO_LENGTH, setCompanyLogo, updateCompanyProfile, updateRegion, isBusinessType, isFeature, setBusinessType, setFeature, StateError, TYPE_FEATURES, ValidationError } from "@bos/core";
+import { FEATURES, ForbiddenError, MAX_LOGO_LENGTH, setCompanyLogo, setRequireTwoStep, updateCompanyProfile, updateRegion, isBusinessType, isFeature, setBusinessType, setFeature, StateError, TYPE_FEATURES, ValidationError } from "@bos/core";
 import { FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
 
@@ -103,6 +103,20 @@ export async function saveRegion(form: FormData): Promise<void> {
     const tax = field(form, "defaultTaxPercent").trim();
     await updateRegion(ctx, { timeZone: field(form, "timeZone"), currency: field(form, "currency"), defaultTaxPercent: tax === "" ? 0 : Number(tax) });
     query = `notice=${encodeURIComponent("Region and tax saved.")}`;
+  } catch (error) {
+    query = `error=${encodeURIComponent(friendly(error))}`;
+  }
+  revalidatePath("/", "layout");
+  redirect(`/settings?${query}`);
+}
+
+export async function saveTwoStepRule(form: FormData): Promise<void> {
+  const { ctx } = await requireSession();
+  const on = form.get("requireTwoStep") === "1";
+  let query: string;
+  try {
+    await setRequireTwoStep(ctx, on);
+    query = `notice=${encodeURIComponent(on ? "Two-step verification is now required for everyone with a password." : "Two-step verification is optional again.")}`;
   } catch (error) {
     query = `error=${encodeURIComponent(friendly(error))}`;
   }

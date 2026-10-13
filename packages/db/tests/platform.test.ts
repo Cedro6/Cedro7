@@ -65,6 +65,7 @@ describe("migrations", () => {
       "0029_function_search_path.sql",
       "0030_refunds_part_payments.sql",
       "0031_taxable_supplier_address.sql",
+      "0032_service_controls.sql",
     ]);
   });
 

@@ -4,7 +4,7 @@ import { BUSINESS_TYPES, can, FEATURES, CURRENCIES, getCompanyProfile, getRegion
 import { TeamPanel } from "../../../components/TeamPanel";
 import { BUILT, FEATURE_TEXT, TYPE_TEXT } from "../../../lib/features";
 import { requireSession } from "../../../lib/session";
-import { chooseType, saveCompany, saveLogo, saveRegion, switchFeature } from "./actions";
+import { chooseType, saveCompany, saveLogo, saveRegion, saveTwoStepRule, switchFeature } from "./actions";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { ctx, membership } = await requireSession();
@@ -120,6 +120,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="muted">Changing the currency changes the symbol only. Amounts already entered are not converted. A customer can be marked as not charged tax on their own page.</p>
           <div className="actions">
             <button type="submit" className="btn btn-primary">Save region and tax</button>
+          </div>
+        </form>
+      </section>
+
+      <section className="glass panel">
+        <h2 className="title">Security</h2>
+        <form action={saveTwoStepRule} className="stack">
+          <label className="bill-choice">
+            <input type="checkbox" name="requireTwoStep" value="1" defaultChecked={membership.requireTwoStep} /> <span>Require two-step verification for everyone with a password</span>
+          </label>
+          <p className="muted">
+            Anyone who has not set it up is sent to do so the next time they open the app, and cannot use anything else until they have.
+            You need it on for your own login before you can require it. {members.filter((m) => m.hasPassword && m.status === "active" && !m.twoStep).length} of your team would need to set it up.
+          </p>
+          <div className="actions">
+            <button type="submit" className="btn btn-glass">Save</button>
           </div>
         </form>
       </section>

@@ -118,3 +118,23 @@ export async function updateRegion(ctx: Ctx, input: { timeZone: string; currency
     );
   });
 }
+
+/**
+ * Makes two-step verification compulsory for everyone in the company who has a password, or optional again.
+ * The person switching it on must already use it themselves, so they cannot lock the company out by mistake.
+ */
+export async function setRequireTwoStep(ctx: Ctx, on: boolean): Promise<void> {
+  requirePermission(ctx, "settings.manage");
+  if (on) {
+    const mine = await ctx.pool.query("select 1 from auth_totp_enabled($1::uuid[])", [[ctx.userId]]);
+    if (mine.rows.length === 0) throw new ValidationError("requireTwoStep", "Turn on two-step verification for your own login first, on the Password page.");
+  }
+  await withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    await tx.query("update organizations set require_two_step = $2, updated_at = now() where id = $1", [ctx.orgId, on]);
+    await tx.query(
+      `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, after)
+       values ($1, 'user', $2, 'company.two_step_rule', 'organization', $1, $3)`,
+      [ctx.orgId, ctx.userId, JSON.stringify({ on })],
+    );
+  });
+}

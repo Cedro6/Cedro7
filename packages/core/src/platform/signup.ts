@@ -43,11 +43,23 @@ export async function revokeSignupLink(pool: Pool, id: string): Promise<boolean>
   return Boolean((await pool.query<{ ok: boolean }>("select signup_invite_revoke($1) as ok", [id])).rows[0]?.ok);
 }
 
-export type PlatformCompany = { id: string; name: string; businessType: string; createdAt: Date; people: number; orders: number; lastActivity: Date | null };
+export type PlatformCompany = { id: string; name: string; businessType: string; createdAt: Date; people: number; orders: number; lastActivity: Date | null; suspended: boolean };
 
 export async function listCompanies(pool: Pool): Promise<PlatformCompany[]> {
-  const r = await pool.query<{ id: string; name: string; business_type: string; created_at: Date; people: number; orders: number; last_activity: Date | null }>("select * from platform_companies()");
-  return r.rows.map((c) => ({ id: c.id, name: c.name, businessType: c.business_type, createdAt: c.created_at, people: c.people, orders: c.orders, lastActivity: c.last_activity }));
+  const r = await pool.query<{ id: string; name: string; business_type: string; created_at: Date; people: number; orders: number; last_activity: Date | null; suspended_at: Date | null }>("select * from platform_companies()");
+  return r.rows.map((c) => ({ id: c.id, name: c.name, businessType: c.business_type, createdAt: c.created_at, people: c.people, orders: c.orders, lastActivity: c.last_activity, suspended: c.suspended_at !== null }));
+}
+
+/** Switches a company off or back on. While off, its people cannot sign in or use the app; nothing is deleted. */
+export async function setCompanySuspended(pool: Pool, orgId: string, suspended: boolean): Promise<boolean> {
+  if (!/^[0-9a-f-]{36}$/i.test(orgId)) return false;
+  return Boolean((await pool.query<{ ok: boolean }>("select platform_set_suspended($1, $2) as ok", [orgId, suspended])).rows[0]?.ok);
+}
+
+/** Turns two-step verification off for the login with this email. For an owner who is locked out with nobody above them to ask. */
+export async function platformResetTwoStep(pool: Pool, email: string): Promise<boolean> {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return false;
+  return Boolean((await pool.query<{ ok: boolean }>("select platform_reset_two_step($1) as ok", [email])).rows[0]?.ok);
 }
 
 export type SignupInput = {

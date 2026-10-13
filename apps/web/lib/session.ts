@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { currentMembership, sessionVersion, type Ctx, type Membership } from "@bos/core";
+import { currentMembership, sessionVersion, twoStepStatus, type Ctx, type Membership } from "@bos/core";
 import { setLocale } from "./locale";
 import { pool } from "./pool";
 
@@ -102,7 +102,11 @@ export async function endSession(): Promise<void> {
 export type Session = { ctx: Ctx; membership: Membership };
 
 /** The signed-in person and their company, or a redirect to sign-in. */
-export async function requireSession(): Promise<Session> {
+/**
+ * `setupAllowed` is for the few screens someone must still reach while their company requires two-step
+ * verification and they have not set it up yet: the Password page, where it is set up, and the frame around it.
+ */
+export async function requireSession(options: { setupAllowed?: boolean } = {}): Promise<Session> {
   const raw = (await cookies()).get(COOKIE)?.value;
   const [userId, orgId, version, signature] = raw?.split(".") ?? [];
   if (!userId || !orgId || !version || !signature) redirect("/sign-in");
@@ -111,6 +115,11 @@ export async function requireSession(): Promise<Session> {
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) redirect("/sign-in");
   const [membership, current] = await Promise.all([currentMembership(pool, orgId, userId).catch(() => null), sessionVersion(pool, userId).catch(() => -1)]);
   if (!membership || String(current) !== version) redirect("/sign-in");
+  if (membership.suspended) redirect("/sign-in?error=suspended");
+  // A demo person has no password and so nothing to add a second step to.
+  if (membership.requireTwoStep && !options.setupAllowed && version !== "0" && !(await twoStepStatus(pool, userId)).on) {
+    redirect("/account?required=1#two-step");
+  }
   setLocale(membership.timeZone, membership.currency);
   return { ctx: { pool, orgId, userId, role: membership.role, features: membership.features, timeZone: membership.timeZone, currency: membership.currency }, membership };
 }
