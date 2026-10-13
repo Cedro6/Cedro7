@@ -13,6 +13,7 @@ import {
   InvoicesIcon,
   PurchasingIcon,
   ReportsIcon,
+  SearchIcon,
   SalesIcon,
   WarehouseIcon,
 } from "./icons";
@@ -44,6 +45,11 @@ export function Sidebar({ items, company, footer }: { items: NavItem[]; company:
           <small>{company}</small>
         </span>
       </div>
+      <form action="/search" className="side-search" role="search">
+        <SearchIcon />
+        <label htmlFor="side-q" className="sr-only">Search everything</label>
+        <input id="side-q" name="q" type="search" placeholder="Search" maxLength={80} />
+      </form>
       <div className="nav">
         {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
