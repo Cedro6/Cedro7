@@ -21,7 +21,7 @@ const shortMoney = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n % 1000 =
 const shortDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** A smooth area chart of a daily series, plotted to one scale with labelled gridlines. */
-export function AreaChart({ series, label }: { series: { date: string; total: number }[]; label: string }) {
+export function AreaChart({ series, label, animate }: { series: { date: string; total: number }[]; label: string; animate?: string }) {
   const W = 720, H = 250, left = 46, right = 16, top = 26, bottom = 30;
   const max = niceMax(Math.max(...series.map((d) => d.total)));
   const x = (i: number) => left + (i * (W - left - right)) / Math.max(1, series.length - 1);
@@ -31,7 +31,7 @@ export function AreaChart({ series, label }: { series: { date: string; total: nu
   const [lx, ly] = points.at(-1)!;
   const every = Math.ceil(series.length / 6);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className="chart">
+    <svg key={animate} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className={animate ? "chart chart-animated" : "chart"}>
       <defs>
         <linearGradient id="home-area" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#A78BFA" stopOpacity="0.5" />
@@ -50,9 +50,9 @@ export function AreaChart({ series, label }: { series: { date: string; total: nu
           </text>
         </g>
       ))}
-      <path d={`${line} L${lx.toFixed(1)},${y(0).toFixed(1)} L${left},${y(0).toFixed(1)} Z`} fill="url(#home-area)" />
-      <path d={line} fill="none" stroke="url(#home-line)" strokeWidth="3" strokeLinecap="round" />
-      <circle cx={lx} cy={ly} r="5" fill="#A78BFA" />
+      <path d={`${line} L${lx.toFixed(1)},${y(0).toFixed(1)} L${left},${y(0).toFixed(1)} Z`} fill="url(#home-area)" className="chart-area" />
+      <path d={line} pathLength={1} fill="none" stroke="url(#home-line)" strokeWidth="3" strokeLinecap="round" className="chart-line" />
+      <circle cx={lx} cy={ly} r="5" fill="#A78BFA" className="chart-dot" />
       {series.map((d, i) =>
         i % every === 0 && i < series.length - every / 2 ? (
           <text key={d.date} x={x(i)} y={H - 8} fill="currentColor" fillOpacity="0.7" fontSize="12" textAnchor="middle">

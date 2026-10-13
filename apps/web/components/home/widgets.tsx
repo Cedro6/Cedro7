@@ -206,7 +206,7 @@ async function SalesChart({ ctx, view }: { ctx: Ctx; view: HomeView }) {
         </span>
       </div>
       {data.total > 0 && data.points.length > 1 ? (
-        <AreaChart series={data.points} label={`${text.title}: ${whole(data.total)} in total, shown ${data.bucket === "week" ? "week by week" : "day by day"}`} />
+        <AreaChart animate={data.period} series={data.points} label={`${text.title}: ${whole(data.total)} in total, shown ${data.bucket === "week" ? "week by week" : "day by day"}`} />
       ) : (
         <Empty>{data.total > 0 ? `${whole(data.total)} so far. The chart appears from the second day.` : text.empty}</Empty>
       )}
