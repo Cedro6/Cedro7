@@ -237,3 +237,4 @@ export {
   type Expense, type ExpenseCategory, type ExpenseFilter, type ExpenseInput, type ExpenseSummary,
 } from "./billing/expenses";
 export { createReturn, listReturnable, listReturns, type OrderReturn, type Returnable, type ReturnLine } from "./sales/returns";
+export { search, SEARCH_MIN, type SearchGroup, type SearchHit } from "./platform/search";

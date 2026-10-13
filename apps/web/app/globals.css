@@ -2182,3 +2182,11 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .return-form > summary::-webkit-details-marker { display: none; }
 .return-form[open] > summary { margin-bottom: 14px; }
 .return-qty { width: 96px; height: 40px; padding: 0 10px; border: 1px solid rgba(var(--w), 0.24); border-radius: 12px; background: rgba(var(--k), 0.32); color: var(--ink); font: inherit; text-align: right; }
+
+/* Search everything */
+.side-search { display: flex; align-items: center; gap: 8px; height: 42px; margin: 0 0 10px; padding: 0 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(var(--k), 0.28); color: var(--ink-2); }
+.side-search:focus-within { border-color: rgba(var(--w), 0.5); }
+.side-search input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; color: var(--ink); outline: none; }
+.side-search svg { flex: none; }
+.search-hit { color: var(--ink); }
+.search-hit:hover .row-title { text-decoration: underline; }
