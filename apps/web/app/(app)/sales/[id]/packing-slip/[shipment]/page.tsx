@@ -5,8 +5,9 @@ import { PaperBrand } from "../../../../../../components/PaperBrand";
 import { PrintButton } from "../../../../../../components/PrintButton";
 import { formatQty } from "../../../../../../lib/format";
 import { requireSession } from "../../../../../../lib/session";
+import { zone } from "../../../../../../lib/locale";
 
-const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+const day = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: zone() }).format(d) };
 
 export default async function PackingSlipPage({ params }: { params: Promise<{ id: string; shipment: string }> }) {
   const { ctx } = await requireSession();

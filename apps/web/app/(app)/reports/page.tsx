@@ -5,8 +5,8 @@ import { ReportControls } from "../../../components/ReportControls";
 import { formatQty } from "../../../lib/format";
 import { COMPARE_LABEL, PRESET_LABEL, rangeText, readReportQuery, reportHref, type ReportQuery, type ReportTab, type ReportView } from "../../../lib/report-params";
 import { requireSession } from "../../../lib/session";
+import { whole } from "../../../lib/locale";
 
-const whole = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const count = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 const ROWS = 100;
 

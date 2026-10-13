@@ -1,5 +1,6 @@
 import { withTenant, type Pool } from "@bos/db/runtime";
 import { isBusinessType, parseFeatures, type BusinessType, type FeatureSet } from "./features";
+import { DEFAULT_CURRENCY, DEFAULT_TIME_ZONE, isCurrency, isTimeZone } from "./locale";
 import { isRole, type Role } from "./permissions";
 
 export type Membership = {
@@ -11,6 +12,8 @@ export type Membership = {
   /** Present when read for a signed-in request; the sign-in list does not need them. */
   businessType?: BusinessType;
   features?: FeatureSet;
+  timeZone?: string;
+  currency?: string;
 };
 
 /** The companies a person belongs to, looked up by email at sign-in. */
@@ -32,8 +35,8 @@ export async function membershipsByEmail(pool: Pool, email: string): Promise<Mem
 /** Re-reads the person's current role on every request, so a role change or suspension applies at once. */
 export async function currentMembership(pool: Pool, orgId: string, userId: string): Promise<Membership | null> {
   return withTenant(pool, orgId, async (tx) => {
-    const result = await tx.query<{ user_name: string; org_name: string; role: string; business_type: string; features: unknown }>(
-      `select u.name as user_name, o.name as org_name, m.role, o.business_type, o.features
+    const result = await tx.query<{ user_name: string; org_name: string; role: string; business_type: string; features: unknown; timezone: string; currency: string }>(
+      `select u.name as user_name, o.name as org_name, m.role, o.business_type, o.features, o.timezone, trim(o.base_currency) as currency
        from memberships m
        join users u on u.id = m.user_id
        join organizations o on o.id = m.org_id
@@ -50,6 +53,8 @@ export async function currentMembership(pool: Pool, orgId: string, userId: strin
       role: row.role,
       businessType: isBusinessType(row.business_type) ? row.business_type : "distributor",
       features: parseFeatures(row.features),
+      timeZone: isTimeZone(row.timezone) ? row.timezone : DEFAULT_TIME_ZONE,
+      currency: isCurrency(row.currency) ? row.currency : DEFAULT_CURRENCY,
     };
   });
 }

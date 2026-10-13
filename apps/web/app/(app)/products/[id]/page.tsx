@@ -5,6 +5,7 @@ import { can, getProduct, listMovements, type MovementKind } from "@bos/core";
 import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 import { saveAdjustment } from "./actions";
+import { zone } from "../../../../lib/locale";
 
 const kindLabel: Record<MovementKind, string> = {
   opening_balance: "Opening balance",
@@ -17,13 +18,13 @@ const kindLabel: Record<MovementKind, string> = {
   transfer_out: "Transfer out",
 };
 
-const when = new Intl.DateTimeFormat("en-US", {
+const when = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
-  timeZone: "America/New_York",
-});
+  timeZone: zone(),
+}).format(d) };
 
 export default async function ProductPage({
   params,

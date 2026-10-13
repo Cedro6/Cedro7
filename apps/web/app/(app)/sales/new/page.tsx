@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { can, featureOn, listCustomers, listProducts, pricesForCustomer } from "@bos/core";
+import { can, getRegion, featureOn, listCustomers, listProducts, pricesForCustomer } from "@bos/core";
 import { OrderLinesEditor } from "../../../../components/OrderLinesEditor";
 import { requireSession } from "../../../../lib/session";
 import { saveQuote } from "../actions";
@@ -11,6 +11,7 @@ export default async function NewOrderPage({
   searchParams: Promise<{ error?: string; customer?: string }>;
 }) {
   const { ctx } = await requireSession();
+  const region = await getRegion(ctx);
   if (!can(ctx, "sales_order.write")) redirect("/sales");
   const { error, customer } = await searchParams;
   const [customers, products] = await Promise.all([listCustomers(ctx), listProducts(ctx)]);
@@ -47,13 +48,14 @@ export default async function NewOrderPage({
             </label>
             <label className="field tax-field">
               <span>Tax %</span>
-              <input name="taxRatePercent" type="number" min="0" max="99" step="any" defaultValue="0" inputMode="decimal" />
+              <input name="taxRatePercent" type="number" min="0" max="99" step="any" inputMode="decimal" placeholder={`Usual (${region.defaultTaxPercent}%)`} title="Leave blank for your usual rate, or no tax for a customer marked as not charged tax" />
             </label>
           </div>
         </section>
         <section className="glass panel">
           <h2 className="title">Items</h2>
           <OrderLinesEditor
+            currency={ctx.currency ?? "USD"}
             tracked={tracked}
             customerPrices={customerPrices}
             initialCustomer={customer ?? ""}

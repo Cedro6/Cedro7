@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { can, EXPENSE_CATEGORIES, listSuppliers, today } from "@bos/core";
+import { can, EXPENSE_CATEGORIES, listSuppliers } from "@bos/core";
 import { requireSession } from "../../../../lib/session";
 import { saveBill } from "../actions";
+import { todayHere } from "../../../../lib/locale";
 
 export default async function NewBillPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { ctx } = await requireSession();
   if (!can(ctx, "expense.write")) redirect("/bills");
   const { error } = await searchParams;
   const suppliers = can(ctx, "purchase_order.read") ? await listSuppliers(ctx) : [];
-  const on = today();
+  const on = todayHere();
   return (
     <>
       <header className="page-head">

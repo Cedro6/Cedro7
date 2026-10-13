@@ -23,7 +23,7 @@ export type Contact = {
   isPrimary: boolean;
 };
 
-export type CustomerDetail = CustomerSummary & { createdAt: Date; contacts: Contact[]; billingAddress: string | null; shippingAddress: string | null };
+export type CustomerDetail = CustomerSummary & { createdAt: Date; contacts: Contact[]; billingAddress: string | null; shippingAddress: string | null; taxExempt: boolean };
 
 const SUMMARY_SQL = `
   select c.id, c.name, c.payment_terms as "paymentTerms", c.created_at as "createdAt",
@@ -54,8 +54,8 @@ export async function getCustomer(ctx: Ctx, id: string): Promise<CustomerDetail 
   requirePermission(ctx, "customer.read");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const customer = await tx.query<CustomerSummary & { createdAt: Date; billingAddress: string | null; shippingAddress: string | null }>(
-      `select q.*, a.billing_address as "billingAddress", a.shipping_address as "shippingAddress"
+    const customer = await tx.query<CustomerSummary & { createdAt: Date; billingAddress: string | null; shippingAddress: string | null; taxExempt: boolean }>(
+      `select q.*, a.billing_address as "billingAddress", a.shipping_address as "shippingAddress", a.tax_exempt as "taxExempt"
          from (${SUMMARY_SQL} where c.id = $1) q join customers a on a.id = q.id`,
       [id],
     );
@@ -129,7 +129,7 @@ export async function customerStatus(ctx: Ctx, id: string): Promise<"active" | "
 export async function updateCustomer(
   ctx: Ctx,
   id: string,
-  input: { name: string; paymentTerms?: string; billingAddress?: string; shippingAddress?: string },
+  input: { name: string; paymentTerms?: string; billingAddress?: string; shippingAddress?: string; taxExempt?: boolean },
 ): Promise<void> {
   requirePermission(ctx, "customer.write");
   const name = input.name.trim();
@@ -147,9 +147,10 @@ export async function updateCustomer(
       `update customers set name = $2, payment_terms = $3,
               billing_address = case when $4 then $5 else billing_address end,
               shipping_address = case when $6 then $7 else shipping_address end,
+              tax_exempt = coalesce($8, tax_exempt),
               updated_at = now()
         where id = $1`,
-      [id, name, paymentTerms, billing !== undefined, billing ?? null, shipping !== undefined, shipping ?? null],
+      [id, name, paymentTerms, billing !== undefined, billing ?? null, shipping !== undefined, shipping ?? null, input.taxExempt ?? null],
     );
     if (done.rowCount === 0) throw new ValidationError("id", "Customer not found.");
     await audit(tx, ctx, "customer.updated", "customer", id, { name, paymentTerms });

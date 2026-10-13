@@ -38,7 +38,7 @@ export async function saveQuote(formData: FormData): Promise<void> {
   try {
     ({ id } = await createQuote(ctx, {
       customerId: String(formData.get("customerId") ?? ""),
-      taxRatePercent: Number(String(formData.get("taxRatePercent") ?? "0").trim() || "0"),
+      taxRatePercent: String(formData.get("taxRatePercent") ?? "").trim() === "" ? undefined : Number(String(formData.get("taxRatePercent")).trim()),
       notes: String(formData.get("notes") ?? ""),
       lines: productIds.map((productId, index) => ({
         productId,

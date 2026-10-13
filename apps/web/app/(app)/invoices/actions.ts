@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import {
   createInvoice,
+  moneyText,
   ForbiddenError,
   raiseCredit,
   recordPayment,
@@ -12,7 +13,6 @@ import {
   ValidationError,
   voidInvoice,
 } from "@bos/core";
-import { formatMoney } from "../../../lib/format";
 import { requireSession } from "../../../lib/session";
 
 function friendly(error: unknown): string {
@@ -43,7 +43,7 @@ export async function pay(formData: FormData): Promise<void> {
       reference: String(formData.get("reference") ?? ""),
       idempotencyKey: String(formData.get("requestId") ?? ""),
     });
-    return balance > 0 ? `Payment recorded. ${formatMoney(balance)} still owed.` : "Payment recorded. This invoice is paid.";
+    return balance > 0 ? `Payment recorded. ${moneyText(balance, ctx.currency)} still owed.` : "Payment recorded. This invoice is paid.";
   });
 }
 
@@ -56,8 +56,8 @@ export async function credit(formData: FormData): Promise<void> {
       reason: String(formData.get("reason") ?? ""),
     });
     return result.onAccount > 0
-      ? `${result.number} raised. ${formatMoney(result.applied)} came off this invoice and ${formatMoney(result.onAccount)} is on the customer's account.`
-      : `${result.number} raised. ${formatMoney(result.applied)} came off this invoice.`;
+      ? `${result.number} raised. ${moneyText(result.applied, ctx.currency)} came off this invoice and ${moneyText(result.onAccount, ctx.currency)} is on the customer's account.`
+      : `${result.number} raised. ${moneyText(result.applied, ctx.currency)} came off this invoice.`;
   });
 }
 
@@ -65,7 +65,7 @@ export async function useCredit(formData: FormData): Promise<void> {
   const { ctx } = await requireSession();
   await act(formData, async (invoiceId) => {
     const { applied, balance } = await useCustomerCredit(ctx, invoiceId);
-    return balance > 0 ? `${formatMoney(applied)} of credit used. ${formatMoney(balance)} still owed.` : `${formatMoney(applied)} of credit used. This invoice is paid.`;
+    return balance > 0 ? `${moneyText(applied, ctx.currency)} of credit used. ${moneyText(balance, ctx.currency)} still owed.` : `${moneyText(applied, ctx.currency)} of credit used. This invoice is paid.`;
   });
 }
 
@@ -83,7 +83,7 @@ export async function deposit(formData: FormData): Promise<void> {
   let target: string;
   try {
     const made = await requestDeposit(ctx, orderId, number(formData.get("percent")));
-    target = `/invoices/${made.id}?notice=${encodeURIComponent(`Deposit invoice ${made.number} raised for ${formatMoney(made.amount)}.`)}`;
+    target = `/invoices/${made.id}?notice=${encodeURIComponent(`Deposit invoice ${made.number} raised for ${moneyText(made.amount, ctx.currency)}.`)}`;
   } catch (error) {
     target = `/sales/${encodeURIComponent(orderId)}?error=${encodeURIComponent(friendly(error))}`;
   }
@@ -100,7 +100,7 @@ export async function saveInvoice(formData: FormData): Promise<void> {
   try {
     const made = await createInvoice(ctx, {
       customerId: String(formData.get("customerId") ?? ""),
-      taxRatePercent: Number(String(formData.get("taxRatePercent") ?? "0").trim() || "0"),
+      taxRatePercent: String(formData.get("taxRatePercent") ?? "").trim() === "" ? undefined : Number(String(formData.get("taxRatePercent")).trim()),
       dueInDays: due === "" ? undefined : Number(due),
       notes: String(formData.get("notes") ?? ""),
       // a row left completely empty is ignored; a half-filled one is reported

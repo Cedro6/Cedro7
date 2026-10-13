@@ -8,14 +8,15 @@ import { formatMoney, formatQty } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 import { deposit } from "../../invoices/actions";
 import { cancel, confirm, reserve, ship } from "../actions";
+import { zone } from "../../../../lib/locale";
 
-const when = new Intl.DateTimeFormat("en-US", {
+const when = { format: (d: Date | number) => new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
-  timeZone: "America/New_York",
-});
+  timeZone: zone(),
+}).format(d) };
 
 export default async function OrderPage({
   params,

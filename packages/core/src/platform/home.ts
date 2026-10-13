@@ -1,3 +1,4 @@
+import { currencyOf, moneyText, zoneOf } from "./locale";
 import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "./context";
 import { featureOn } from "./features";
@@ -21,8 +22,6 @@ export type AttentionItem = {
   action: string;
 };
 
-const ZONE = "America/New_York";
-const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -42,7 +41,7 @@ export async function salesTrend(ctx: Ctx): Promise<SalesTrend | null> {
                          where o.status <> 'cancelled' and o.confirmed_at is not null
                            and (o.confirmed_at at time zone $1)::date = d.day), 0)::text as total
          from days d order by d.day`,
-      [ZONE],
+      [zoneOf(ctx)],
     );
     const days = result.rows.map((r) => ({ date: r.day, total: Number(r.total) }));
     const sum = (rows: typeof days) => rows.reduce((s, r) => s + r.total, 0);
@@ -64,7 +63,7 @@ export async function attention(ctx: Ctx): Promise<AttentionItem[]> {
         `select count(*)::int as n, count(*) filter (where due_on < (now() at time zone $2)::date)::int as late,
                 (array_agg(title order by due_on, created_at))[1] as first
            from reminders where assigned_to = $1 and done_at is null and due_on <= (now() at time zone $2)::date`,
-        [ctx.userId, ZONE],
+        [ctx.userId, zoneOf(ctx)],
       );
       const r = mine.rows[0]!;
       if (r.n > 0) {
@@ -96,7 +95,7 @@ export async function attention(ctx: Ctx): Promise<AttentionItem[]> {
           kind: "overdue_invoice",
           tone: "bad",
           title: `${plural(o.n, "invoice", "invoices")} overdue`,
-          detail: `${money(Number(o.owed))} owed · oldest ${plural(o.oldest, "day", "days")} late`,
+          detail: `${moneyText(Number(o.owed), currencyOf(ctx), true)} owed · oldest ${plural(o.oldest, "day", "days")} late`,
           href: "/invoices?show=overdue",
           action: "Open",
         });
@@ -160,7 +159,7 @@ export async function attention(ctx: Ctx): Promise<AttentionItem[]> {
           where po.status in ('approved', 'sent', 'partially_received')
             and po.expected_on < (now() at time zone $1)::date
           order by po.expected_on limit 1`,
-        [ZONE],
+        [zoneOf(ctx)],
       );
       const p = late.rows[0];
       if (p) {
@@ -180,7 +179,7 @@ export async function attention(ctx: Ctx): Promise<AttentionItem[]> {
         `select count(*)::int as n, coalesce(sum(amount), 0)::text as owed,
                 coalesce(max((now() at time zone $1)::date - due_on), 0)::int as oldest
            from expenses where voided_at is null and paid_on is null and due_on < (now() at time zone $1)::date`,
-        [ZONE],
+        [zoneOf(ctx)],
       );
       const b = bills.rows[0]!;
       if (b.n > 0) {
@@ -188,7 +187,7 @@ export async function attention(ctx: Ctx): Promise<AttentionItem[]> {
           kind: "overdue_bill",
           tone: "warn",
           title: `${plural(b.n, "bill", "bills")} to pay overdue`,
-          detail: `${money(Number(b.owed))} owed · oldest ${plural(b.oldest, "day", "days")} late`,
+          detail: `${moneyText(Number(b.owed), currencyOf(ctx), true)} owed · oldest ${plural(b.oldest, "day", "days")} late`,
           href: "/bills",
           action: "Open",
         });

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { can, getExpense, today } from "@bos/core";
+import { can, getExpense } from "@bos/core";
 import { formatMoney } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 import { markPaid, voidBill } from "../actions";
 import { billDate, BillStatus } from "../../../../components/BillStatus";
+import { todayHere } from "../../../../lib/locale";
 
 export default async function BillPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { ctx } = await requireSession();
@@ -42,7 +43,7 @@ export default async function BillPage({ params, searchParams }: { params: Promi
           <h2 className="title">Mark as paid</h2>
           <form action={markPaid} className="form-row bill-inline">
             <input type="hidden" name="id" value={bill.id} />
-            <label className="field grow"><span>Paid on</span><input name="paidOn" type="date" required defaultValue={today()} /></label>
+            <label className="field grow"><span>Paid on</span><input name="paidOn" type="date" required defaultValue={todayHere()} /></label>
             <label className="field grow"><span>Paid by (optional)</span><input name="method" maxLength={40} placeholder="Card, check, bank transfer" /></label>
             <button type="submit" className="btn btn-primary">Mark as paid</button>
           </form>

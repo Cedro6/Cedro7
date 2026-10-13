@@ -1,7 +1,8 @@
-const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+import { moneyText } from "@bos/core";
+import { currency } from "./locale";
 
 export function formatMoney(value: number): string {
-  return money.format(value);
+  return moneyText(value, currency());
 }
 
 const qty = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 });

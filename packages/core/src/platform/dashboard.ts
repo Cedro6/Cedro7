@@ -1,3 +1,4 @@
+import { zoneOf } from "./locale";
 import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "./context";
 import { ValidationError } from "./errors";
@@ -106,7 +107,6 @@ export async function changeHomeLayout(ctx: Ctx, type: BusinessType | undefined,
   await save(ctx, list);
 }
 
-const ZONE = "America/New_York";
 /** Orders confirmed and not cancelled, one row per line, with the goods value before tax. */
 const LINES = `
   select o.id as order_id, o.confirmed_at, o.created_at, l.product_id, l.qty * l.unit_price as amount
@@ -140,7 +140,7 @@ export async function heroFigures(ctx: Ctx, days: HeroRange): Promise<Hero | nul
          from (${LINES}) x join products p on p.id = x.product_id
         where (x.confirmed_at at time zone $2)::date > (now() at time zone $2)::date - $1::int::int
         group by 1 order by 2 desc`,
-      [days, ZONE],
+      [days, zoneOf(ctx)],
     );
     const top = cats.rows.slice(0, 2);
     const rest = cats.rows.slice(2).reduce((sum, c) => sum + c.amount, 0);
@@ -176,7 +176,7 @@ export async function dailySales(ctx: Ctx, days: number): Promise<{ date: string
        select to_char(d.day, 'YYYY-MM-DD') as date,
               coalesce((select sum(x.amount) from (${LINES}) x where (x.confirmed_at at time zone $2)::date = d.day), 0)::float8 as total
          from d order by d.day`,
-      [span, ZONE],
+      [span, zoneOf(ctx)],
     );
     return result.rows;
   });
@@ -194,7 +194,7 @@ export async function orderHeatmap(ctx: Ctx): Promise<Heatmap | null> {
               extract(hour from created_at at time zone $1)::int as hour, count(*)::int as n
          from sales_orders where status <> 'cancelled' and created_at > now() - interval '60 days'
         group by 1, 2`,
-      [ZONE],
+      [zoneOf(ctx)],
     );
     const grid = hours.map(() => Array<number>(7).fill(0));
     for (const row of result.rows) {
@@ -316,7 +316,7 @@ export async function salesSeries(ctx: Ctx, period: ChartPeriod): Promise<SalesS
          from daily
         group by ${weekly ? "date_trunc('week', day)" : "day"}
         order by 1`,
-      [ZONE],
+      [zoneOf(ctx)],
     );
     const points = result.rows.map(({ date, total }) => ({ date, total }));
     return {

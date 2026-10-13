@@ -5,8 +5,8 @@ import { Widget, WIDGET_INFO } from "../../components/home/widgets";
 import { assistantConfigured } from "../../lib/assistant";
 import { requireSession } from "../../lib/session";
 import { changeHome } from "./home-actions";
+import { zone } from "../../lib/locale";
 
-const ZONE = "America/New_York";
 const greeting = (hour: number) => (hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
 
 /** The list of cards a person can add, or swap an existing card for. */
@@ -59,8 +59,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const adding = edit && params.add === "1";
 
   const now = new Date();
-  const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: ZONE }).format(now));
-  const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: ZONE }).format(now);
+  const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: zone() }).format(now));
+  const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: zone() }).format(now);
 
   return (
     <>
@@ -106,7 +106,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {!edit && assistantConfigured() && (
         <BriefingPanel
           initial={briefing?.body ?? ""}
-          writtenAt={briefing ? `at ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: ZONE }).format(briefing.writtenAt)}` : ""}
+          writtenAt={briefing ? `at ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone() }).format(briefing.writtenAt)}` : ""}
         />
       )}
 

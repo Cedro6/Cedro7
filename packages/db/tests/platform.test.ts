@@ -57,6 +57,7 @@ describe("migrations", () => {
       "0021_home_layouts.sql",
       "0022_expenses.sql",
       "0023_frozen_cost.sql",
+      "0024_region_tax.sql",
     ]);
   });
 

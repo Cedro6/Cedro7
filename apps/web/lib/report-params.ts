@@ -1,4 +1,5 @@
-import { compareRange, isAnalysisPreset, isCompareMode, resolveRange, today, type AnalysisPreset, type CompareMode, type DateRange } from "@bos/core";
+import { compareRange, isAnalysisPreset, isCompareMode, resolveRange, type AnalysisPreset, type CompareMode, type DateRange } from "@bos/core";
+import { todayHere } from "./locale";
 
 export const REPORT_TABS = ["overview", "products", "customers", "money", "profit", "stock", "purchasing"] as const;
 export type ReportTab = (typeof REPORT_TABS)[number];
@@ -27,7 +28,7 @@ export type ReportView = { preset: AnalysisPreset; mode: CompareMode; range: Dat
 export function readReportQuery(q: ReportQuery): ReportView {
   const preset = isAnalysisPreset(q.period) ? q.period : "30d";
   const mode = isCompareMode(q.compare) ? q.compare : "previous";
-  const range = resolveRange(preset, today(), { from: q.from, to: q.to });
+  const range = resolveRange(preset, todayHere(), { from: q.from, to: q.to });
   const tab = (REPORT_TABS as readonly string[]).includes(q.tab ?? "") ? (q.tab as ReportTab) : "overview";
   return { preset, mode, range, compare: compareRange(range, mode), tab };
 }

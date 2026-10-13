@@ -45,6 +45,9 @@ export default async function EditCustomerPage({ params, searchParams }: { param
             <span>Shipping address, if different</span>
             <textarea name="shippingAddress" rows={3} maxLength={500} defaultValue={customer.shippingAddress ?? ""} />
           </label>
+          <label className="bill-choice">
+            <input type="checkbox" name="taxExempt" value="1" defaultChecked={customer.taxExempt} /> <span>Not charged tax (reseller, charity or export customer)</span>
+          </label>
           <div className="actions">
             <button type="submit" className="btn btn-primary">Save</button>
             <Link href={`/customers/${id}`} className="btn btn-glass">Cancel</Link>
