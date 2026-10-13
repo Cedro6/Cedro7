@@ -38,6 +38,10 @@ export default async function NewSupplierPage({ searchParams }: { searchParams: 
             <input name="paymentTerms" maxLength={50} placeholder="Net 30" />
           </label>
           <label className="field">
+            <span>Address (printed on purchase orders)</span>
+            <textarea name="address" rows={3} maxLength={500} />
+          </label>
+          <label className="field">
             <span>Lead time in days</span>
             <input name="leadTimeDays" type="number" min="0" max="730" step="1" inputMode="numeric" />
           </label>

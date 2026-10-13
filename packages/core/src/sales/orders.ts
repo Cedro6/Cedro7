@@ -37,6 +37,8 @@ export type OrderLine = {
   qty: number;
   /** What the customer pays per unit, after any discount. */
   unitPrice: number;
+  /** False when this line is not charged tax. */
+  taxable: boolean;
   /** The price the line started from: the customer's price, or one typed in. */
   listPrice: number;
   discountPercent: number;
@@ -69,18 +71,19 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SUMMARY_SQL = `
   select o.id, o.number, o.status, o.customer_id as "customerId", c.name as "customerName",
          o.created_at as "createdAt",
-         (t.subtotal + round(t.subtotal * o.tax_rate, 2))::float8 as total,
+         (t.subtotal + round(t.taxable * o.tax_rate, 2))::float8 as total,
          t.units_ordered::float8 as "unitsOrdered",
          t.units_shipped::float8 as "unitsShipped",
          t.units_reserved::float8 as "unitsReserved",
          o.tax_rate::float8 as "taxRate", t.subtotal::float8 as subtotal,
-         round(t.subtotal * o.tax_rate, 2)::float8 as tax,
+         round(t.taxable * o.tax_rate, 2)::float8 as tax,
          o.notes, u.name as "ownerName", o.confirmed_at as "confirmedAt", o.cancelled_at as "cancelledAt"
   from sales_orders o
   join customers c on c.id = o.customer_id
   left join users u on u.id = o.owner_user_id
   join lateral (
     select coalesce(sum(round(l.qty * l.unit_price, 2)), 0) as subtotal,
+           coalesce(sum(round(l.qty * l.unit_price, 2)) filter (where l.taxable), 0) as taxable,
            coalesce(sum(l.qty), 0) as units_ordered,
            coalesce(sum(l.qty_shipped), 0) as units_shipped,
            coalesce(sum(l.qty_reserved), 0) as units_reserved
@@ -177,6 +180,7 @@ export async function createQuote(
     const price = await customerPricesInTx(tx, input.customerId, productIds);
     if (price.size !== productIds.length) throw new ValidationError("lines", "Choose a product on every line.");
 
+    const untaxed = new Set((await tx.query<{ id: string }>("select id from products where id = any($1::uuid[]) and not taxable", [productIds])).rows.map((r) => r.id));
     const number = await nextNumber(tx, ctx.orgId, "sales_order", "SO");
     const order = await tx.query<{ id: string }>(
       `insert into sales_orders (org_id, number, customer_id, tax_rate, notes, owner_user_id, created_by)
@@ -189,9 +193,9 @@ export async function createQuote(
       const discount = Math.round((line.discountPercent ?? 0) * 100) / 100;
       const net = Math.round(listPrice * (100 - discount)) / 100;
       await tx.query(
-        `insert into sales_order_lines (org_id, order_id, position, product_id, qty, unit_price, list_price, discount_pct)
-         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [ctx.orgId, id, index + 1, line.productId, line.qty, net, listPrice, discount],
+        `insert into sales_order_lines (org_id, order_id, position, product_id, qty, unit_price, list_price, discount_pct, taxable)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [ctx.orgId, id, index + 1, line.productId, line.qty, net, listPrice, discount, !untaxed.has(line.productId)],
       );
     }
     await audit(tx, ctx, "sales_order.created", id, { number, lines: input.lines.length });
@@ -462,7 +466,7 @@ export async function getOrder(ctx: Ctx, orderId: string): Promise<OrderDetail |
     if (!order) return null;
     const lines = await tx.query<OrderLine>(
       `select l.id, l.product_id as "productId", p.sku, p.name,
-              l.qty::float8 as qty, l.unit_price::float8 as "unitPrice",
+              l.qty::float8 as qty, l.unit_price::float8 as "unitPrice", l.taxable,
               l.list_price::float8 as "listPrice", l.discount_pct::float8 as "discountPercent",
               round(l.qty * l.unit_price, 2)::float8 as amount,
               l.qty_reserved::float8 as reserved, l.qty_shipped::float8 as shipped,

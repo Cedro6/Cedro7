@@ -64,6 +64,7 @@ export async function saveSupplier(formData: FormData): Promise<void> {
       phone: String(formData.get("phone") ?? ""),
       paymentTerms: String(formData.get("paymentTerms") ?? ""),
       leadTimeDays: lead ? Number(lead) : undefined,
+      address: String(formData.get("address") ?? ""),
     });
   } catch (error) {
     message = friendly(error);

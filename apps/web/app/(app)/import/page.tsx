@@ -8,6 +8,8 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
   const allowed: { key: ImportKind; label: string; listHref: string }[] = [
     ...(can(ctx, "customer.write") ? [{ key: "customers" as const, label: "Customers", listHref: "/customers" }] : []),
     ...(can(ctx, "product.write") ? [{ key: "products" as const, label: "Products", listHref: "/products" }] : []),
+    ...(can(ctx, "purchase_order.write") ? [{ key: "suppliers" as const, label: "Suppliers", listHref: "/purchasing" }] : []),
+    ...(can(ctx, "invoice.write") ? [{ key: "invoices" as const, label: "Unpaid invoices", listHref: "/invoices?show=open" }] : []),
   ];
   if (allowed.length === 0) redirect("/");
   const asked = (await searchParams).kind;

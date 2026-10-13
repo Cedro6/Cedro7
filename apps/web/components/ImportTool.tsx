@@ -8,6 +8,7 @@ import { checkImport, doImport } from "../app/(app)/import/actions";
 type Kind = { key: string; label: string; columns: { label: string; required: boolean }[]; listHref: string };
 const MAX_BYTES = 700_000;
 const SHOWN = 200;
+const ROW: Record<string, string> = { customers: "Customer", products: "Product", suppliers: "Supplier", invoices: "Invoice" };
 const WORD = { add: "Will be added", skip: "Skipped", error: "Needs fixing" } as const;
 const DONE_WORD = { add: "Added", skip: "Skipped", error: "Not imported" } as const;
 const TONE = { add: "badge-ok", skip: "badge-muted", error: "badge-bad" } as const;
@@ -73,6 +74,7 @@ export function ImportTool({ kinds, start }: { kinds: Kind[]; start: string }) {
           ))}
           . Other columns are ignored.
         </p>
+        {current.key === "invoices" && <p className="muted">For invoices customers still owe you from before. Each one comes in as a single balance with its original dates, so it shows as owed and overdue correctly. Import the customers first: the customer name must match exactly.</p>}
         <p><a className="btn btn-glass btn-small" href={`/import/template?kind=${current.key}`} download>Download a blank {current.label.toLowerCase()} file</a></p>
       </section>
 
@@ -113,7 +115,7 @@ export function ImportTool({ kinds, start }: { kinds: Kind[]; start: string }) {
           {plan.notes.map((n) => <p className="muted" key={n}>{n}</p>)}
           <div className="table-wrap">
             <table className="compact">
-              <thead><tr><th scope="col">Row</th><th scope="col">{current.label === "Products" ? "Product" : "Customer"}</th><th scope="col">Result</th><th scope="col">Detail</th></tr></thead>
+              <thead><tr><th scope="col">Row</th><th scope="col">{ROW[current.key] ?? "Record"}</th><th scope="col">Result</th><th scope="col">Detail</th></tr></thead>
               <tbody>
                 {[...plan.rows].sort((a, b) => Number(b.action === "error") - Number(a.action === "error")).slice(0, SHOWN).map((r) => (
                   <tr key={r.line}>

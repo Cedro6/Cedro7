@@ -34,6 +34,10 @@ export function ProductFields({ product, showCost, tracked }: { product?: Produc
           </label>
         )}
       </div>
+      <label className="bill-choice">
+        <input type="hidden" name="taxableSent" value="1" />
+        <input type="checkbox" name="taxable" value="1" defaultChecked={product?.taxable ?? true} /> <span>Charge tax on this product (untick for goods that are never taxed)</span>
+      </label>
       {tracked && (
         <div className="form-row">
           <label className="field">
