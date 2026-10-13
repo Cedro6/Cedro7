@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { assistantUsage, can, expenseSummary, featureOn, getBriefing, overview } from "@bos/core";
+import { assistantUsage, can, expenseSummary, featureOn, overview } from "@bos/core";
 import { Suspense } from "react";
 import { Ava } from "../../components/Ava";
 import { assistantConfigured, monthlyLimit } from "../../lib/assistant";
@@ -38,7 +38,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (can(ctx, "settings.manage")) items.push({ href: "/settings", label: "Settings", children: [{ href: "/welcome", label: "Setup guide" }] });
   // Ava sits beside every screen rather than having a page of her own.
   const avaOn = assistantConfigured();
-  const [usage, briefing] = await Promise.all([assistantUsage(ctx, monthlyLimit()), avaOn ? getBriefing(ctx) : null]);
+  const usage = await assistantUsage(ctx, monthlyLimit());
   const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);
   return (
     <div className="shell">
@@ -63,7 +63,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           left={Math.max(usage.limit - usage.questions, 0)}
           limit={usage.limit}
           voice={voiceConfigured()}
-          briefing={briefing?.body ?? ""}
           abilities={{
             sales: can(ctx, "sales_order.write"),
             ship: can(ctx, "sales_order.ship"),
