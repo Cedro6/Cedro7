@@ -15,6 +15,7 @@ import {
   SearchIcon,
   SalesIcon,
   SettingsIcon,
+  VehicleIcon,
   WarehouseIcon,
 } from "./icons";
 
@@ -30,6 +31,7 @@ const ICONS: Record<string, ReactNode> = {
   "/calendar": <CalendarIcon />,
   "/reports": <ReportsIcon />,
   "/settings": <SettingsIcon />,
+  "/vehicles": <VehicleIcon />,
 };
 
 /** One entry per screen this person may open. The server decides the list from their role and the company's features. */

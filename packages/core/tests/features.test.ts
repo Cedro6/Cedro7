@@ -9,6 +9,7 @@ import {
   featureOn,
   FEATURES,
   featuresFor,
+  ADD_ONS,
   ForbiddenError,
   getSettings,
   listCustomers,
@@ -53,9 +54,9 @@ afterAll(async () => {
 });
 
 describe("feature rules", () => {
-  it("treats a missing switch as on, so existing companies keep everything", () => {
-    for (const id of FEATURES) expect(featureOn({}, id)).toBe(true);
-    for (const id of FEATURES) expect(featureOn(undefined, id)).toBe(true);
+  it("treats a missing switch as on, so existing companies keep everything (add-ons excepted)", () => {
+    for (const id of FEATURES) expect(featureOn({}, id)).toBe(!ADD_ONS.includes(id));
+    for (const id of FEATURES) expect(featureOn(undefined, id)).toBe(!ADD_ONS.includes(id));
   });
 
   it("turns off everything that needs stock when stock is off", () => {
@@ -65,7 +66,8 @@ describe("feature rules", () => {
   });
 
   it("gives each business type its starting set", () => {
-    expect(Object.values(featuresFor("distributor")).every(Boolean)).toBe(true);
+    // A distributor starts with everything except the dealer add-on.
+    expect(Object.entries(featuresFor("distributor")).filter(([, on]) => !on).map(([id]) => id)).toEqual(["dealer"]);
     const sales = featuresFor("sales");
     expect(sales.stock).toBe(false);
     expect(sales.purchasing).toBe(false);
@@ -97,7 +99,7 @@ describe("company settings", () => {
   it("starts a company as a distributor with everything on", async () => {
     const settings = await getSettings(await as("sales"));
     expect(settings.businessType).toBe("distributor");
-    expect(Object.values(settings.features).every(Boolean)).toBe(true);
+    expect(Object.entries(settings.features).filter(([, on]) => !on).map(([id]) => id)).toEqual(["dealer"]);
   });
 
   it("lets only someone who manages settings change them", async () => {
@@ -167,5 +169,16 @@ describe("company settings", () => {
     expect(other.rows[0]!.business_type).toBe("distributor");
     expect(other.rows[0]!.features).toEqual({});
     await setBusinessType(await as("owner"), "distributor");
+  });
+});
+
+describe("add-ons", () => {
+  it("stay off until switched on, even for a company with no settings at all", async () => {
+    const { featureOn, featuresFor } = await import("../src/index");
+    expect(featureOn(undefined, "dealer")).toBe(false);
+    expect(featureOn({}, "dealer")).toBe(false);
+    expect(featureOn({ dealer: true }, "dealer")).toBe(true);
+    expect(featureOn({}, "stock")).toBe(true);
+    expect(featuresFor("dealer").dealer).toBe(true);
   });
 });

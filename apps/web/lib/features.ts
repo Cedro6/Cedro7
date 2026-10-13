@@ -14,10 +14,11 @@ export const FEATURE_TEXT: Record<FeatureId, { name: string; about: string }> = 
   counts: { name: "Stock counts", about: "Count an aisle or category and correct the stock from the differences" },
   reports: { name: "Reports and sales charts", about: "Sales, margin, top products and customers, money owed and stock value" },
   expenses: { name: "Bills and expenses", about: "Record supplier bills and running costs, see what you owe and what the business really made" },
+  dealer: { name: "Dealer Terminal", about: "Vehicle inventory by VIN: decode a VIN into a full record, add cost, mileage and photos, and track each car from arrival to sale" },
 };
 
 /** Features that change something you can see in this build. The rest can be switched, but their screens come later. */
-export const BUILT: readonly FeatureId[] = ["stock", "purchasing", "calendar", "reports", "expenses", "returns"];
+export const BUILT: readonly FeatureId[] = ["stock", "purchasing", "calendar", "reports", "expenses", "returns", "dealer"];
 
 export const TYPE_TEXT: Record<BusinessType, { name: string; about: string }> = {
   distributor: { name: "Wholesale distributor", about: "Buys in bulk, stores it and ships to business customers. Everything is on." },
@@ -25,4 +26,5 @@ export const TYPE_TEXT: Record<BusinessType, { name: string; about: string }> = 
   warehouse: { name: "Warehouse", about: "Stores and moves goods for others. Receiving, putaway, picking and counts, without the selling tools." },
   sales: { name: "Sales", about: "A sales team or agency. Customer contact, quotes and follow-ups, without warehouse work." },
   contractor: { name: "Contractor", about: "Quotes jobs and buys materials for them. Customers, quotes, reminders and purchasing, no warehouse." },
+  dealer: { name: "Car dealer", about: "Buys and sells vehicles. Dealer Terminal for the lot, plus customers, reminders, reports and bills." },
 };
