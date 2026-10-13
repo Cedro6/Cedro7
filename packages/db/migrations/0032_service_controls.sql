@@ -16,8 +16,9 @@ language sql security definer set search_path = public as $$
   delete from user_totp where user_id = (select id from users where email = lower(trim(p_email))) returning true
 $$;
 
-drop function platform_companies();
-create function platform_companies()
+-- The company list for the Platform screen, now saying which are suspended. It has a new name so the
+-- earlier one can stay as it is: nothing is removed by this change.
+create function platform_company_list()
 returns table (id uuid, name text, business_type text, created_at timestamptz, people integer, orders integer, last_activity timestamptz, suspended_at timestamptz)
 language sql stable security definer set search_path = public as $$
   select o.id, o.name, o.business_type, o.created_at,
@@ -31,7 +32,7 @@ $$;
 do $$
 declare f text; r text;
 begin
-  foreach f in array array['platform_set_suspended(uuid, boolean)', 'platform_reset_two_step(text)', 'platform_companies()'] loop
+  foreach f in array array['platform_set_suspended(uuid, boolean)', 'platform_reset_two_step(text)', 'platform_company_list()'] loop
     execute format('revoke all on function %s from public', f);
     execute format('grant execute on function %s to bos_app', f);
     foreach r in array array['anon', 'authenticated'] loop

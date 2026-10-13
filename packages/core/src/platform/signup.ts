@@ -46,7 +46,7 @@ export async function revokeSignupLink(pool: Pool, id: string): Promise<boolean>
 export type PlatformCompany = { id: string; name: string; businessType: string; createdAt: Date; people: number; orders: number; lastActivity: Date | null; suspended: boolean };
 
 export async function listCompanies(pool: Pool): Promise<PlatformCompany[]> {
-  const r = await pool.query<{ id: string; name: string; business_type: string; created_at: Date; people: number; orders: number; last_activity: Date | null; suspended_at: Date | null }>("select * from platform_companies()");
+  const r = await pool.query<{ id: string; name: string; business_type: string; created_at: Date; people: number; orders: number; last_activity: Date | null; suspended_at: Date | null }>("select * from platform_company_list()");
   return r.rows.map((c) => ({ id: c.id, name: c.name, businessType: c.business_type, createdAt: c.created_at, people: c.people, orders: c.orders, lastActivity: c.last_activity, suspended: c.suspended_at !== null }));
 }
 
