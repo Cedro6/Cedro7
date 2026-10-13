@@ -92,6 +92,7 @@ export {
   isBusinessType,
   isFeature,
   NEEDS_STOCK,
+  ADD_ONS,
   parseFeatures,
   TYPE_FEATURES,
   type BusinessType,

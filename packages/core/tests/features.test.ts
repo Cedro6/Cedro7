@@ -170,3 +170,14 @@ describe("company settings", () => {
     await setBusinessType(await as("owner"), "distributor");
   });
 });
+
+describe("add-ons", () => {
+  it("stay off until switched on, even for a company with no settings at all", async () => {
+    const { featureOn, featuresFor } = await import("../src/index");
+    expect(featureOn(undefined, "dealer")).toBe(false);
+    expect(featureOn({}, "dealer")).toBe(false);
+    expect(featureOn({ dealer: true }, "dealer")).toBe(true);
+    expect(featureOn({}, "stock")).toBe(true);
+    expect(featuresFor("dealer").dealer).toBe(true);
+  });
+});

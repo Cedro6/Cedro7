@@ -47,7 +47,11 @@ export function isBusinessType(value: string): value is BusinessType {
   return (BUSINESS_TYPES as readonly string[]).includes(value);
 }
 
+/** Add-ons are off until a company switches them on, unlike the core features, which are on unless switched off. */
+export const ADD_ONS: readonly FeatureId[] = ["dealer"];
+
 export function featureOn(features: FeatureSet | undefined, id: FeatureId): boolean {
+  if (ADD_ONS.includes(id)) return features?.[id] === true;
   if (!features) return true;
   if (features[id] === false) return false;
   return !NEEDS_STOCK.includes(id) || features.stock !== false;
