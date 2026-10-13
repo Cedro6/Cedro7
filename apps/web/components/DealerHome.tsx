@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { dealerAttention, dealSeries, DEALER_PERIODS, listDeals, listReminders, listVehicles, lotSummary, VEHICLE_STATUS_TEXT, type Ctx, type DealerPeriod, type DealSeries, type WidgetId } from "@bos/core";
-import { AreaChart, CountBars } from "./home/charts";
+import { AreaChart } from "./home/charts";
 import { todayHere, whole } from "../lib/locale";
 
 const PERIOD: Record<DealerPeriod, { tab: string; words: string }> = {
-  "7d": { tab: "7 days", words: "last 7 days" },
-  "30d": { tab: "30 days", words: "last 30 days" },
-  quarter: { tab: "Quarter", words: "this quarter" },
-  ytd: { tab: "Year to date", words: "year to date" },
-  "12m": { tab: "12 months", words: "last 12 months" },
+  "7d": { tab: "7D", words: "last 7 days" },
+  "30d": { tab: "30D", words: "last 30 days" },
+  quarter: { tab: "QTR", words: "this quarter" },
+  ytd: { tab: "YTD", words: "year to date" },
+  "12m": { tab: "12M", words: "last 12 months" },
 };
 const shortDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const shortMonth = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
@@ -27,9 +27,9 @@ const homeHref = (choice: Choice, change: Partial<Pick<Choice, "sales" | "deals"
 
 function Periods({ choice, which, label }: { choice: Choice; which: "sales" | "deals"; label: string }) {
   return (
-    <div className="segmented" role="group" aria-label={label}>
+    <div className="segmented segmented-compact" role="group" aria-label={label}>
       {DEALER_PERIODS.map((p) => (
-        <Link key={p} href={homeHref(choice, { [which]: p })} aria-current={p === choice[which] ? "true" : undefined} scroll={false}>{PERIOD[p].tab}</Link>
+        <Link key={p} href={homeHref(choice, { [which]: p })} aria-current={p === choice[which] ? "true" : undefined} aria-label={PERIOD[p].words} title={PERIOD[p].words} scroll={false}>{PERIOD[p].tab}</Link>
       ))}
     </div>
   );
@@ -47,7 +47,7 @@ async function DealerSalesChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
       <div className="panel-head">
         <div>
           <h2 className="title">Sales, {PERIOD[data.period].words}</h2>
-          <div className="muted">{span(data)} · cars delivered, sale price before tax and fees · {by}</div>
+          <div className="muted">{span(data)} · {by}</div>
         </div>
         <Periods choice={choice} which="sales" label="Sales chart period" />
       </div>
@@ -55,33 +55,54 @@ async function DealerSalesChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
         <span className="numeral numeral-md">{whole(data.total)}</span>
         <span className="muted">total · {data.cars} {data.cars === 1 ? "car" : "cars"} delivered · {whole(last)} {now}</span>
       </div>
-      <AreaChart animate={`s${data.period}`} series={data.points} tick={tick} label={`Sales, ${PERIOD[data.period].words}: ${whole(data.total)} from ${data.cars} cars delivered, shown ${by}`} />
-      {data.total === 0 && <p className="muted">No cars delivered in this period yet. A sale shows here on the day its deal is delivered.</p>}
+      <AreaChart compact animate={`s${data.period}`} series={data.points} tick={tick} label={`Sales, ${PERIOD[data.period].words}: ${whole(data.total)} from ${data.cars} cars delivered, shown ${by}`} />
+      <p className="muted chart-note">{data.total === 0 ? "No cars delivered in this period yet. " : ""}Sale price before tax and fees, counted the day the deal is delivered.</p>
     </section>
   );
 }
 
-/** How many deals were written, with how many of those are still open, beside the sales chart. */
+/**
+ * Deals in Cedro's Total sales style: the count, then one purple block per outcome, each as wide as its
+ * share, with its number and percentage. Delivered is solid, still open striped, cancelled faint stripes.
+ */
 async function DealCountChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
   const data = await dealSeries(ctx, choice.deals);
   if (!data) return null;
-  const [by] = BUCKET[data.bucket];
-  const tick = data.bucket === "month" ? shortMonth : shortDay;
+  const delivered = data.deals - data.open;
+  const all = data.deals + data.cancelled;
+  const parts = [
+    { name: "Delivered", count: delivered },
+    { name: "Still open", count: data.open },
+    { name: "Cancelled", count: data.cancelled },
+  ].map((p, i) => ({ ...p, stripe: i, share: all ? p.count / all : 0 })).filter((p) => p.count > 0);
   return (
-    <section className="glass panel">
+    <section className="glass panel deals-card">
       <div className="panel-head">
         <div>
           <h2 className="title">Deals, {PERIOD[data.period].words}</h2>
-          <div className="muted">{span(data)} · deals written, cancelled left out · {by}</div>
+          <div className="muted">{span(data)}</div>
         </div>
         <Periods choice={choice} which="deals" label="Deals chart period" />
       </div>
       <div className="chart-total">
-        <span className="numeral numeral-md">{data.deals}</span>
-        <span className="muted">{data.deals === 1 ? "deal" : "deals"} written · {data.deals - data.open} delivered · {data.open} still open</span>
+        <span className="numeral numeral-md">{all}</span>
+        <span className="muted">{all === 1 ? "deal" : "deals"} written · {delivered} delivered</span>
       </div>
-      <CountBars animate={`d${data.period}`} series={data.points.map((p) => ({ date: p.date, count: p.deals }))} tick={tick} label={`Deals ${PERIOD[data.period].words}: ${data.deals} written, ${data.open} still open, shown ${by}`} />
-      {data.deals === 0 && <p className="muted">No deals written in this period yet.</p>}
+      <div className="hero-bars deals-bars">
+        {parts.length === 0 ? (
+          <p className="muted">No deals written in this period yet.</p>
+        ) : (
+          parts.map((p) => (
+            <div className="hero-block" key={p.name} style={{ flexGrow: Math.max(1.1, p.share * 4) }}>
+              <div className="hero-amount">{p.count} {p.count === 1 ? "deal" : "deals"}</div>
+              <div className="hero-rule" />
+              <div className="hero-cat"><strong>{Math.round(p.share * 100)}%</strong> {p.name}</div>
+              <div className={`stripes stripes-${p.stripe}`} role="img" aria-label={`${p.name}: ${p.count} of ${all} deals, ${Math.round(p.share * 100)} percent`} />
+            </div>
+          ))
+        )}
+      </div>
+      <p className="muted chart-note">Counted the day each deal was written.</p>
     </section>
   );
 }
