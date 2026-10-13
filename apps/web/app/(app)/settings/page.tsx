@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BUSINESS_TYPES, can, FEATURES, CURRENCIES, getCompanyProfile, getRegion, getSettings, timeZones, listMembers, NEEDS_STOCK, TYPE_FEATURES } from "@bos/core";
 import { TeamPanel } from "../../../components/TeamPanel";
@@ -20,6 +21,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div className="eyebrow">{membership.orgName}</div>
           <h1>Settings</h1>
         </div>
+        <Link href="/settings/history" className="btn btn-glass">Activity history</Link>
       </header>
       {error && <p className="error">{error}</p>}
       {notice && !error && <p className="notice">{notice}</p>}
