@@ -25,6 +25,11 @@ function rich(line: string): ReactNode[] {
   return parts;
 }
 
+/** One line of Ava's writing with its links and bold text. */
+export function RichLine({ text }: { text: string }) {
+  return <>{rich(text)}</>;
+}
+
 export function AssistantText({ text }: { text: string }) {
   return (
     <>
