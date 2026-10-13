@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { search, SEARCH_MIN } from "@bos/core";
+import { SearchBox } from "../../../components/SearchBox";
 import { requireSession } from "../../../lib/session";
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -11,13 +12,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     <>
       <header className="page-head">
         <div>
-          <div className="eyebrow">{q.length >= SEARCH_MIN ? `${total} ${total === 1 ? "result" : "results"}${groups.some((g) => g.more) ? " shown" : ""}` : "Everything you can see"}</div>
+          <div className="eyebrow">{q.length >= SEARCH_MIN ? `${total} ${groups.some((g) => g.close) ? (total === 1 ? "close match" : "close matches") : total === 1 ? "result" : "results"}${groups.some((g) => g.more) ? " shown" : ""}` : "Everything you can see"}</div>
           <h1>Search</h1>
         </div>
-        <form action="/search" className="glass search" role="search">
-          <label htmlFor="search-page-q" className="sr-only">Search</label>
-          <input id="search-page-q" name="q" type="search" defaultValue={q} placeholder="Name, number, code or barcode" autoFocus={groups.length === 0} maxLength={80} />
-        </form>
+        <SearchBox initial={q} />
       </header>
       {q.length < SEARCH_MIN ? (
         <section className="glass panel empty">
@@ -30,7 +28,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           <p>Try fewer letters, or part of a number such as 0042.</p>
         </section>
       ) : (
-        groups.map((g) => (
+        [
+          ...(groups.some((g) => g.close) ? [<p className="notice" key="close">Nothing matches &ldquo;{q}&rdquo; exactly. These are the closest:</p>] : []),
+          ...groups.map((g) => (
           <section className="glass panel" key={g.kind}>
             <h2 className="title">{g.label}</h2>
             <div className="rows">
@@ -45,7 +45,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             </div>
             {g.more && <p className="muted footnote">More match. Add a few letters to narrow it down.</p>}
           </section>
-        ))
+          )),
+        ]
       )}
     </>
   );

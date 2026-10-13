@@ -8,7 +8,9 @@ import { can } from "./permissions";
  * person's role may see it, and results link straight to the record.
  */
 export type SearchHit = { id: string; title: string; detail: string; href: string };
-export type SearchGroup = { kind: "customers" | "products" | "orders" | "invoices" | "purchase_orders" | "suppliers" | "bills"; label: string; hits: SearchHit[]; more: boolean };
+export type SearchGroup = { kind: "customers" | "products" | "orders" | "invoices" | "purchase_orders" | "suppliers" | "bills"; label: string; hits: SearchHit[]; more: boolean;
+  /** True when nothing matched exactly and these are near misses, such as a misspelt name. */
+  close?: boolean };
 
 export const SEARCH_MIN = 2;
 const LIMIT = 6;
@@ -79,6 +81,38 @@ export async function search(ctx: Ctx, query: string): Promise<SearchGroup[]> {
           where e.description ilike $1 or e.reference ilike $1 or s.name ilike $1
           order by (e.voided_at is not null), (e.description ilike $2) desc, e.incurred_on desc`);
     }
+    // Nothing matched as typed: look for names that are nearly the same, so a slip of the keyboard still finds the record.
+    if (groups.length === 0 && q.length >= 4) {
+      const near = async (kind: SearchGroup["kind"], label: string, sql: string) => {
+        const rows = (await tx.query<SearchHit>(`${sql} limit 3000`)).rows;
+        const scored = rows.map((row) => ({ row, score: Math.max(...row.title.split(/\s*·\s*/).map((part) => likeness(q, part))) })).filter((x) => x.score >= 0.42);
+        scored.sort((a, b) => b.score - a.score);
+        if (scored.length > 0) groups.push({ kind, label, hits: scored.slice(0, LIMIT).map((x) => x.row), more: scored.length > LIMIT, close: true });
+      };
+      if (can(ctx, "customer.read")) await near("customers", "Customers", "select id, name as title, coalesce(payment_terms, '') as detail, '/customers/' || id as href from customers where status = 'active' order by name");
+      if (can(ctx, "product.read")) await near("products", "Products", "select id, name || ' · ' || sku as title, coalesce(category, '') as detail, '/products/' || id as href from products where status = 'active' order by name");
+      if (can(ctx, "purchase_order.read")) await near("suppliers", "Suppliers", "select id, name as title, coalesce(email, '') as detail, '/purchasing/suppliers/' || id as href from suppliers where status = 'active' order by name");
+    }
   });
   return groups;
+}
+
+/** How alike two pieces of text are, from 0 to 1, by the three-letter runs they share. Forgiving of a wrong or missing letter. */
+export function likeness(a: string, b: string): number {
+  const grams = (text: string) => {
+    const t = `  ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+    const out = new Map<string, number>();
+    for (let i = 0; i < t.length - 2; i++) out.set(t.slice(i, i + 3), (out.get(t.slice(i, i + 3)) ?? 0) + 1);
+    return out;
+  };
+  const x = grams(a);
+  const y = grams(b);
+  let shared = 0;
+  let sizeX = 0;
+  let sizeY = 0;
+  for (const [g, n] of x) { sizeX += n; shared += Math.min(n, y.get(g) ?? 0); }
+  for (const n of y.values()) sizeY += n;
+  if (sizeX === 0 || sizeY === 0) return 0;
+  // Measured against the shorter text, so "bayside" still finds "Bayside Hardware".
+  return shared / Math.min(sizeX, sizeY);
 }

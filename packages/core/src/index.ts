@@ -240,7 +240,7 @@ export {
   type Expense, type ExpenseCategory, type ExpensePayment, type ExpenseFilter, type ExpenseInput, type ExpenseSummary,
 } from "./billing/expenses";
 export { createReturn, listReturnable, listReturns, type OrderReturn, type Returnable, type ReturnLine } from "./sales/returns";
-export { search, SEARCH_MIN, type SearchGroup, type SearchHit } from "./platform/search";
+export { likeness, search, SEARCH_MIN, type SearchGroup, type SearchHit } from "./platform/search";
 export { HISTORY_AREAS, HISTORY_PAGE, isHistoryArea, listHistory, type HistoryArea, type HistoryEntry } from "./platform/history";
 export { beginTwoStep, confirmTwoStep, disableTwoStep, pendingTwoStep, resetMemberTwoStep, totpCode, totpStep, twoStepStatus, verifyTwoStep, type TwoStepCheck, type TwoStepStatus } from "./platform/twostep";
 export {

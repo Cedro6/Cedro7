@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
-import { createCustomer, createExpense, createProduct, createQuote, listCustomers, listProducts, saveContact, search, setCustomerArchived, type Ctx, type Role } from "../src/index";
+import { createCustomer, createExpense, createProduct, createQuote, listCustomers, listProducts, saveContact, search, likeness, setCustomerArchived, type Ctx, type Role } from "../src/index";
 
 let owner: Pool;
 let app: Pool;
@@ -83,5 +83,23 @@ describe("search", () => {
     const there: Ctx = { pool: app, orgId: other.rows[0]!.id, userId, role: "owner" };
     expect(await search(there, "zephyr")).toEqual([]);
     expect(await search(there, "SO-")).toEqual([]);
+  });
+
+  it("offers near misses when nothing matches as typed, and only then", async () => {
+    await createCustomer(as("owner"), { name: "Fairweather Chandlery" });
+    await createProduct(as("owner"), { sku: "AN-22", name: "Galvanised anchor", price: 60 });
+    const typo = await search(as("owner"), "fairwether chandlry");
+    expect(typo.find((g) => g.kind === "customers")).toMatchObject({ close: true });
+    expect(typo.find((g) => g.kind === "customers")!.hits[0]!.title).toBe("Fairweather Chandlery");
+    expect((await search(as("owner"), "galvanized ancor")).find((g) => g.kind === "products")!.hits[0]!.title).toContain("Galvanised anchor");
+    // An exact match is never mixed with guesses.
+    expect((await search(as("owner"), "fairweather")).every((g) => !g.close)).toBe(true);
+    // Nonsense finds nothing, and short text is not guessed at.
+    expect(await search(as("owner"), "qqqqzzzzxxxx")).toEqual([]);
+    expect(await search(as("owner"), "zqx")).toEqual([]);
+    // Near misses respect roles too.
+    expect((await search(as("warehouse"), "fairwether chandlry")).some((g) => g.kind === "customers")).toBe(false);
+    expect(likeness("bayside", "Bayside Hardware")).toBeGreaterThan(0.9);
+    expect(likeness("hammer", "Potting soil")).toBeLessThan(0.2);
   });
 });

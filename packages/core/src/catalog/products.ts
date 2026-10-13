@@ -144,6 +144,8 @@ export async function updateProduct(ctx: Ctx, id: string, input: ProductInput): 
   if (!UUID.test(id)) throw new ValidationError("id", "Product not found.");
   try {
     await withTenant(ctx.pool, ctx.orgId, async (tx) => {
+      const snapshot = async () => (await tx.query<Record<string, unknown>>(`select sku, name, category, price::float8 as price, case when $2 then cost::float8 end as cost, shelf_location as "shelfLocation", reorder_point::float8 as "reorderPoint", barcode, taxable from products where id = $1`, [id, can(ctx, "product.cost.view")])).rows[0] ?? {};
+      const was = await snapshot();
       const done = await tx.query(
         `update products set sku = $2, name = $3, category = $4, price = $5,
                 cost = case when $9 then $6 else cost end,
@@ -154,9 +156,9 @@ export async function updateProduct(ctx: Ctx, id: string, input: ProductInput): 
       );
       if (done.rowCount === 0) throw new ValidationError("id", "Product not found.");
       await tx.query(
-        `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, after)
-         values ($1, 'user', $2, 'product.updated', 'product', $3, $4)`,
-        [ctx.orgId, ctx.userId, id, JSON.stringify({ sku: p.sku, name: p.name, price: p.price })],
+        `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, before, after)
+         values ($1, 'user', $2, 'product.updated', 'product', $3, $4, $5)`,
+        [ctx.orgId, ctx.userId, id, JSON.stringify(was), JSON.stringify(await snapshot())],
       );
     });
   } catch (error) {

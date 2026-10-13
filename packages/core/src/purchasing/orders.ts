@@ -218,15 +218,17 @@ export async function updateSupplier(
   }
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ValidationError("id", "Supplier not found.");
   await withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const snapshot = async () => (await tx.query<Record<string, unknown>>(`select name, email, phone, payment_terms as "paymentTerms", lead_time_days as "leadTimeDays", address from suppliers where id = $1`, [id])).rows[0] ?? {};
+    const was = await snapshot();
     const done = await tx.query(
       `update suppliers set name = $2, email = $3, phone = $4, payment_terms = $5, lead_time_days = $6, address = case when $7 then $8 else address end, updated_at = now() where id = $1`,
       [id, name, input.email?.trim().slice(0, 200) || null, input.phone?.trim().slice(0, 50) || null, input.paymentTerms?.trim().slice(0, 50) || null, lead ?? null, input.address !== undefined, input.address?.trim().slice(0, 500) || null],
     );
     if (done.rowCount === 0) throw new ValidationError("id", "Supplier not found.");
     await tx.query(
-      `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, after)
-       values ($1, 'user', $2, 'supplier.updated', 'supplier', $3, $4)`,
-      [ctx.orgId, ctx.userId, id, JSON.stringify({ name })],
+      `insert into audit_log (org_id, actor_type, actor_id, action, entity_type, entity_id, before, after)
+       values ($1, 'user', $2, 'supplier.updated', 'supplier', $3, $4, $5)`,
+      [ctx.orgId, ctx.userId, id, JSON.stringify(was), JSON.stringify(await snapshot())],
     );
   });
 }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appUrl, createPool, migrate, ownerUrl, seed, type Pool } from "@bos/db";
-import { adjustStock, confirmOrder, createCustomer, createExpense, createQuote, ForbiddenError, HISTORY_PAGE, listCustomers, listHistory, listProducts, setFeature, type Ctx, type Role } from "../src/index";
+import { adjustStock, confirmOrder, createCustomer, createExpense, createQuote, ForbiddenError, HISTORY_PAGE, listCustomers, listHistory, listProducts, setFeature, updateCustomer, updateProduct, type Ctx, type Role } from "../src/index";
 import { randomUUID } from "node:crypto";
 
 let owner: Pool;
@@ -86,5 +86,21 @@ describe("activity history", () => {
     const other = await owner.query<{ id: string }>("insert into organizations (name, slug) values ('Other', 'other-history') returning id");
     expect((await listHistory({ pool: app, orgId: other.rows[0]!.id, userId, role: "owner" })).entries).toEqual([]);
     expect((await listCustomers(as("owner"))).length).toBeGreaterThan(0);
+  });
+
+  it("says exactly what changed when a customer, product or supplier is edited", async () => {
+    const c = await createCustomer(as("owner"), { name: "Before Co", paymentTerms: "Net 30" });
+    await updateCustomer(as("owner"), c.id, { name: "After Co", paymentTerms: "Net 30", billingAddress: "1 Quay St" });
+    const p = (await listProducts(as("owner")))[0]!;
+    await updateProduct(as("owner"), p.id, { sku: p.sku, name: p.name, category: p.category ?? undefined, price: p.price + 1, cost: p.cost ?? undefined, reorderPoint: p.reorderPoint, shelfLocation: p.shelfLocation ?? undefined, taxable: false });
+    await updateCustomer(as("owner"), c.id, { name: "After Co", paymentTerms: "Net 30" });
+    const [same, product, customer] = (await listHistory(as("owner"))).entries;
+    expect(customer!.detail).toBe("Name: Before Co → After Co · Billing address: nothing → 1 Quay St");
+    expect(product!.detail).toBe(`Price: ${p.price} → ${p.price + 1} · Taxed: yes → no`);
+    expect(same!.detail).toBe("Saved with no changes");
+    // A role that cannot see cost does not get it written into the history either.
+    await updateProduct(as("owner"), p.id, { sku: p.sku, name: p.name, price: p.price, taxable: true });
+    const stored = (await owner.query("select before, after from audit_log where action = 'product.updated' order by created_at desc, id desc limit 1")).rows[0];
+    expect(Object.keys(stored.before)).toContain("cost");
   });
 });
