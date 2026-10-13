@@ -236,3 +236,4 @@ export {
   createExpense, EXPENSE_CATEGORIES, EXPENSE_FILTERS, expenseSummary, getExpense, isExpenseCategory, listExpenses, payExpense, STOCK_CATEGORY, voidExpense,
   type Expense, type ExpenseCategory, type ExpenseFilter, type ExpenseInput, type ExpenseSummary,
 } from "./billing/expenses";
+export { createReturn, listReturnable, listReturns, type OrderReturn, type Returnable, type ReturnLine } from "./sales/returns";
