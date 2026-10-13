@@ -24,7 +24,7 @@ const homeHref = (view: HomeView, change: Partial<HomeView>) => {
 };
 
 /** What each card is called, what it shows, and how wide it sits. */
-export const WIDGET_INFO: Record<WidgetId, { name: string; about: string; size: "full" | "wide" | "narrow" }> = {
+export const WIDGET_INFO: Record<WidgetId, { name: string; about: string; size: "full" | "wide" | "half" | "narrow" }> = {
   hero: { name: "Total sales", about: "The big sales figure with the change, what is still to collect, and the split by category", size: "full" },
   tiles: { name: "Headline numbers", about: "Sales this week, ready to ship, unpaid invoices and low stock at a glance", size: "full" },
   sales: { name: "Sales chart", about: "Daily sales for the last 30 days", size: "wide" },
@@ -40,8 +40,8 @@ export const WIDGET_INFO: Record<WidgetId, { name: string; about: string; size: 
   putaway: { name: "To put away", about: "Deliveries received but not yet on the shelf", size: "narrow" },
   quotes: { name: "Open quotes", about: "Quotes waiting on the customer, oldest first", size: "narrow" },
   "lot-tiles": { name: "Headline numbers", about: "Cars on the lot, cars over 60 days, money in stock and reminders due", size: "full" },
-  "dealer-sales": { name: "Sales chart", about: "Money from cars delivered, from 7 days to 12 months", size: "full" },
-  "dealer-deals": { name: "Deals chart", about: "How many deals were written, and how many are still open, from 7 days to 12 months", size: "full" },
+  "dealer-sales": { name: "Sales chart", about: "Money from cars delivered, from 7 days to 12 months", size: "half" },
+  "dealer-deals": { name: "Deals chart", about: "How many deals were written, and how many are still open, from 7 days to 12 months", size: "half" },
   "lot-attention": { name: "Needs attention", about: "Money owed, deals ready to deliver, title paperwork gaps and cars sitting too long", size: "narrow" },
   "open-deals": { name: "Open deals", about: "Deals not yet delivered, with what each buyer still owes", size: "wide" },
   "newest-cars": { name: "Newest on the lot", about: "The latest cars in, with mileage, asking price and status", size: "wide" },

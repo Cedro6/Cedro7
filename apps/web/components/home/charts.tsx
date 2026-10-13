@@ -22,15 +22,15 @@ const shortMoney = (n: number) => (n >= 1000 ? `${symbol()}${(n / 1000).toFixed(
 const shortDay = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** A smooth area chart of a daily series, plotted to one scale with labelled gridlines. */
-export function AreaChart({ series, label, animate, tick = shortDay }: { series: { date: string; total: number }[]; label: string; animate?: string; tick?: (iso: string) => string }) {
-  const W = 720, H = 250, left = 46, right = 16, top = 26, bottom = 30;
+export function AreaChart({ series, label, animate, tick = shortDay, compact = false }: { series: { date: string; total: number }[]; label: string; animate?: string; tick?: (iso: string) => string; /** Drawn for a half-width card. */ compact?: boolean }) {
+  const W = compact ? 460 : 720, H = compact ? 210 : 250, left = 46, right = 16, top = 26, bottom = 30;
   const max = niceMax(Math.max(...series.map((d) => d.total)));
   const x = (i: number) => left + (i * (W - left - right)) / Math.max(1, series.length - 1);
   const y = (v: number) => top + (1 - v / max) * (H - top - bottom);
   const points = series.map((d, i): [number, number] => [x(i), y(d.total)]);
   const line = smoothPath(points);
   const [lx, ly] = points.at(-1)!;
-  const every = Math.ceil(series.length / 6);
+  const every = Math.ceil(series.length / (compact ? 4 : 6));
   return (
     <svg key={animate} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className={animate ? "chart chart-animated" : "chart"}>
       <defs>
@@ -57,58 +57,6 @@ export function AreaChart({ series, label, animate, tick = shortDay }: { series:
       {series.map((d, i) =>
         i % every === 0 && i < series.length - every / 2 ? (
           <text key={d.date} x={x(i)} y={H - 8} fill="currentColor" fillOpacity="0.7" fontSize="12" textAnchor="middle">
-            {tick(d.date)}
-          </text>
-        ) : null,
-      )}
-    </svg>
-  );
-}
-
-/** A whole-number top for a count axis, even so the halfway line is a whole number too. */
-const countMax = (value: number) => {
-  if (value <= 4) return 4;
-  const top = niceMax(value);
-  return top % 2 === 1 ? top + 1 : top;
-};
-
-/**
- * Columns for a count per day, week or month, drawn to one scale from zero. The count is printed above
- * any column that has one, so a single deal on one day is never just a sliver.
- */
-export function CountBars({ series, label, animate, tick = shortDay }: { series: { date: string; count: number }[]; label: string; animate?: string; tick?: (iso: string) => string }) {
-  const W = 720, H = 250, left = 46, right = 16, top = 26, bottom = 30;
-  const max = countMax(Math.max(...series.map((d) => d.count)));
-  const slot = (W - left - right) / series.length;
-  const bar = Math.max(2, Math.min(36, slot * 0.62));
-  const x = (i: number) => left + slot * i + slot / 2;
-  const y = (v: number) => top + (1 - v / max) * (H - top - bottom);
-  const every = Math.ceil(series.length / 6);
-  return (
-    <svg key={animate} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className={animate ? "chart chart-animated" : "chart"}>
-      {[0, 0.5, 1].map((f) => (
-        <g key={f}>
-          <path d={`M${left} ${y(f * max).toFixed(1)}H${W - right}`} stroke="currentColor" strokeOpacity="0.12" fill="none" />
-          <text x={left - 8} y={y(f * max) + 4} fill="currentColor" fillOpacity="0.7" fontSize="12" textAnchor="end">
-            {Math.round(f * max)}
-          </text>
-        </g>
-      ))}
-      {series.map((d, i) =>
-        d.count > 0 ? (
-          <g key={d.date} className="chart-bar">
-            <rect x={x(i) - bar / 2} y={y(d.count)} width={bar} height={y(0) - y(d.count)} rx={Math.min(4, bar / 3)} fill="#A78BFA" />
-            {bar >= 8 && (
-              <text x={x(i)} y={y(d.count) - 6} fill="currentColor" fontSize="12" fontWeight="600" textAnchor="middle">
-                {d.count}
-              </text>
-            )}
-          </g>
-        ) : null,
-      )}
-      {series.map((d, i) =>
-        i % every === 0 ? (
-          <text key={`t${d.date}`} x={x(i)} y={H - 8} fill="currentColor" fillOpacity="0.7" fontSize="12" textAnchor="middle">
             {tick(d.date)}
           </text>
         ) : null,

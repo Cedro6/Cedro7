@@ -249,6 +249,7 @@ describe("the dealer's sales chart", () => {
     expect(week.points).toHaveLength(7);
     expect(week.deals).toBe(n("open") + n("delivered"));
     expect(week.open).toBe(n("open"));
+    expect(week.cancelled).toBe(n("cancelled"));
     expect(week.points.at(-1)!.deals).toBe(week.deals);
     const year = (await dealSeries(as("owner"), "12m"))!;
     expect(year.bucket).toBe("month");

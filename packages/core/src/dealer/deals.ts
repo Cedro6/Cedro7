@@ -445,6 +445,8 @@ export type DealSeries = {
   deals: number;
   /** Of the deals written in the period, how many are still open. */
   open: number;
+  /** Deals written in the period and later cancelled. */
+  cancelled: number;
   from: string;
   to: string;
 };
@@ -466,17 +468,18 @@ export async function dealSeries(ctx: Ctx, period: DealerPeriod): Promise<DealSe
     : "(date_trunc('month', now() at time zone $1) - interval '11 months')::date";
   const bucket = period === "12m" ? "month" : period === "ytd" ? "week" : "day";
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
-    const result = await tx.query<{ date: string; total: number; deals: number; delivered: number; open: number; first: string; last: string }>(
+    const result = await tx.query<{ date: string; total: number; deals: number; delivered: number; open: number; cancelled: number; first: string; last: string }>(
       `with span as (select ${start} as first, (now() at time zone $1)::date as last),
             days as (select generate_series(first, last, interval '1 day')::date as day from span),
             daily as (select d.day,
                              coalesce((select sum(sale_price) from deals x where x.status = 'delivered' and x.delivered_on = d.day), 0) as total,
                              (select count(*) from deals x where x.status = 'delivered' and x.delivered_on = d.day) as delivered,
                              (select count(*) from deals x where x.status <> 'cancelled' and (x.created_at at time zone $1)::date = d.day) as deals,
-                             (select count(*) from deals x where x.status = 'open' and (x.created_at at time zone $1)::date = d.day) as open
+                             (select count(*) from deals x where x.status = 'open' and (x.created_at at time zone $1)::date = d.day) as open,
+                             (select count(*) from deals x where x.status = 'cancelled' and (x.created_at at time zone $1)::date = d.day) as cancelled
                         from days d)
        select to_char(min(day), 'YYYY-MM-DD') as date, sum(total)::float8 as total, sum(deals)::int as deals,
-              sum(delivered)::int as delivered, sum(open)::int as open,
+              sum(delivered)::int as delivered, sum(open)::int as open, sum(cancelled)::int as cancelled,
               to_char((select first from span), 'YYYY-MM-DD') as first, to_char((select last from span), 'YYYY-MM-DD') as last
          from daily
         group by ${bucket === "day" ? "day" : `date_trunc('${bucket}', day)`}
@@ -493,6 +496,7 @@ export async function dealSeries(ctx: Ctx, period: DealerPeriod): Promise<DealSe
       cars: sum("delivered"),
       deals: sum("deals"),
       open: result.rows.reduce((n, r) => n + r.open, 0),
+      cancelled: result.rows.reduce((n, r) => n + r.cancelled, 0),
       from: result.rows[0]!.first,
       to: result.rows[0]!.last,
     };

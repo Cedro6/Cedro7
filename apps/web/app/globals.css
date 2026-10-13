@@ -2123,15 +2123,18 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .chart-animated .chart-line { animation: draw 1.3s cubic-bezier(0.45, 0, 0.2, 1) both; }
 .chart-animated .chart-area { animation: fade-in 0.9s ease 0.7s both; }
 .chart-animated .chart-dot { transform-box: fill-box; transform-origin: center; animation: pop-in 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) 1.2s both; }
-/* Count columns grow up from the baseline. */
-.chart-animated .chart-bar { transform-box: fill-box; transform-origin: bottom; animation: grow-up 0.7s cubic-bezier(0.3, 1.2, 0.5, 1) both; }
-@keyframes grow-up { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
-:root[data-mode="light"] .chart .chart-bar rect { fill: #7c4dff; }
-.chart-pair { display: grid; gap: 16px; }
-.chart-pair > * { min-width: 0; }
+/* Dealer deals card: Cedro's Total sales bars, filling the card, blocks growing in from the left. */
+.deals-card { display: flex; flex-direction: column; gap: 12px; }
+.deals-bars { flex: 1; margin-top: 8px; }
+.deals-bars .hero-cat { white-space: normal; overflow: visible; }
+.deals-bars .stripes { height: 64px; transform-origin: left center; animation: grow-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.deals-bars .hero-block:nth-child(2) .stripes { animation-delay: 0.1s; }
+.deals-bars .hero-block:nth-child(3) .stripes { animation-delay: 0.2s; }
+.segmented-compact a { padding-inline: 11px; letter-spacing: 0.04em; }
+.chart-note { margin: 0; font-size: 13px; }
 .panel-head .segmented { flex-wrap: wrap; }
 @media (prefers-reduced-motion: reduce) {
-  .chart-animated .chart-line, .chart-animated .chart-area, .chart-animated .chart-dot, .chart-animated .chart-bar { animation: none; }
+  .chart-animated .chart-line, .chart-animated .chart-area, .chart-animated .chart-dot, .deals-bars .stripes { animation: none; }
 }
 
 /* Full report: period pickers, section tabs, change markers and comparison tables. */
@@ -2430,7 +2433,8 @@ a.account-card:hover .account-name { text-decoration: underline; }
 .numeral-small { font-size: 22px; }
 :root[data-mode="light"] .veh-from { background: rgba(124, 92, 255, 0.14); color: #5b3fd6; }
 :root[data-mode="light"] .veh-from-missing { background: rgba(200, 120, 20, 0.14); color: #9a5b00; }
-.dash-half { flex: 1 1 300px; }
+.dash-half { flex: 1 1 420px; }
+.widget-thumb-half { width: 46px; }
 .plain-list { margin: 8px 0 0; padding-left: 18px; line-height: 1.8; }
 .deal-sum { max-width: 520px; font-variant-numeric: tabular-nums; }
 .deal-sum > div { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; border-bottom: 1px solid var(--line); }
