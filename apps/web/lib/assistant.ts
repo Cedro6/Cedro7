@@ -27,5 +27,8 @@ export const callModel: ModelCall = async (request) => {
     console.error("assistant: model request failed", response.status, (await response.text()).slice(0, 300));
     throw new Error(`Model request failed with status ${response.status}`);
   }
-  return (await response.json()) as Awaited<ReturnType<ModelCall>>;
+  const result = (await response.json()) as Awaited<ReturnType<ModelCall>>;
+  // Running out of room cuts an answer off; note it so the allowance can be raised if it ever recurs.
+  if (result.stop_reason === "max_tokens") console.warn("assistant: answer hit the length allowance", request.max_tokens, JSON.stringify(result.usage));
+  return result;
 };

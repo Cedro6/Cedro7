@@ -29,7 +29,7 @@ export class AssistantLimitError extends Error {
   }
 }
 
-export type AssistantAnswer = { text: string; lookups: string[]; proposals: Proposal[]; inputTokens: number; outputTokens: number };
+export type AssistantAnswer = { text: string; lookups: string[]; proposals: Proposal[]; inputTokens: number; outputTokens: number; /** False when the model produced no usable words of its own. */ answered: boolean };
 /** Earlier turns of this conversation, oldest first. Text only. */
 export type AssistantTurn = { role: "user" | "assistant"; text: string };
 export type AssistantUsage = { questions: number; limit: number; inputTokens: number; outputTokens: number };
@@ -133,7 +133,9 @@ export async function ask(
         messages,
         // On the last round no tools are offered, so the model has to answer with what it has.
         tools: round === MAX_ROUNDS - 1 ? [] : offered,
-        max_tokens: input.maxTokens ?? 900,
+        // Generous on purpose: the allowance also covers any reasoning the model does before it writes,
+        // and a tight one cuts answers off mid-sentence. Only what is actually written is paid for.
+        max_tokens: input.maxTokens ?? 4000,
       });
       inputTokens += response.usage.input_tokens;
       outputTokens += response.usage.output_tokens;
@@ -180,7 +182,7 @@ export async function ask(
       tx.query(`update assistant_usage set input_tokens = input_tokens + $1, output_tokens = output_tokens + $2 where month = ${monthStartOf(ctx)}`, [inputTokens, outputTokens]),
     );
   }
-  return { text: text || (proposals.length > 0 ? "I have prepared that for you to confirm." : "I could not work out an answer to that. Try asking it a different way."), lookups, proposals, inputTokens, outputTokens };
+  return { answered: Boolean(text), text: text || (proposals.length > 0 ? "I have prepared that for you to confirm." : "I could not work out an answer to that. Try asking it a different way."), lookups, proposals, inputTokens, outputTokens };
 }
 
 /** Drops a trailing half-written line or sentence from text that was cut short. */
@@ -214,7 +216,9 @@ export async function getBriefing(ctx: Ctx): Promise<Briefing | null> {
 
 /** Writes (or rewrites) today's briefing from the records this person can see. Counts as one question. */
 export async function writeBriefing(ctx: Ctx, input: { company: string; person: string; monthlyLimit: number }, callModel: ModelCall): Promise<Briefing> {
-  const answer = await ask(ctx, { ...input, question: BRIEFING_REQUEST, readOnly: true, maxTokens: 1500 }, callModel);
+  const answer = await ask(ctx, { ...input, question: BRIEFING_REQUEST, readOnly: true, maxTokens: 6000 }, callModel);
+  // A briefing with nothing finished in it is not worth keeping; the person is asked to try again instead.
+  if (!answer.answered) throw new Error("The briefing came back empty or unfinished.");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const result = await tx.query<Briefing>(
       `insert into assistant_briefings (org_id, user_id, day, body) values ($1, $2, ${todayOf(ctx)}, $3)
