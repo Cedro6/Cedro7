@@ -198,3 +198,23 @@ export {
   type SignInResult,
   type TeamMemberDetail,
 } from "./platform/passwords";
+export {
+  changeHomeLayout,
+  dailySales,
+  defaultHome,
+  getHomeLayout,
+  headline,
+  HERO_RANGES,
+  heroFigures,
+  isWidget,
+  orderHeatmap,
+  widgetAllowed,
+  WIDGETS,
+  type Headline,
+  type Heatmap,
+  type Hero,
+  type HeroRange,
+  type HomeChange,
+  type HomeLayout,
+  type WidgetId,
+} from "./platform/dashboard";

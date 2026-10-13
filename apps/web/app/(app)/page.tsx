@@ -1,51 +1,65 @@
 import Link from "next/link";
-import { attention, can, getBriefing, overview, salesTrend } from "@bos/core";
+import { can, getBriefing, getHomeLayout, HERO_RANGES, isWidget, type HeroRange, type WidgetId } from "@bos/core";
 import { BriefingPanel } from "../../components/BriefingPanel";
+import { Widget, WIDGET_INFO } from "../../components/home/widgets";
 import { assistantConfigured } from "../../lib/assistant";
 import { requireSession } from "../../lib/session";
+import { changeHome } from "./home-actions";
 
-const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-const shortDay = (iso: string) =>
-  new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const ZONE = "America/New_York";
+const greeting = (hour: number) => (hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
 
-/** A smooth line through the daily totals, scaled into the chart's 660 by 180 drawing area. */
-function chartPoints(days: { date: string; total: number }[]) {
-  const max = Math.max(...days.map((d) => d.total), 1);
-  return days.map((d, i) => ({
-    x: 30 + (i * 660) / Math.max(days.length - 1, 1),
-    y: 220 - (d.total / max) * 170,
-    ...d,
-  }));
+/** The list of cards a person can add, or swap an existing card for. */
+function WidgetMenu({ options, replacing }: { options: WidgetId[]; replacing: WidgetId | null }) {
+  return (
+    <div className="glass widget-menu" role="region" aria-label={replacing ? `Replace ${WIDGET_INFO[replacing].name}` : "Add a card"}>
+      <div className="panel-head">
+        <div>
+          <h2 className="title">{replacing ? `Replace "${WIDGET_INFO[replacing].name}" with` : "Add a widget"}</h2>
+          <div className="muted">{options.length ? "Pick what you want to see here." : "Everything available to your role is already on your dashboard."}</div>
+        </div>
+        <Link href="/?edit=1" className="btn btn-glass btn-small" scroll={false}>
+          Close
+        </Link>
+      </div>
+      <form action={changeHome} className="widget-options">
+        <input type="hidden" name="kind" value={replacing ? "replace" : "add"} />
+        {replacing && <input type="hidden" name="id" value={replacing} />}
+        {options.map((id) => {
+          const info = WIDGET_INFO[id];
+          return (
+            <button type="submit" className="widget-option" name={replacing ? "with" : "id"} value={id} key={id}>
+              <span className={`widget-thumb widget-thumb-${info.size}`} aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="row-text">
+                <span className="row-title">{info.name}</span>
+                <span className="muted">{info.about}</span>
+              </span>
+              <span className="badge">{info.size === "full" ? "Full width" : info.size === "wide" ? "Wide" : "Compact"}</span>
+            </button>
+          );
+        })}
+      </form>
+    </div>
+  );
 }
-function chartPath(points: { x: number; y: number }[]) {
-  return points
-    .map((p, i) => {
-      if (i === 0) return `M${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-      const prev = points[i - 1]!;
-      const mid = ((prev.x + p.x) / 2).toFixed(1);
-      return `C${mid},${prev.y.toFixed(1)} ${mid},${p.y.toFixed(1)} ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-    })
-    .join(" ");
-}
 
-function greeting(hour: number): string {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ edit?: string; add?: string; replace?: string; range?: string; error?: string }> }) {
   const { ctx, membership } = await requireSession();
-  const [counts, trend, needs, briefing] = await Promise.all([overview(ctx), salesTrend(ctx), attention(ctx), assistantConfigured() ? getBriefing(ctx) : null]);
-  const points = trend ? chartPoints(trend.days) : [];
-  const path = chartPath(points);
-  const peak = points.reduce<(typeof points)[number] | null>((best, p) => (p.total > 0 && (!best || p.total >= best.total) ? p : best), null);
-  const change = trend && trend.lastWeek > 0 ? Math.round(((trend.thisWeek - trend.lastWeek) / trend.lastWeek) * 100) : null;
+  const params = await searchParams;
+  const edit = params.edit === "1";
+  const requested = Number(params.range);
+  const range: HeroRange = (HERO_RANGES as readonly number[]).includes(requested) ? (requested as HeroRange) : 30;
+  const [layout, briefing] = await Promise.all([getHomeLayout(ctx, membership.businessType), assistantConfigured() ? getBriefing(ctx) : null]);
+  const replacing = edit && params.replace && isWidget(params.replace) && layout.widgets.includes(params.replace) ? params.replace : null;
+  const adding = edit && params.add === "1";
+
   const now = new Date();
-  const zone = "America/New_York";
-  const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: zone }).format(now));
-  const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: zone }).format(now);
-  const firstName = membership.userName.split(" ")[0];
+  const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: ZONE }).format(now));
+  const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: ZONE }).format(now);
 
   return (
     <>
@@ -53,121 +67,101 @@ export default async function HomePage() {
         <div>
           <div className="eyebrow">{today}</div>
           <h1>
-            {greeting(hour)}, {firstName}
+            {greeting(hour)}, <span className="dim">{membership.userName.split(" ")[0]}</span>
           </h1>
         </div>
-        {can(ctx, "sales_order.write") && (
-          <Link href="/sales/new" className="btn btn-primary">
-            New order
-          </Link>
+        {edit ? (
+          <>
+            {layout.customized && (
+              <form action={changeHome}>
+                <input type="hidden" name="kind" value="reset" />
+                <button type="submit" className="btn btn-glass">
+                  Reset to default
+                </button>
+              </form>
+            )}
+            <Link href="/" className="btn btn-primary">
+              Done
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link href="/?edit=1" className="btn btn-glass">
+              Customize
+            </Link>
+            {can(ctx, "sales_order.write") && (
+              <Link href="/sales/new" className="btn btn-primary">
+                New order
+              </Link>
+            )}
+          </>
         )}
       </header>
+      {params.error && <p className="error">{params.error}</p>}
+      {edit && (
+        <p className="notice notice-edit">You are arranging your own Home screen. Move, replace or remove cards, or add new ones. Other people keep their own layout.</p>
+      )}
 
-      <div className="tiles">
-        {counts.customers !== null && (
-          <Link href="/customers" className="glass panel tile">
-            <h2 className="label">Customers</h2>
-            <div className="numeral">{counts.customers}</div>
-            <div className="muted">Active accounts</div>
-          </Link>
-        )}
-        {counts.readyToShip !== null && (
-          <Link href="/sales?show=open" className="glass panel tile">
-            <h2 className="label">Ready to ship</h2>
-            <div className="numeral">{counts.readyToShip}</div>
-            <div className="muted">Of {counts.openOrders} open orders</div>
-          </Link>
-        )}
-        {counts.openPurchaseOrders !== null && (
-          <Link href="/purchasing?show=open" className="glass panel tile">
-            <h2 className="label">Purchase orders</h2>
-            <div className="numeral">{counts.openPurchaseOrders}</div>
-            <div className="muted">Open with suppliers</div>
-          </Link>
-        )}
-        {counts.lowStock !== null && (
-          <Link href="/products?low=1" className="glass panel tile">
-            <h2 className="label">Low stock</h2>
-            <div className="numeral">{counts.lowStock}</div>
-            <div className="muted">At or below reorder point</div>
-          </Link>
-        )}
-      </div>
-
-      {assistantConfigured() && (
+      {!edit && assistantConfigured() && (
         <BriefingPanel
           initial={briefing?.body ?? ""}
-          writtenAt={briefing ? `at ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone }).format(briefing.writtenAt)}` : ""}
+          writtenAt={briefing ? `at ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: ZONE }).format(briefing.writtenAt)}` : ""}
         />
       )}
 
-      <div className="split">
-        {trend && (
-          <section className="glass panel grow-3">
-            <div className="panel-head">
-              <div>
-                <h2 className="label">Sales, last 7 days</h2>
-                <div className="numeral-row">
-                  <span className="numeral numeral-xl">{usd(trend.thisWeek)}</span>
-                  {change !== null && <span className={`badge ${change >= 0 ? "badge-ok" : "badge-warn"}`}>{change >= 0 ? "+" : ""}{change}%</span>}
+      <div className="dash">
+        {layout.widgets.map((id, index) => {
+          const info = WIDGET_INFO[id];
+          return (
+            <div className={`dash-item dash-${info.size} ${edit ? "is-editing" : ""}`} key={id}>
+              {edit && (
+                <div className="widget-bar">
+                  <span className="widget-name">{info.name}</span>
+                  <span className="widget-tools">
+                    {([[-1, "earlier", "‹"], [1, "later", "›"]] as const).map(([by, word, glyph]) => (
+                      <form action={changeHome} key={by}>
+                        <input type="hidden" name="kind" value="move" />
+                        <input type="hidden" name="id" value={id} />
+                        <input type="hidden" name="by" value={by} />
+                        <button type="submit" className="icon-button" aria-label={`Move ${info.name} ${word}`} disabled={by === -1 ? index === 0 : index === layout.widgets.length - 1}>
+                          {glyph}
+                        </button>
+                      </form>
+                    ))}
+                    <Link href={`/?edit=1&replace=${id}`} className="btn btn-glass btn-small" scroll={false}>
+                      Replace
+                    </Link>
+                    <form action={changeHome}>
+                      <input type="hidden" name="kind" value="remove" />
+                      <input type="hidden" name="id" value={id} />
+                      <button type="submit" className="btn btn-glass btn-small">
+                        Remove
+                      </button>
+                    </form>
+                  </span>
                 </div>
-                <div className="muted">
-                  {trend.lastWeek > 0 ? `${usd(trend.lastWeek)} in the 7 days before` : "Orders confirmed, before tax"}
-                </div>
-              </div>
+              )}
+              {replacing === id && <WidgetMenu options={layout.available} replacing={id} />}
+              <Widget id={id} ctx={ctx} range={range} edit={edit} />
             </div>
-            {peak ? (
-              <svg viewBox="0 0 720 262" role="img" aria-label={`Daily sales over the last 21 days. Highest day ${usd(peak.total)} on ${shortDay(peak.date)}.`} className="chart">
-                <defs>
-                  <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#A78BFA" stopOpacity="0.55" />
-                    <stop offset="1" stopColor="#A78BFA" stopOpacity="0" />
-                  </linearGradient>
-                  <linearGradient id="chart-line" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0" stopColor="#7C4DFF" />
-                    <stop offset="1" stopColor="#A78BFA" />
-                  </linearGradient>
-                </defs>
-                <path d="M30 50H690M30 135H690M30 220H690" stroke="currentColor" strokeOpacity="0.12" />
-                <path d={`${path} L690,220 L30,220 Z`} fill="url(#chart-fill)" />
-                <path d={path} fill="none" stroke="url(#chart-line)" strokeWidth="3.5" strokeLinecap="round" />
-                <circle cx={peak.x} cy={peak.y} r="6" fill="#A78BFA" />
-                <text x={Math.min(Math.max(peak.x, 80), 640)} y={Math.max(peak.y - 14, 16)} textAnchor="middle" fill="currentColor" fontSize="15" fontWeight="600">
-                  {usd(peak.total)} · {shortDay(peak.date)}
-                </text>
-                {[0, 10, 20].map((i) => (
-                  <text key={i} x={points[i]!.x} y="250" textAnchor={i === 0 ? "start" : i === 20 ? "end" : "middle"} fill="currentColor" fillOpacity="0.7" fontSize="13">
-                    {shortDay(points[i]!.date)}
-                  </text>
-                ))}
-              </svg>
-            ) : (
-              <p className="muted">No orders confirmed in the last three weeks. Confirm an order and it shows up here.</p>
-            )}
+          );
+        })}
+        <div className="dash-item dash-full">
+          {adding ? (
+            <WidgetMenu options={layout.available} replacing={null} />
+          ) : (
+            <Link href="/?edit=1&add=1" className={`widget-add ${edit ? "" : "widget-add-slim"}`} scroll={false}>
+              <span aria-hidden="true">+</span>
+              <span>Add a widget</span>
+            </Link>
+          )}
+        </div>
+        {layout.widgets.length === 0 && !adding && (
+          <section className="glass panel dash-item dash-full empty">
+            <div className="empty-title">Your dashboard is empty</div>
+            <p>Choose Add a widget to put cards here.</p>
           </section>
         )}
-
-        <section className="glass panel grow-2">
-          <h2 className="title">Needs attention</h2>
-          {needs.length === 0 ? (
-            <p className="muted">Nothing needs you right now.</p>
-          ) : (
-            <div className="rows">
-              {needs.map((item) => (
-                <div className="row" key={item.kind}>
-                  <span className={`dot dot-${item.tone}`} aria-hidden="true" />
-                  <div className="row-text">
-                    <div className="row-title">{item.title}</div>
-                    <div className="muted">{item.detail}</div>
-                  </div>
-                  <Link href={item.href} className="btn btn-glass btn-small">
-                    {item.action}
-                  </Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
       </div>
     </>
   );
