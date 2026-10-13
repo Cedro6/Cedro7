@@ -2308,11 +2308,12 @@ a.account-card:hover .account-name { text-decoration: underline; }
   border-color: rgba(255, 255, 255, 0.14);
 }
 /* The picture is its own layer so the glass frame above it has something to blur. */
-.briefing-art::after { content: ""; position: absolute; inset: 0; z-index: -2; background: url("/briefing.jpg") center 38% / cover no-repeat; }
-.briefing-art::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(2, 14, 6, 0.86) 0%, rgba(2, 14, 6, 0.62) 45%, rgba(2, 14, 6, 0.3) 100%); }
+.briefing-art::after { content: ""; position: absolute; inset: 0; z-index: -2; background: url("/briefing.jpg") center / cover no-repeat; }
+.briefing-art::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(2, 14, 6, 0.55) 0%, rgba(2, 14, 6, 0.25) 50%, rgba(2, 14, 6, 0) 100%); }
 .briefing-art .panel-head { align-items: center; }
 .briefing-title { margin: 0; font-size: 22px; line-height: 26px; font-weight: 800; letter-spacing: -0.01em; color: #fff; }
-.briefing-sub { margin-top: 1px; color: rgba(244, 244, 248, 0.78); }
+.briefing-sub { margin-top: 1px; color: #fff; }
+.briefing-title, .briefing-sub, .briefing-point, .briefing-foot { text-shadow: 0 1px 2px rgba(0, 20, 5, 0.55); }
 .briefing-art .btn-glass { background: rgba(2, 14, 6, 0.6); border-color: rgba(255, 255, 255, 0.4); color: #fff; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .briefing-art .btn-glass:hover { background: rgba(2, 14, 6, 0.8); }
 .briefing-art .error { color: #ffb4b4; }
@@ -2321,21 +2322,20 @@ a.account-card:hover .account-name { text-decoration: underline; }
   padding: 16px;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.22);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.06) 40%, rgba(190, 244, 50, 0.08));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(255, 255, 255, 0.06), 0 18px 50px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(22px) saturate(1.4);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 12px 36px rgba(0, 20, 5, 0.3);
+  /* A half-strength blur: the leaf stays recognisable but no longer competes with the words. */
+  backdrop-filter: blur(11px) brightness(0.8);
+  -webkit-backdrop-filter: blur(11px) brightness(0.8);
   animation: briefing-glass-in 1.6s ease both;
 }
-.briefing-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.briefing-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .briefing-points li {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(3, 12, 6, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 14px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
   animation: briefing-point-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .briefing-num {
@@ -2348,15 +2348,15 @@ a.account-card:hover .account-name { text-decoration: underline; }
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
-  color: #0b0614;
-  background: linear-gradient(135deg, #c6f432, #8fe01f);
-  box-shadow: 0 0 14px rgba(190, 244, 50, 0.45);
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
 }
-.briefing-point { min-width: 0; font-size: 15px; line-height: 1.55; color: #fff; overflow-wrap: anywhere; }
-.briefing-point strong { color: #d9ff6a; font-weight: 700; }
+.briefing-point { min-width: 0; font-size: 16px; font-weight: 500; line-height: 1.55; color: #fff; overflow-wrap: anywhere; }
+.briefing-point strong { color: #fff; font-weight: 800; }
+.briefing-points li:first-child { border-top: 0; padding-top: 4px; }
 .briefing-point .row-link { color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
-.briefing-foot { margin-top: 12px; padding: 0 4px; font-size: 13px; color: rgba(244, 244, 248, 0.8); }
-.briefing-foot .link-button { color: #d9ff6a; padding: 0; font-size: 13px; }
+.briefing-foot { padding: 12px 6px 0; border-top: 1px solid rgba(255, 255, 255, 0.28); font-size: 13px; color: #fff; }
+.briefing-foot .link-button { color: #fff; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; padding: 0; font-size: 13px; }
 @keyframes briefing-glass-in { from { opacity: 0; backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); } }
 @keyframes briefing-point-in { from { opacity: 0; transform: translateY(18px); filter: blur(6px); } }
 /* The panel grows open slowly, then the glass settles, then each point arrives in turn. */

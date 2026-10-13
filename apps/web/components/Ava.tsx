@@ -60,10 +60,10 @@ function suggestionsFor(path: string, title: string, can: AvaAbilities): string[
   return s.filter((x): x is string => Boolean(x)).slice(0, 4);
 }
 
-export function Ava({ firstName, on, left, limit, voice, briefing, abilities }: {
+export function Ava({ firstName, on, left, limit, voice, abilities }: {
   firstName: string; on: boolean; left: number; limit: number;
   /** True when Ava's own voice is set up. Without it she stays silent and says why. */
-  voice: boolean; briefing: string; abilities: AvaAbilities;
+  voice: boolean; abilities: AvaAbilities;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
@@ -239,12 +239,6 @@ export function Ava({ firstName, on, left, limit, voice, briefing, abilities }: 
             ) : (
               <>
                 <p className="muted">I can find things, keep track, and prepare the paperwork for you to confirm. Ask me, or tell me what to do.</p>
-                {briefing && (
-                  <div className="ava-briefing">
-                    <div className="as-approval-label">Today</div>
-                    <AssistantText text={briefing} />
-                  </div>
-                )}
                 <div className="as-suggestions">
                   {ideas.map((q) => (
                     <button key={q} type="button" className="as-suggestion" onClick={() => void send(q)} disabled={pending}>{q}</button>
