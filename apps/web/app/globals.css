@@ -2126,3 +2126,32 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 @media (prefers-reduced-motion: reduce) {
   .chart-animated .chart-line, .chart-animated .chart-area, .chart-animated .chart-dot { animation: none; }
 }
+
+/* Full report: period pickers, section tabs, change markers and comparison tables. */
+.rpt-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.rpt-controls[aria-busy="true"] { opacity: 0.6; }
+.rpt-controls .field input[type="date"] { width: 170px; max-width: 100%; color: var(--ink); color-scheme: dark; }
+:root[data-mode="light"] .rpt-controls .field input[type="date"] { color-scheme: light; }
+.rpt-controls .btn { height: 48px; }
+.rpt-wide { flex-basis: 100%; margin: 0; }
+.rpt-tabs { display: flex; max-width: 100%; overflow-x: auto; align-self: flex-start; }
+.rpt-tabs a { white-space: nowrap; }
+.rpt-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.delta { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.delta-good { color: var(--ok); }
+.delta-bad { color: var(--bad); }
+.delta-flat { color: var(--ink-2); font-weight: 500; }
+.rpt-table tbody th { padding: 12px 12px 12px 0; border-top: 1px solid var(--line); font-weight: 500; min-width: 160px; }
+.rpt-table thead th { font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.rpt-table thead tr:first-child th.num[colspan="3"] { text-align: center; padding-left: 28px; color: var(--ink); }
+.rpt-subhead th { font-weight: 500; padding-top: 0; }
+.rpt-table td.num, .rpt-table th.num { padding-left: 20px; white-space: nowrap; }
+.rpt-none { padding: 18px 0 6px; }
+.rpt-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 4px 0 0; }
+.rpt-key { display: inline-block; width: 22px; height: 0; border-top: 3px solid #a78bfa; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.rpt-key-was { border-top: 2px dashed var(--ink-2); }
+.chart-animated .chart-was { animation: fade-in 0.6s ease 0.2s both; }
+@media (prefers-reduced-motion: reduce) { .chart-animated .chart-was { animation: none; } }
+@media (max-width: 640px) {
+  .rpt-controls, .rpt-controls .field, .rpt-controls .field select, .rpt-controls .field input[type="date"] { width: 100%; }
+}
