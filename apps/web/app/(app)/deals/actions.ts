@@ -19,7 +19,7 @@ function readDeal(form: FormData): DealInput {
     customerId: text(form.get("customerId")) || null,
     buyerName: text(form.get("buyerName")),
     buyerAddress: text(form.get("buyerAddress")), buyerCity: text(form.get("buyerCity")), buyerState: text(form.get("buyerState")) || "FL", buyerZip: text(form.get("buyerZip")),
-    buyerPhone: text(form.get("buyerPhone")), buyerEmail: text(form.get("buyerEmail")), buyerDl: text(form.get("buyerDl")), buyerDob: text(form.get("buyerDob")), coBuyerName: text(form.get("coBuyerName")),
+    buyerPhone: text(form.get("buyerPhone")), buyerEmail: text(form.get("buyerEmail")), buyerDl: text(form.get("buyerDl")), buyerDob: text(form.get("buyerDob")), buyerSex: text(form.get("buyerSex")), buyerCounty: text(form.get("buyerCounty")), coBuyerName: text(form.get("coBuyerName")),
     salePrice: num(form.get("salePrice")) ?? 0, dealerFee: num(form.get("dealerFee")), tradeAllowance: num(form.get("tradeAllowance")),
     tradeVin: text(form.get("tradeVin")), tradeDescription: text(form.get("tradeDescription")), tradeMileage: num(form.get("tradeMileage")),
     stateTaxPct: num(form.get("stateTaxPct")), surtaxPct: num(form.get("surtaxPct")), tagTitleFees: num(form.get("tagTitleFees")), otherFees: num(form.get("otherFees")), otherFeesNote: text(form.get("otherFeesNote")),

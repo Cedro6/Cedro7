@@ -6,6 +6,7 @@ import { currency, todayHere, whole } from "../../../../lib/locale";
 import { formatMoney } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
 import { cancel, deliver, saveDeal, takePayment } from "../actions";
+import { FLORIDA_FORMS } from "../../../../lib/florida-forms";
 
 export default async function DealPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { ctx } = await requireSession();
@@ -61,6 +62,34 @@ export default async function DealPage({ params, searchParams }: { params: Promi
         </div>
       </section>
 
+      {deal.status !== "cancelled" && (
+        <section className="glass panel">
+          <div className="panel-head">
+            <div>
+              <h2 className="title">Compliance paperwork</h2>
+              <p className="muted">Filled from this deal. Print each one, check it, and have the buyer sign. Nothing is filed by the site; take the signed forms to the tag office.</p>
+            </div>
+          </div>
+          {(!deal.titleNumber || !deal.buyerDl || !deal.buyerDob || !deal.buyerSex || !deal.buyerCounty || deal.odometer === null || !deal.buyerAddress) && (
+            <p className="notice">
+              Still missing for the forms: {[!deal.buyerAddress && "buyer's address", !deal.buyerDl && "buyer's licence number", !deal.buyerDob && "date of birth", !deal.buyerSex && "sex", !deal.buyerCounty && "county of residence", deal.odometer === null && "odometer reading", !deal.titleNumber && "the vehicle's title number (on the vehicle's page)"].filter(Boolean).join(", ")}.
+            </p>
+          )}
+          <ul className="comp-list">
+            <li>
+              <div><strong>Buyers Guide (FTC window form)</strong><div className="muted">Required on every used car. Print it, display it in the window, and give the buyer a copy.</div></div>
+              <Link href={`/deals/${deal.id}/buyers-guide`} className="btn btn-glass btn-small" target="_blank">Open</Link>
+            </li>
+            {Object.entries(FLORIDA_FORMS).map(([key, f]) => (
+              <li key={key}>
+                <div><strong>{f.title}</strong><div className="muted">{f.about}</div></div>
+                <a href={`/deals/${deal.id}/forms/${key}`} className="btn btn-glass btn-small" target="_blank" rel="noreferrer">Fill and open</a>
+              </li>
+            ))}
+          </ul>
+          <p className="muted footnote">These are the state's current forms, filled in their own fields. Tax rates, fees and form versions change; the dealership is responsible for checking each form before it is signed.</p>
+        </section>
+      )}
       {deal.status !== "cancelled" && (
         <section className="glass panel">
           <div className="panel-head">

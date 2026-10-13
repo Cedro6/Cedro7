@@ -32,6 +32,9 @@ export type VehicleOwnInput = {
   status?: VehicleStatus;
   notes?: string;
   description?: string;
+  titleNumber?: string;
+  titleState?: string;
+  titleIssuedOn?: string;
 };
 
 export type Vehicle = VehicleSpecs & VehicleOwnInput & {
@@ -71,6 +74,7 @@ const COLUMNS = `
   v.colour, v.mileage, v.condition, v.acquisition_price::float8 as "acquisitionPrice", v.acquisition_source as "acquisitionSource",
   to_char(v.acquired_on, 'YYYY-MM-DD') as "acquiredOn", v.asking_price::float8 as "askingPrice", v.location_id as "locationId",
   l.name as "locationName", v.status, v.description, v.notes, v.created_at as "createdAt", v.sold_at as "soldAt",
+  v.title_number as "titleNumber", v.title_state as "titleState", to_char(v.title_issued_on, 'YYYY-MM-DD') as "titleIssuedOn",
   extract(day from coalesce(v.sold_at, now()) - v.created_at)::int as "daysHeld"`;
 const FROM = "from vehicles v left join locations l on l.org_id = v.org_id and l.id = v.location_id";
 
@@ -146,6 +150,12 @@ function cleanOwn(input: VehicleOwnInput): VehicleOwnInput {
   }
   out.notes = text(input.notes, 4000, "notes");
   out.description = text(input.description, 4000, "description");
+  out.titleNumber = text(input.titleNumber, 40, "titleNumber");
+  if (input.titleState !== undefined) out.titleState = (text(input.titleState, 2, "titleState") ?? "FL").toUpperCase();
+  if (input.titleIssuedOn !== undefined) {
+    if (input.titleIssuedOn && !DATE.test(input.titleIssuedOn)) throw new ValidationError("titleIssuedOn", "Enter the date as YYYY-MM-DD.");
+    out.titleIssuedOn = input.titleIssuedOn || undefined;
+  }
   return out;
 }
 
@@ -194,6 +204,7 @@ const SPEC_COLUMN: Record<keyof VehicleSpecs, string> = {
 const OWN_COLUMN: Record<keyof VehicleOwnInput, string> = {
   colour: "colour", mileage: "mileage", condition: "condition", acquisitionPrice: "acquisition_price", acquisitionSource: "acquisition_source", acquiredOn: "acquired_on",
   askingPrice: "asking_price", locationId: "location_id", status: "status", notes: "notes", description: "description",
+  titleNumber: "title_number", titleState: "title_state", titleIssuedOn: "title_issued_on",
 };
 
 /**
