@@ -23,7 +23,7 @@ export async function changePassword(form: FormData): Promise<void> {
   redirect(message ? `/account?error=${encodeURIComponent(message)}` : `/account?notice=${encodeURIComponent("Password changed. Anywhere else you were signed in has been signed out.")}`);
 }
 
-const ISSUER = "Cedro Terminal";
+const ISSUER = "Clivada";
 
 export async function startSetup(): Promise<void> {
   const { ctx } = await requireSession({ setupAllowed: true, billingAllowed: true });

@@ -184,7 +184,7 @@ describe("add-ons", () => {
 });
 
 describe("Dealer Terminal is a separate product", () => {
-  it("fixes a dealer company's tools whatever is stored, and keeps vehicles away from Cedro companies", async () => {
+  it("fixes a dealer company's tools whatever is stored, and keeps vehicles away from Clivada companies", async () => {
     const { effectiveFeatures, featureOn, productOf } = await import("../src/index");
     expect(productOf("dealer")).toBe("dealer");
     expect(productOf("retail")).toBe("cedro");
@@ -192,7 +192,7 @@ describe("Dealer Terminal is a separate product", () => {
     expect(dealer.dealer).toBe(true);
     expect(dealer.stock).toBe(false);
     expect(dealer.calendar).toBe(true);
-    // A Cedro company with the switch stored on still does not get the add-on.
+    // A Clivada company with the switch stored on still does not get the add-on.
     expect(featureOn(effectiveFeatures("retail", { dealer: true }), "dealer")).toBe(false);
   });
 

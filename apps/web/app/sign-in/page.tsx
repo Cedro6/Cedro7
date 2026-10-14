@@ -17,12 +17,12 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   return (
     <main className="sign-in landing signin-page">
       <section className="glass panel sign-in-card">
-        <Link href="/" className="brand landing-wordmark">Cedro</Link>
+        <Link href="/" className="brand"><img src="/brand/clivada-white.png" alt="Clivada" className="brand-logo" width={760} height={144} /></Link>
         <h1>Sign in</h1>
         <form action={signInWithEmail} className="stack">
           {error === "wrong" && <p className="error">That email or password is not right.</p>}
           {error === "expired" && <p className="error">That took too long. Sign in again.</p>}
-          {error === "suspended" && <p className="error">This company&apos;s account has been suspended. Contact whoever provides Cedro Terminal to you.</p>}
+          {error === "suspended" && <p className="error">This company&apos;s account has been suspended. Contact whoever provides Clivada to you.</p>}
           {error === "locked" && <p className="error">Too many wrong passwords. Try again in 15 minutes, or ask your company&apos;s owner for a new sign-in link.</p>}
           {error === "has-password" && <p className="error">That person now has their own password. Sign in with their email and password.</p>}
           <label className="field">
@@ -37,7 +37,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
             Sign in
           </button>
           <p className="muted">Forgotten it? Ask your company&apos;s owner for a sign-in link.</p>
-          <p className="muted">New here? <Link href="/" className="row-link">See Cedro Terminal and Dealer Terminal</Link>, or <Link href="/sign-up" className="row-link">set up your company</Link>.</p>
+          <p className="muted">New here? <Link href="/" className="row-link">See Clivada and Dealer Terminal</Link>, or <Link href="/sign-up" className="row-link">set up your company</Link>.</p>
         </form>
         {enabled && <hr className="rule" />}
         {enabled ? (

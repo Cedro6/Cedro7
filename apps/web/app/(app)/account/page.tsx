@@ -13,7 +13,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const { error, notice, required } = await searchParams;
   const hasPassword = (await sessionVersion(pool, ctx.userId)) > 0;
   const twoStep = hasPassword ? await twoStepStatus(pool, ctx.userId) : { on: false, recoveryLeft: 0 };
-  const pending = hasPassword && !twoStep.on ? await pendingTwoStep(ctx, "Cedro Terminal") : null;
+  const pending = hasPassword && !twoStep.on ? await pendingTwoStep(ctx, "Clivada") : null;
   const qr = pending ? await QRCode.toString(pending.uri, { type: "svg", margin: 1, width: 200 }) : "";
   const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);
   return (

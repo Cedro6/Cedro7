@@ -11,7 +11,10 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   return (
     <main className="sign-in">
       <section className="glass panel sign-in-card">
-        <div className="brand">Cedro Terminal</div>
+        <div className="brand">
+          <img src="/brand/clivada-white.png" alt="Clivada" className="brand-logo brand-logo-on-dark" width={760} height={144} />
+          <img src="/brand/clivada-dark.png" alt="" aria-hidden="true" className="brand-logo brand-logo-on-light" width={760} height={144} />
+        </div>
         <h1>Enter your code</h1>
         <form action={verifyCode} className="stack">
           {error === "wrong" && <p className="error">That code is not right, or it was already used. Wait for the app to show a new one and try again.</p>}

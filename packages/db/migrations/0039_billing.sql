@@ -1,4 +1,4 @@
--- Plans and billing. A new company starts on a free trial (30 days for Dealer Terminal, 14 for Cedro);
+-- Plans and billing. A new company starts on a free trial (30 days for Dealer Terminal, 14 for Clivada);
 -- Stripe holds the card and the subscription, and tells us its state through signed notifications.
 -- Companies that existed before billing are exempt: they belong to whoever runs the service.
 

@@ -63,7 +63,7 @@ export async function priceFor(plan: PlanId, interval: Interval, extra = false):
     const p = PLANS[plan];
     const monthlyAmount = extra ? p.extraUser! : p.monthly;
     const amount = interval === "year" ? (extra ? monthlyAmount * 10 : yearlyPrice(p)) : monthlyAmount;
-    const name = extra ? `${p.name}: extra user` : p.product === "dealer" ? "Dealer Terminal" : `Cedro Terminal ${p.name}`;
+    const name = extra ? `${p.name}: extra user` : p.product === "dealer" ? "Dealer Terminal" : `Clivada ${p.name}`;
     const product = await call<{ id: string }>("POST", "/v1/products", { name, metadata: { plan, extra: extra ? "yes" : "no" } }, `product-${key}`);
     const made = await call<Price>("POST", "/v1/prices", {
       product: product.id, currency: "usd", unit_amount: amount * 100, recurring: { interval }, lookup_key: key, transfer_lookup_key: true, metadata: { plan, extra: extra ? "yes" : "no" },

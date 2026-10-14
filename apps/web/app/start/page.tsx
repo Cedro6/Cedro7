@@ -4,8 +4,8 @@ import type { Metadata } from "next";
 import { PLANS, TRIAL_DAYS } from "@bos/core";
 
 export const metadata: Metadata = {
-  title: "Cedro Terminal and Dealer Terminal",
-  description: "Two ways to run a small business without wrestling the software: Cedro Terminal for product businesses, Dealer Terminal for Florida car lots. Each with Ava, the assistant who knows your records.",
+  title: "Clivada and Dealer Terminal",
+  description: "Two ways to run a small business without wrestling the software: Clivada for product businesses, Dealer Terminal for Florida car lots. Each with Ava, the assistant who knows your records.",
 };
 
 const CEDRO_DAY = [
@@ -31,7 +31,7 @@ export default function StartPage() {
   return (
     <main className="landing">
       <header className="landing-top">
-        <span className="landing-wordmark">Cedro</span>
+        <Image src="/brand/clivada-white.png" alt="Clivada" width={760} height={144} className="landing-logo" priority />
         <nav className="landing-nav" aria-label="Account">
           <Link href="/sign-in">Sign in</Link>
         </nav>
@@ -48,8 +48,8 @@ export default function StartPage() {
       <section className="doors" aria-label="Products">
         <article className="door door-cedro" id="cedro">
           <div className="door-head">
-            <span className="door-mark door-mark-cedro" aria-hidden="true"><i /></span>
-            <h2>Cedro Terminal</h2>
+            <Image src="/brand/clivada-white.png" alt="" width={760} height={144} className="door-logo door-logo-cedro" priority />
+            <h2 className="sr-only">Clivada</h2>
           </div>
           <p className="door-for">For businesses that buy, stock and sell things: distributors, shops, warehouses, sales teams and contractors.</p>
           <dl className="door-day">
@@ -62,7 +62,7 @@ export default function StartPage() {
           </ul>
           <div className="door-foot">
             <p className="door-price"><strong>From ${cedro.monthly} a month.</strong> {TRIAL_DAYS.cedro} days free, no card to start.</p>
-            <Link href="/sign-up?product=cedro" className="door-cta">Start Cedro Terminal free</Link>
+            <Link href="/sign-up?product=cedro" className="door-cta">Start Clivada free</Link>
           </div>
         </article>
 
@@ -104,8 +104,8 @@ export default function StartPage() {
       <section className="straight">
         <h2>Straight answers</h2>
         <dl>
-          <div><dt>Is it really free to try?</dt><dd>Yes. {TRIAL_DAYS.cedro} days for Cedro Terminal and {TRIAL_DAYS.dealer} for Dealer Terminal, with everything switched on and no card asked for. When the trial ends your records are kept; you choose a plan to carry on.</dd></div>
-          <div><dt>What does it cost after that?</dt><dd>Cedro Terminal is ${PLANS.cedro_basic.monthly}, ${PLANS.cedro_small.monthly} or ${PLANS.cedro_corporate.monthly} a month depending on how many people need a login. Dealer Terminal is ${dealer.monthly} a month. Pay yearly and two months are free. Cancel from Billing whenever you like.</dd></div>
+          <div><dt>Is it really free to try?</dt><dd>Yes. {TRIAL_DAYS.cedro} days for Clivada and {TRIAL_DAYS.dealer} for Dealer Terminal, with everything switched on and no card asked for. When the trial ends your records are kept; you choose a plan to carry on.</dd></div>
+          <div><dt>What does it cost after that?</dt><dd>Clivada is ${PLANS.cedro_basic.monthly}, ${PLANS.cedro_small.monthly} or ${PLANS.cedro_corporate.monthly} a month depending on how many people need a login. Dealer Terminal is ${dealer.monthly} a month. Pay yearly and two months are free. Cancel from Billing whenever you like.</dd></div>
           <div><dt>Can I have both?</dt><dd>They are separate products with separate logins, so a lot and a parts business are two accounts. Most people only need one.</dd></div>
           <div><dt>Where does my data live?</dt><dd>In your own company&apos;s account, which nobody outside it can open. Every person on your team sees only what their role allows. Card payments are handled by Stripe; we never see the card number.</dd></div>
           <div><dt>Is Dealer Terminal only for Florida?</dt><dd>For now. The tax, surtax and title forms are Florida's. Other states come when enough dealers there ask.</dd></div>
