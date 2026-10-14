@@ -2,7 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["packages/**/tests/**/*.test.ts"],
+    include: ["packages/**/tests/**/*.test.ts", "apps/web/tests/**/*.test.ts"],
     fileParallelism: false,
     env: {
       DATABASE_URL_OWNER:
