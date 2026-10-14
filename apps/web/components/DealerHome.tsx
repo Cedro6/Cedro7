@@ -173,7 +173,7 @@ async function AgedCars({ ctx }: { ctx: Ctx }) {
   );
 }
 
-const TONE: Record<string, string> = { deal_owed: "warn", deal_ready: "ok", deal_paperwork: "warn", car_aged: "warn", car_no_price: "bad", car_draft: "info", car_recon: "info", car_no_title: "bad", form_8300: "bad", temp_tag: "warn", title_due: "warn", papers_missing: "info" };
+const TONE: Record<string, string> = { deal_owed: "warn", deal_ready: "ok", deal_paperwork: "warn", car_aged: "warn", car_no_price: "bad", car_draft: "info", car_recon: "info", car_no_title: "bad" };
 /** The same list Ava's briefing works from: money owed, deals ready to deliver, paperwork gaps and stale cars. */
 async function LotAttention({ ctx }: { ctx: Ctx }) {
   const list = await dealerAttention(ctx);

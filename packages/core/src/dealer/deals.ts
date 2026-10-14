@@ -1,8 +1,9 @@
 import { withTenant, type PoolClient } from "@bos/db/runtime";
+import { PAYMENT_METHODS } from "../billing/invoices";
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
 import { featureOn } from "../platform/features";
-import { can, ForbiddenError, requirePermission } from "../platform/permissions";
+import { ForbiddenError, requirePermission } from "../platform/permissions";
 import { nextNumber } from "../sales/orders";
 import { cleanVin, vinProblem } from "./vin";
 
@@ -13,11 +14,6 @@ import { cleanVin, vinProblem } from "./vin";
  */
 
 export const DEAL_STATUSES = ["open", "delivered", "cancelled"] as const;
-/**
- * How a car is paid for. Cashier's checks and money orders are listed apart from personal checks
- * because, on a car sale, the IRS counts them as cash for Form 8300 when each is $10,000 or less.
- */
-export const DEAL_PAYMENT_METHODS = ["Cash", "Cashier's check", "Money order", "Check", "Bank transfer", "Card", "Other"] as const;
 export type DealStatus = (typeof DEAL_STATUSES)[number];
 export const ODOMETER_BRANDS = ["actual", "not_actual", "exceeds"] as const;
 export type OdometerBrand = (typeof ODOMETER_BRANDS)[number];
@@ -120,23 +116,8 @@ export type Deal = DealMoney & {
   cancelledReason: string | null;
   createdAt: Date;
   payments: DealPayment[];
-  /** What was spent on the car after buying it (reconditioning and the like). Null when the role may not see cost. */
-  vehicleCosts: number | null;
-  /** Sale price plus dealer fee, less what the car cost and what was spent on it. Null when the role may not see cost. */
+  /** Sale price plus dealer fee less what the vehicle cost. Null when the role may not see cost. */
   gross: number | null;
-  /** After the sale: the temporary tag, the title application and the plate. */
-  tempTagNumber: string | null;
-  tempTagIssuedOn: string | null;
-  tempTagExpiresOn: string | null;
-  titleSentOn: string | null;
-  plateNumber: string | null;
-  titleDoneOn: string | null;
-  buyerOccupation: string | null;
-  form8300FiledOn: string | null;
-  salespersonId: string | null;
-  salespersonName: string | null;
-  /** Null when the role may not see pay. */
-  commission: number | null;
 };
 export type DealPayment = { id: string; amount: number; method: string; reference: string | null; paidOn: string; recordedBy: string | null };
 export type DealSummary = Pick<Deal, "id" | "number" | "status" | "stockNumber" | "vehicleName" | "buyerName" | "total" | "balance" | "deliveredOn" | "createdAt">;
@@ -145,10 +126,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const cents = (n: number) => Math.round(n * 100) / 100;
 
-/** Who may see what a car cost and what people are paid: the same people who see product costs. */
-export const seesCost = (ctx: Ctx) => can(ctx, "product.cost.view");
-
-export function requireDeals(ctx: Ctx, write: boolean): void {
+function requireDeals(ctx: Ctx, write: boolean): void {
   requirePermission(ctx, write ? "vehicle.write" : "vehicle.read");
   if (!featureOn(ctx.features, "dealer")) throw new ForbiddenError(write ? "vehicle.write" : "vehicle.read");
 }
@@ -248,26 +226,15 @@ const COLUMNS = `
   d.tag_title_fees::float8 as "tagTitleFees", d.other_fees::float8 as "otherFees", d.other_fees_note as "otherFeesNote",
   d.odometer, d.odometer_brand as "odometerBrand", d.sold_as_is as "soldAsIs", d.warranty_note as "warrantyNote", d.notes,
   to_char(d.delivered_on, 'YYYY-MM-DD') as "deliveredOn", d.cancelled_reason as "cancelledReason", d.created_at as "createdAt",
-  coalesce((select sum(p.amount) from deal_payments p where p.deal_id = d.id), 0)::float8 as paid,
-  coalesce((select sum(c.amount) from vehicle_costs c where c.vehicle_id = d.vehicle_id), 0)::float8 as "vehicleCosts",
-  d.temp_tag_number as "tempTagNumber", to_char(d.temp_tag_issued_on, 'YYYY-MM-DD') as "tempTagIssuedOn", to_char(d.temp_tag_expires_on, 'YYYY-MM-DD') as "tempTagExpiresOn",
-  to_char(d.title_sent_on, 'YYYY-MM-DD') as "titleSentOn", d.plate_number as "plateNumber", to_char(d.title_done_on, 'YYYY-MM-DD') as "titleDoneOn",
-  d.buyer_occupation as "buyerOccupation", to_char(d.form_8300_filed_on, 'YYYY-MM-DD') as "form8300FiledOn",
-  d.salesperson_id as "salespersonId", (select u.name from users u where u.id = d.salesperson_id) as "salespersonName", d.commission::float8 as commission`;
+  coalesce((select sum(p.amount) from deal_payments p where p.deal_id = d.id), 0)::float8 as paid`;
 const FROM = "from deals d join vehicles v on v.org_id = d.org_id and v.id = d.vehicle_id";
 
-type Row = Omit<Deal, keyof DealMoney | "payments" | "gross"> & { vehicleCosts: number; salePrice: number; dealerFee: number; tradeAllowance: number; tagTitleFees: number; otherFees: number; paid: number };
+type Row = Omit<Deal, keyof DealMoney | "payments" | "gross"> & { salePrice: number; dealerFee: number; tradeAllowance: number; tagTitleFees: number; otherFees: number; paid: number };
 
 function shape(ctx: Ctx, row: Row, payments: DealPayment[]): Deal {
   const m = dealMoney(row, row.paid);
-  const seeCost = seesCost(ctx);
-  return {
-    ...row, ...m, payments,
-    vehicleCost: seeCost ? row.vehicleCost : null,
-    vehicleCosts: seeCost ? row.vehicleCosts : null,
-    commission: seeCost ? row.commission : null,
-    gross: seeCost && row.vehicleCost !== null ? cents(row.salePrice + row.dealerFee - row.vehicleCost - row.vehicleCosts) : null,
-  };
+  const seeCost = ctx.role === "owner" || ctx.role === "admin" || ctx.role === "purchasing";
+  return { ...row, ...m, payments, vehicleCost: seeCost ? row.vehicleCost : null, gross: seeCost && row.vehicleCost !== null ? cents(row.salePrice + row.dealerFee - row.vehicleCost) : null };
 }
 
 export async function createDeal(ctx: Ctx, input: DealInput): Promise<{ id: string; number: string }> {
@@ -315,7 +282,7 @@ export async function recordDealPayment(ctx: Ctx, id: string, input: { amount: n
   requireDeals(ctx, true);
   if (!UUID.test(id)) throw new StateError("Deal not found.");
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new ValidationError("amount", "Enter an amount above zero.");
-  if (!(DEAL_PAYMENT_METHODS as readonly string[]).includes(input.method)) throw new ValidationError("method", "Choose how it was paid.");
+  if (!(PAYMENT_METHODS as readonly string[]).includes(input.method)) throw new ValidationError("method", "Choose how it was paid.");
   if (!DATE.test(input.paidOn)) throw new ValidationError("paidOn", "Enter the date as YYYY-MM-DD.");
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const d = await tx.query<Row>(`select ${COLUMNS} ${FROM} where d.id = $1 for update of d`, [id]);
