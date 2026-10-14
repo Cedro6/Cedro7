@@ -5,7 +5,8 @@ import { assistantUsage, can, expenseSummary, featureOn, listReminders, overview
 import { todayHere } from "../../lib/locale";
 import { Suspense } from "react";
 import { Ava } from "../../components/Ava";
-import { assistantConfigured, monthlyLimit } from "../../lib/assistant";
+import { assistantConfigured } from "../../lib/assistant";
+import { billingFor } from "../../lib/billing";
 import { voiceConfigured } from "../../lib/voice";
 import { Avatar } from "../../components/Avatar";
 import { Main } from "../../components/Main";
@@ -16,14 +17,14 @@ export const dynamic = "force-dynamic";
 
 /** Dealer Terminal accounts carry their own name and mark in the browser tab. */
 export async function generateMetadata(): Promise<Metadata> {
-  const { membership } = await requireSession({ setupAllowed: true });
+  const { membership } = await requireSession({ setupAllowed: true, billingAllowed: true });
   return productOf(membership.businessType ?? "distributor") === "dealer"
     ? { title: "Dealer Terminal", icons: { icon: "/brand/dealer-terminal-icon.png", apple: "/brand/dealer-terminal-icon.png" } }
     : {};
 }
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const { ctx, membership } = await requireSession({ setupAllowed: true });
+  const { ctx, membership } = await requireSession({ setupAllowed: true, billingAllowed: true });
   const counts = await overview(ctx);
   const stock = featureOn(ctx.features, "stock");
   // The menu lists only what this person may open and this company has switched on.
@@ -55,10 +56,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     if (can(ctx, "report.view")) items.push({ href: "/reports", label: "Reports" });
   }
   // Settings is for the people who run the company; the setup guide is tucked under it.
-  if (can(ctx, "settings.manage")) items.push({ href: "/settings", label: "Settings", children: [{ href: "/welcome", label: "Setup guide" }] });
+  if (can(ctx, "settings.manage")) items.push({ href: "/settings", label: "Settings", children: [{ href: "/settings/billing", label: "Billing" }, { href: "/welcome", label: "Setup guide" }] });
+  const billing = billingFor(membership);
+  const manages = can(ctx, "settings.manage");
+  const banner =
+    billing.phase === "past_due" ? { tone: "bad", text: "The last payment for your plan did not go through. Stripe will try again; update the card so nothing is interrupted.", action: "Update card" }
+    : billing.phase === "trial" && billing.trialDaysLeft !== null && billing.trialDaysLeft <= 7 && !billing.plan ? { tone: "info", text: `${billing.trialDaysLeft === 0 ? "Your free trial ends today" : `${billing.trialDaysLeft} ${billing.trialDaysLeft === 1 ? "day" : "days"} left in your free trial`}. Choose a plan to keep going; nothing you have entered is lost.`, action: "Choose a plan" }
+    : billing.phase === "ended" ? { tone: "bad", text: "Your free trial or subscription has ended. Your records are kept safe; choose a plan to open them again.", action: "Choose a plan" }
+    : null;
   // Ava sits beside every screen rather than having a page of her own.
   const avaOn = assistantConfigured();
-  const usage = await assistantUsage(ctx, monthlyLimit());
+  const usage = await assistantUsage(ctx, billingFor(membership).avaQuestions);
   // Reminders for this person that are due today or overdue show as a nudge on Ava's button.
   const due = featureOn(ctx.features, "calendar") ? (await listReminders(ctx, { to: todayHere(), openOnly: true, mineOnly: true })).length : 0;
   const role = membership.role[0]!.toUpperCase() + membership.role.slice(1);
@@ -78,7 +86,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </Link>
         }
       />
-      <Main>{children}</Main>
+      <Main>
+        {banner && (
+          <div className={`billing-banner billing-banner-${banner.tone}`} role="status">
+            <span>{banner.text}{!manages && " Ask an owner or admin to sort it out."}</span>
+            {manages && <Link href="/settings/billing" className="btn btn-small btn-primary">{banner.action}</Link>}
+          </div>
+        )}
+        {children}
+      </Main>
       <Suspense fallback={null}>
         <Ava
           firstName={membership.userName.split(" ")[0] || "there"}

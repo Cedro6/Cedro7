@@ -9,7 +9,7 @@ import { signOut } from "../actions";
 import { changePassword, startSetup, turnOffTwoStep } from "./actions";
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string; required?: string }> }) {
-  const { ctx, membership } = await requireSession({ setupAllowed: true });
+  const { ctx, membership } = await requireSession({ setupAllowed: true, billingAllowed: true });
   const { error, notice, required } = await searchParams;
   const hasPassword = (await sessionVersion(pool, ctx.userId)) > 0;
   const twoStep = hasPassword ? await twoStepStatus(pool, ctx.userId) : { on: false, recoveryLeft: 0 };

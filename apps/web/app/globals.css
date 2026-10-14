@@ -2542,3 +2542,21 @@ tr.row-total th, tr.row-total td { font-weight: 700; border-top: 2px solid rgba(
 .w8300 tbody th { width: 40%; }
 .tile .numeral.mono { overflow-wrap: anywhere; font-size: clamp(16px, 4.2vw, 28px); }
 .form-row .segmented { flex-wrap: wrap; max-width: 100%; }
+
+/* Billing: the strip across the top when a trial is ending or a payment failed, and the plan cards. */
+.billing-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 18px; margin-bottom: 16px; font-weight: 500; }
+.billing-banner-info { background: rgba(124, 77, 255, 0.2); color: #e2d8ff; }
+.billing-banner-bad { background: rgba(239, 68, 68, 0.18); color: #ffc9c9; }
+:root[data-mode="light"] .billing-banner-info { background: #ede9fe; color: #4c1d95; }
+:root[data-mode="light"] .billing-banner-bad { background: #fee2e2; color: #7f1d1d; }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 16px; }
+.plan-card { display: flex; flex-direction: column; gap: 10px; }
+.plan-card.is-current { outline: 2px solid #a78bfa; outline-offset: -2px; }
+.plan-price { display: flex; align-items: baseline; gap: 6px; }
+.plan-price .numeral { font-variant-numeric: tabular-nums; }
+.plan-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.plan-card form { margin-top: auto; }
+.plan-card .btn { width: 100%; justify-content: center; }
+.plan-card:only-child { max-width: 460px; }
+.plan-card .badge { align-self: flex-start; margin-top: auto; }
+.plan-foot { margin-top: 12px; }

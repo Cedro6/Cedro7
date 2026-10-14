@@ -1,3 +1,4 @@
+import { billingFor } from "./billing";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -106,7 +107,11 @@ export type Session = { ctx: Ctx; membership: Membership };
  * `setupAllowed` is for the few screens someone must still reach while their company requires two-step
  * verification and they have not set it up yet: the Password page, where it is set up, and the frame around it.
  */
-export async function requireSession(options: { setupAllowed?: boolean } = {}): Promise<Session> {
+/**
+ * `billingAllowed` is for the screens a company can still reach once its trial has ended or its
+ * subscription has lapsed: Billing, the person's own account, and the frame around them.
+ */
+export async function requireSession(options: { setupAllowed?: boolean; billingAllowed?: boolean } = {}): Promise<Session> {
   const raw = (await cookies()).get(COOKIE)?.value;
   const [userId, orgId, version, signature] = raw?.split(".") ?? [];
   if (!userId || !orgId || !version || !signature) redirect("/sign-in");
@@ -120,6 +125,7 @@ export async function requireSession(options: { setupAllowed?: boolean } = {}): 
   if (membership.requireTwoStep && !options.setupAllowed && version !== "0" && !(await twoStepStatus(pool, userId)).on) {
     redirect("/account?required=1#two-step");
   }
+  if (!options.billingAllowed && billingFor(membership).locked) redirect("/settings/billing?ended=1");
   setLocale(membership.timeZone, membership.currency);
   return { ctx: { pool, orgId, userId, role: membership.role, features: membership.features, timeZone: membership.timeZone, currency: membership.currency }, membership };
 }
