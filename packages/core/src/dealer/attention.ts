@@ -2,6 +2,8 @@ import { withTenant } from "@bos/db/runtime";
 import type { Ctx } from "../platform/context";
 import { featureOn } from "../platform/features";
 import { requirePermission } from "../platform/permissions";
+import type { DealPayment } from "./deals";
+import { cashReport } from "./operations";
 
 /**
  * What needs the dealer today, for Ava and the briefing: money still owed on open deals, deals paid
@@ -41,6 +43,36 @@ export async function dealerAttention(ctx: Ctx): Promise<DealerAttention[]> {
         continue;
       }
       if (d.missing.length) items.push({ kind: "deal_paperwork", title: `${d.number}: paperwork incomplete`, detail: `Missing ${d.missing.join(", ")} for the title forms`, link: `/deals/${d.id}` });
+    }
+    // After the sale: the IRS cash report, the temp tag, the title application and the signed papers.
+    const after = await tx.query<{ id: string; number: string; buyer: string; status: string; delivered: string | null; filed: string | null; tag: string | null; expires: string | null; sent: string | null; done: string | null; days: number | null; signed: number; payments: DealPayment[] }>(
+      `select d.id, d.number, d.buyer_name as buyer, d.status, to_char(d.delivered_on, 'YYYY-MM-DD') as delivered, to_char(d.form_8300_filed_on, 'YYYY-MM-DD') as filed,
+              d.temp_tag_number as tag, to_char(d.temp_tag_expires_on, 'YYYY-MM-DD') as expires, to_char(d.title_sent_on, 'YYYY-MM-DD') as sent,
+              to_char(d.title_done_on, 'YYYY-MM-DD') as done, (current_date - d.delivered_on)::int as days,
+              (select count(*)::int from dealer_files f where f.deal_id = d.id and f.kind = 'signed_form') as signed,
+              coalesce((select json_agg(json_build_object('id', p.id, 'amount', p.amount::float8, 'method', p.method, 'reference', p.reference, 'paidOn', to_char(p.paid_on, 'YYYY-MM-DD'), 'recordedBy', null))
+                          from deal_payments p where p.deal_id = d.id), '[]') as payments
+         from deals d
+        where d.status = 'open' or (d.status = 'delivered' and (d.title_done_on is null or d.form_8300_filed_on is null or d.delivered_on > current_date - 60))
+        order by d.created_at`,
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    const plus = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+    for (const d of after.rows) {
+      const cash = cashReport(d.payments);
+      if (cash.required && !d.filed) {
+        items.push({ kind: "form_8300", title: `${d.number}: Form 8300 ${cash.dueOn! < today ? "is overdue" : `due by ${cash.dueOn}`}`, detail: `${d.buyer} paid ${cash.total.toFixed(2)} in cash or cash-like payments. File it with the IRS, then record the date on the deal`, link: `/deals/${d.id}` });
+      }
+      if (d.status !== "delivered") continue;
+      if (!d.done && d.tag && d.expires && d.expires <= plus(today, 5)) {
+        items.push({ kind: "temp_tag", title: `${d.number}: temp tag ${d.tag} ${d.expires < today ? "has expired" : `expires ${d.expires}`}`, detail: `${d.buyer}${d.sent ? `. Title application went in on ${d.sent}` : ". The title application has not gone in yet"}`, link: `/deals/${d.id}` });
+      }
+      if (!d.sent && d.delivered && (d.days ?? 0) >= 10) {
+        items.push({ kind: "title_due", title: `${d.number}: title application due by ${plus(d.delivered, 30)}`, detail: `${d.buyer}, delivered ${d.days} days ago. Florida gives the dealer 30 days to apply for the buyer's title`, link: `/deals/${d.id}` });
+      }
+      if (d.signed === 0 && (d.days ?? 0) <= 60) {
+        items.push({ kind: "papers_missing", title: `${d.number}: no signed paperwork kept`, detail: `${d.buyer}. Scan or photograph the signed forms and add them to the deal`, link: `/deals/${d.id}` });
+      }
     }
     const cars = await tx.query<{ id: string; stock: string; car: string; status: string; days: number; asking: number | null; title: string | null }>(
       `select v.id, v.stock_number as stock, concat_ws(' ', v.year::text, v.make, v.model) as car, v.status,

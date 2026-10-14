@@ -70,7 +70,7 @@ describe("migrations", () => {
       "0034_dealer.sql",
       "0035_dealer_product.sql",
       "0036_deals.sql",
-      "0037_title_fields.sql",
+      "0037_title_fields.sql", "0038_dealer_operations.sql",
     ]);
   });
 
