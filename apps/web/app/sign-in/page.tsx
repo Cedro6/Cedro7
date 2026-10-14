@@ -15,11 +15,9 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   const enabled = devSignInEnabled();
   const needsPassword = previewPasswordRequired();
   return (
-    <main className="sign-in">
+    <main className="sign-in landing signin-page">
       <section className="glass panel sign-in-card">
-        <div className="brand">
-          Cedro Terminal
-        </div>
+        <Link href="/" className="brand landing-wordmark">Cedro</Link>
         <h1>Sign in</h1>
         <form action={signInWithEmail} className="stack">
           {error === "wrong" && <p className="error">That email or password is not right.</p>}
@@ -39,7 +37,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
             Sign in
           </button>
           <p className="muted">Forgotten it? Ask your company&apos;s owner for a sign-in link.</p>
-          <p className="muted">New here? <Link href="/sign-up" className="row-link">Create your company</Link>. Cedro Terminal or Dealer Terminal, about two minutes.</p>
+          <p className="muted">New here? <Link href="/" className="row-link">See Cedro Terminal and Dealer Terminal</Link>, or <Link href="/sign-up" className="row-link">set up your company</Link>.</p>
         </form>
         {enabled && <hr className="rule" />}
         {enabled ? (

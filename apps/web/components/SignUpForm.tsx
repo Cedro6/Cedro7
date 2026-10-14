@@ -7,9 +7,9 @@ type Kind = { id: string; name: string; about: string; product: "cedro" | "deale
 const START: SignUpState = { error: "", field: "", values: {} };
 
 /** Three short steps on one page: the company, where it is, and the owner's own login. */
-export function SignUpForm({ token, kinds, zones, currencies }: { token: string; kinds: Kind[]; zones: string[]; currencies: { code: string; label: string }[] }) {
+export function SignUpForm({ token, kinds, zones, currencies, start = "cedro" }: { token: string; kinds: Kind[]; zones: string[]; currencies: { code: string; label: string }[]; start?: "cedro" | "dealer" }) {
   const [state, action, busy] = useActionState(createCompany, START);
-  const [product, setProduct] = useState<"cedro" | "dealer">(START.values?.businessType === "dealer" ? "dealer" : "cedro");
+  const [product, setProduct] = useState<"cedro" | "dealer">(state.values?.businessType ? (state.values.businessType === "dealer" ? "dealer" : "cedro") : start);
   const v = state.values;
   const zone = useRef<HTMLSelectElement>(null);
   // Start on the visitor's own time zone when their browser reports one we know.
@@ -29,21 +29,18 @@ export function SignUpForm({ token, kinds, zones, currencies }: { token: string;
           <input name="company" required maxLength={200} autoFocus autoComplete="organization" defaultValue={v.company ?? ""} />
         </label>
         <div className="field">
-          <span id="product-label">Which product?</span>
+          <span id="product-label">Product</span>
           <div className="signup-kinds signup-products" role="radiogroup" aria-labelledby="product-label">
-            <label className="signup-kind">
+            <label className="signup-kind signup-kind-cedro">
               <input type="radio" name="product" value="cedro" checked={product === "cedro"} onChange={() => setProduct("cedro")} />
               <span className="type-name">Cedro Terminal</span>
-              <span className="muted">Customers, orders, invoices, stock, purchasing and reports for a product business.</span>
+              <span className="muted">For businesses that buy, stock and sell things.</span>
             </label>
-            {kinds.filter((k) => k.product === "dealer").map((k) => (
-              <label key={k.id} className="signup-kind">
-                <input type="radio" name="product" value="dealer" checked={product === "dealer"} onChange={() => setProduct("dealer")} />
-                <span className="type-name">{k.name}</span>
-                <span className="muted">{k.about}</span>
-                <span className="signup-tools">Includes: {k.tools.join(", ")}</span>
-              </label>
-            ))}
+            <label className="signup-kind signup-kind-dealer">
+              <input type="radio" name="product" value="dealer" checked={product === "dealer"} onChange={() => setProduct("dealer")} />
+              <span className="type-name">Dealer Terminal</span>
+              <span className="muted">For Florida used-car lots selling for cash.</span>
+            </label>
           </div>
         </div>
         {product === "dealer" ? (
@@ -113,7 +110,7 @@ export function SignUpForm({ token, kinds, zones, currencies }: { token: string;
         <p className="muted">At least 10 characters. A few unrelated words is strong and easy to remember. You will be the owner and can add your team afterwards.</p>
       </fieldset>
 
-      <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Setting up…" : "Create my company"}</button>
+      <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Setting up…" : product === "dealer" ? "Start Dealer Terminal" : "Start Cedro Terminal"}</button>
     </form>
   );
 }
