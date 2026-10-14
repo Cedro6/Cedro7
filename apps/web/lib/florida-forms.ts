@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { PDFDocument, StandardFonts, type PDFForm } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts, type PDFForm, type PDFPage } from "pdf-lib";
 import type { CompanyProfile, Deal, DealerSettings } from "@bos/core";
 
 /**
@@ -12,6 +12,7 @@ export const FLORIDA_FORMS = {
   "82040": { title: "Application for Certificate of Title (HSMV 82040)", about: "The buyer's application for the Florida title. Sections 1, 2, 5, 6, 7 and 12 are filled; the buyer signs section 12." },
   "82050": { title: "Notice of Sale / Bill of Sale (HSMV 82050)", about: "Filled as a bill of sale with the odometer statement. Seller and buyer sign section 3." },
   "82993": { title: "Odometer Disclosure Statement (HSMV 82993)", about: "The federal odometer statement, seller to buyer. Both sign." },
+  "82042": { title: "VIN and Odometer Verification (HSMV 82042)", about: "Only for a car whose current title is from another state. Part A is the buyer's VIN and odometer declaration; Part B is the VIN check, done by the dealership after looking at the VIN under the windshield and in the door jamb." },
   "82053": { title: "Power of Attorney (HSMV 82053)", about: "Lets the dealership apply for the title on the buyer's behalf. The buyer signs." },
 } as const;
 export type FloridaForm = keyof typeof FLORIDA_FORMS;
@@ -45,13 +46,38 @@ function setText(form: PDFForm, name: string, value: string | number | null | un
     throw new Error(`Form field "${name}" is missing or not a text field.`, { cause: error });
   }
 }
+/**
+ * Boxes to tick, by form. The forms' own check marks use a symbol font the PDFs do not embed, so some
+ * viewers and printers show a placeholder instead. The mark is drawn onto the page after flattening.
+ */
+const ticks = new WeakMap<PDFForm, { page: PDFPage; x: number; y: number; width: number; height: number }[]>();
 function tick(form: PDFForm, name: string, on = true) {
   if (!on) return;
   try {
-    form.getCheckBox(name).check();
+    const field = form.getCheckBox(name);
+    const pages = form.doc.getPages();
+    for (const widget of field.acroField.getWidgets()) {
+      const ref = form.doc.context.getObjectRef(widget.dict);
+      const page = pages.find((pg) => pg.node.Annots()?.asArray().some((a) => a === ref)) ?? pages[0]!;
+      const list = ticks.get(form) ?? [];
+      list.push({ page, ...widget.getRectangle() });
+      ticks.set(form, list);
+    }
   } catch (error) {
     throw new Error(`Form field "${name}" is missing or not a check box.`, { cause: error });
   }
+}
+/** A check mark inside the box, sized to it, in plain lines so it prints the same everywhere. */
+function drawTick({ page, x, y, width, height }: { page: PDFPage; x: number; y: number; width: number; height: number }) {
+  const size = Math.min(width, height);
+  const left = x + (width - size) / 2;
+  const bottom = y + (height - size) / 2;
+  const thickness = Math.max(1, size * 0.13);
+  const a = { x: left + size * 0.2, y: bottom + size * 0.52 };
+  const b = { x: left + size * 0.42, y: bottom + size * 0.22 };
+  const c = { x: left + size * 0.82, y: bottom + size * 0.8 };
+  page.drawLine({ start: a, end: b, thickness, color: rgb(0, 0, 0) });
+  page.drawLine({ start: b, end: c, thickness, color: rgb(0, 0, 0) });
 }
 
 const fillers: Record<FloridaForm, (form: PDFForm, s: Source) => void> = {
@@ -203,6 +229,39 @@ const fillers: Record<FloridaForm, (form: PDFForm, s: Source) => void> = {
     setText(f, "State_2", d.buyerState);
     setText(f, "Zip_2", d.buyerZip);
   },
+  "82042": (f, { deal: d, company, dealer, today }) => {
+    // Part A: the vehicle, the odometer, and the buyer's declaration with the dealership as seller.
+    setText(f, "Vehicle Identification Number", d.vin);
+    setText(f, "Year", d.vehicleYear);
+    setText(f, "Make", d.vehicleMake);
+    setText(f, "Color", d.vehicleColour);
+    setText(f, "Body Type", d.vehicleBody);
+    if (d.titleState && d.titleState.toUpperCase() !== "FL") setText(f, "Previous State Vehicle Titled In", d.titleState.toUpperCase());
+    // Matches the other forms on the deal: a modern car has a 6-digit odometer. Cross it out by hand on an older 5-digit one.
+    tick(f, "Select if 6 digit odometer reading");
+    const [a, b, c, e, g, h] = digits(d.odometer);
+    setText(f, "Hundred thousands place that the odometer number now reads", a);
+    setText(f, "Ten thousands place that the odometer number now reads", b);
+    setText(f, "Thousands place that the odometer number now reads", c);
+    setText(f, "Hundreds place that the odometer number now reads", e);
+    setText(f, "Tens place that the odometer number now reads", g);
+    setText(f, "Ones place that the odometer number now reads", h);
+    const read = parts(d.deliveredOn ?? today);
+    setText(f, "Two-digit month of odometer reading", read.mm);
+    setText(f, "Two-digit day of odometer reading", read.dd);
+    setText(f, "Four-digit year of odometer reading", read.yyyy);
+    tick(f, "1. reflects ACTUAL MILEAGE", d.odometerBrand === "actual");
+    tick(f, "2. is IN EXCESS OF ITS MECHANICAL LIMITS", d.odometerBrand === "exceeds");
+    tick(f, "3. is NOT THE ACTUAL MILEAGE", d.odometerBrand === "not_actual");
+    setText(f, "Date - Part A", mdy(d.deliveredOn ?? today));
+    setText(f, "Owner/Purchaser Name", [d.buyerName, d.coBuyerName].filter(Boolean).join(" and "));
+    setText(f, "Seller's Name", company.name);
+    // Part B: verified by the dealership. The person who looks at the VIN signs and prints their name by hand.
+    tick(f, "Florida Licensed Dealer");
+    setText(f, "Florida Dealer Name", company.name);
+    setText(f, "Florida Dealer Number", dealer.licence);
+    setText(f, "Date - Part B", mdy(d.deliveredOn ?? today));
+  },
   "82053": (f, { deal: d, company, today }) => {
     tick(f, "Motor Vehicle");
     setText(f, "YearRow1", d.vehicleYear);
@@ -235,5 +294,6 @@ export async function fillFloridaForm(which: FloridaForm, source: Source): Promi
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   form.updateFieldAppearances(font);
   form.flatten();
+  for (const box of ticks.get(form) ?? []) drawTick(box);
   return pdf.save();
 }

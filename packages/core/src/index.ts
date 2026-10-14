@@ -266,7 +266,13 @@ export {
 } from "./dealer/vehicles";
 export { dealerAttention, type DealerAttention } from "./dealer/attention";
 export {
-  DEAL_STATUSES, ODOMETER_BRANDS, ODOMETER_TEXT, dealMoney, createDeal, updateDeal, recordDealPayment, deliverDeal, cancelDeal, getDeal, listDeals, openDealFor,
+  CASH_REPORT_THRESHOLD, cashReport, updateDealFollowUp, COST_KINDS, COST_KIND_TEXT, listVehicleCosts, addVehicleCost, removeVehicleCost,
+  FILE_KINDS, FILE_KIND_TEXT, FILE_TYPES, MAX_FILE_BYTES, addDealerFile, listDealerFiles, getDealerFile, removeDealerFile, makeCoverPhoto, publicVehiclePhoto,
+  dealerProfit, salesTaxReport, commissionReport, listingRows, coverPhotos, toCsv,
+  type CashReport, type FollowUpInput, type CostKind, type VehicleCost, type FileKind, type DealerFile, type ProfitRow, type TaxRow, type CommissionRow, type ListingRow,
+} from "./dealer/operations";
+export {
+  DEAL_STATUSES, DEAL_PAYMENT_METHODS, seesCost, ODOMETER_BRANDS, ODOMETER_TEXT, dealMoney, createDeal, updateDeal, recordDealPayment, deliverDeal, cancelDeal, getDeal, listDeals, openDealFor,
   getDealerSettings, updateDealerSettings, dealSalesSeries, dealSeries, DEALER_PERIODS, isDealerPeriod, type DealerPeriod, type DealSeries,
   type DealStatus, type OdometerBrand, type DealInput, type DealMoney, type Deal, type DealPayment, type DealSummary, type DealerSettings,
 } from "./dealer/deals";

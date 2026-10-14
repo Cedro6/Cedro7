@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { can, featureOn, getDeal, PAYMENT_METHODS } from "@bos/core";
+import { can, cashReport, DEAL_PAYMENT_METHODS, featureOn, FILE_KIND_TEXT, getDeal, listDealerFiles, listTeam, seesCost } from "@bos/core";
+import { FileUpload } from "../../../../components/FileUpload";
 import { DealForm } from "../../../../components/DealForm";
-import { currency, todayHere, whole } from "../../../../lib/locale";
+import { currency, todayHere, whole, zone } from "../../../../lib/locale";
 import { formatMoney } from "../../../../lib/format";
 import { requireSession } from "../../../../lib/session";
-import { cancel, deliver, saveDeal, takePayment } from "../actions";
+import { cancel, deleteFile, deliver, saveDeal, saveFollowUp, takePayment } from "../actions";
 import { FLORIDA_FORMS } from "../../../../lib/florida-forms";
 
 export default async function DealPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; notice?: string }> }) {
@@ -18,6 +19,11 @@ export default async function DealPage({ params, searchParams }: { params: Promi
   const write = can(ctx, "vehicle.write") && deal.status === "open";
   const paid = deal.balance <= 0.005;
   const ready = paid && Boolean(deal.buyerAddress && deal.buyerCity && deal.buyerZip) && deal.odometer !== null;
+  const edit = can(ctx, "vehicle.write") && deal.status !== "cancelled";
+  const [files, team] = await Promise.all([listDealerFiles(ctx, { dealId: deal.id }), listTeam(ctx)]);
+  const cash = cashReport(deal.payments);
+  const follow = saveFollowUp.bind(null, deal.id);
+  const kb = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
   return (
     <>
       <header className="page-head">
@@ -84,7 +90,9 @@ export default async function DealPage({ params, searchParams }: { params: Promi
             </li>
             {Object.entries(FLORIDA_FORMS).map(([key, f]) => (
               <li key={key}>
-                <div><strong>{f.title}</strong><div className="muted">{f.about}</div></div>
+                <div><strong>{f.title}</strong><div className="muted">{f.about}</div>
+                  {key === "82042" && <div className={(deal.titleState ?? "FL").toUpperCase() === "FL" ? "muted" : "badge badge-warn"}>{(deal.titleState ?? "FL").toUpperCase() === "FL" ? "Not needed for this car: its title is a Florida title." : `Needed for this car: its title is from ${deal.titleState!.toUpperCase()}.`}</div>}
+                </div>
                 <Link href={`/deals/${deal.id}/documents/${key}`} className="btn btn-glass btn-small">Fill and open</Link>
               </li>
             ))}
@@ -103,15 +111,15 @@ export default async function DealPage({ params, searchParams }: { params: Promi
           {deal.payments.length > 0 && (
             <div className="table-wrap">
               <table className="compact">
-                <thead><tr><th>Date</th><th>How</th><th>Reference</th><th className="num">Amount</th><th>By</th></tr></thead>
-                <tbody>{deal.payments.map((p) => <tr key={p.id}><td>{p.paidOn}</td><td>{p.method}</td><td>{p.reference ?? "—"}</td><td className="num">{formatMoney(p.amount)}</td><td>{p.recordedBy ?? "—"}</td></tr>)}</tbody>
+                <thead><tr><th>Date</th><th>How</th><th>Reference</th><th className="num">Amount</th><th>By</th><th><span className="sr-only">Receipt</span></th></tr></thead>
+                <tbody>{deal.payments.map((p) => <tr key={p.id}><td>{p.paidOn}</td><td>{p.method}</td><td>{p.reference ?? "—"}</td><td className="num">{formatMoney(p.amount)}</td><td>{p.recordedBy ?? "—"}</td><td><Link href={`/deals/${deal.id}/receipt/${p.id}`} className="row-link">Receipt</Link></td></tr>)}</tbody>
               </table>
             </div>
           )}
           {write && !paid && (
             <form action={takePayment.bind(null, deal.id)} className="form-row deal-pay">
               <label className="field"><span>Amount</span><input name="amount" inputMode="decimal" required defaultValue={deal.balance.toFixed(2)} /></label>
-              <label className="field"><span>How</span><select name="method" defaultValue="Cash">{PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}</select></label>
+              <label className="field"><span>How</span><select name="method" defaultValue="Cash">{DEAL_PAYMENT_METHODS.map((m) => <option key={m}>{m}</option>)}</select></label>
               <label className="field"><span>Reference</span><input name="reference" maxLength={100} placeholder="Check no., last 4…" /></label>
               <label className="field"><span>Date</span><input name="paidOn" type="date" required defaultValue={todayHere()} /></label>
               <div className="field"><span>&nbsp;</span><button type="submit" className="btn btn-primary">Record payment</button></div>
@@ -119,6 +127,107 @@ export default async function DealPage({ params, searchParams }: { params: Promi
           )}
         </section>
       )}
+
+      {cash.required && (
+        <section className="glass panel" id="form-8300">
+          <div className="panel-head">
+            <div>
+              <h2 className="title">Cash over $10,000: IRS Form 8300</h2>
+              <p className="muted">
+                {formatMoney(cash.total)} came in as cash, or as cashier&apos;s checks and money orders of $10,000 or less, which count as cash on a car sale.
+                The dealership must file Form 8300 with the IRS within 15 days of passing $10,000{cash.dueOn ? `, so by ${cash.dueOn}` : ""}, and send the buyer a written notice by January 31 of next year.
+              </p>
+            </div>
+            {deal.form8300FiledOn ? <span className="badge badge-ok">Filed {deal.form8300FiledOn}</span> : <span className="badge badge-bad">Not filed yet</span>}
+          </div>
+          <div className="actions">
+            <Link href={`/deals/${deal.id}/form-8300`} className="btn btn-glass">Open the 8300 worksheet</Link>
+          </div>
+          {edit && (
+            <form action={follow} className="form-row">
+              <input type="hidden" name="section" value="form-8300" />
+              <label className="field"><span>Buyer&apos;s occupation</span><input name="buyerOccupation" maxLength={80} defaultValue={deal.buyerOccupation ?? ""} placeholder="Asked on the form" /></label>
+              <label className="field"><span>Filed with the IRS on</span><input name="form8300FiledOn" type="date" defaultValue={deal.form8300FiledOn ?? ""} /></label>
+              <div className="field"><span>&nbsp;</span><button type="submit" className="btn btn-primary">Save</button></div>
+            </form>
+          )}
+          <p className="muted footnote">The site does not file anything. File through the IRS (BSA E-Filing) or on paper, then record the date here. Check the rules with your accountant.</p>
+        </section>
+      )}
+
+      {deal.status !== "cancelled" && (
+        <section className="glass panel" id="after-sale">
+          <div className="panel-head">
+            <div>
+              <h2 className="title">After the sale</h2>
+              <p className="muted">Who sold it, the temporary tag, and the title application at the tag office. Florida gives the dealer 30 days from the sale to apply for the buyer&apos;s title. A temp tag with no expiry date runs 30 days from issue.</p>
+            </div>
+            {deal.titleDoneOn ? <span className="badge badge-ok">Title done {deal.titleDoneOn}</span> : deal.titleSentOn ? <span className="badge">Title sent {deal.titleSentOn}</span> : deal.status === "delivered" && deal.deliveredOn ? <span className="badge badge-warn">Title due by {new Date(Date.parse(`${deal.deliveredOn}T12:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10)}</span> : null}
+          </div>
+          <form action={follow} className="stack">
+            <input type="hidden" name="section" value="after-sale" />
+            <fieldset disabled={!edit} className="veh-fieldset">
+              <div className="form-row">
+                <label className="field"><span>Salesperson</span>
+                  <select name="salespersonId" defaultValue={deal.salespersonId ?? ""}>
+                    <option value="">Not recorded</option>
+                    {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </label>
+                {seesCost(ctx) && <label className="field"><span>Commission</span><input name="commission" inputMode="decimal" defaultValue={deal.commission ?? ""} placeholder="0.00" /></label>}
+              </div>
+              <div className="form-row">
+                <label className="field"><span>Temp tag number</span><input name="tempTagNumber" maxLength={20} defaultValue={deal.tempTagNumber ?? ""} /></label>
+                <label className="field"><span>Issued on</span><input name="tempTagIssuedOn" type="date" defaultValue={deal.tempTagIssuedOn ?? ""} /></label>
+                <label className="field"><span>Expires on</span><input name="tempTagExpiresOn" type="date" defaultValue={deal.tempTagExpiresOn ?? ""} /></label>
+              </div>
+              <div className="form-row">
+                <label className="field"><span>Title application sent</span><input name="titleSentOn" type="date" defaultValue={deal.titleSentOn ?? ""} /></label>
+                <label className="field"><span>Plate number</span><input name="plateNumber" maxLength={20} defaultValue={deal.plateNumber ?? ""} /></label>
+                <label className="field"><span>Title and plate done</span><input name="titleDoneOn" type="date" defaultValue={deal.titleDoneOn ?? ""} /></label>
+              </div>
+            </fieldset>
+            {edit && <div className="actions"><button type="submit" className="btn btn-primary">Save</button></div>}
+          </form>
+        </section>
+      )}
+
+      <section className="glass panel" id="documents">
+        <div className="panel-head">
+          <div>
+            <h2 className="title">Signed paperwork and documents</h2>
+            <p className="muted">Keep the signed forms, the buyer&apos;s licence and the title with the deal. Photos from a phone are shrunk before upload; PDFs up to 4.4 MB.</p>
+          </div>
+          <span className="muted">{files.length} {files.length === 1 ? "file" : "files"}</span>
+        </div>
+        {files.length > 0 && (
+          <div className="table-wrap">
+            <table className="compact">
+              <thead><tr><th>File</th><th>What it is</th><th className="num">Size</th><th>Added</th><th><span className="sr-only">Actions</span></th></tr></thead>
+              <tbody>
+                {files.map((f) => (
+                  <tr key={f.id}>
+                    <td><a href={`/files/${f.id}`} className="row-link" target="_blank" rel="noreferrer">{f.name}</a></td>
+                    <td>{FILE_KIND_TEXT[f.kind]}</td>
+                    <td className="num">{kb(f.sizeBytes)}</td>
+                    <td>{new Intl.DateTimeFormat("en-CA", { timeZone: zone() }).format(f.createdAt)}{f.by ? ` · ${f.by}` : ""}</td>
+                    <td className="row-actions">
+                      <a href={`/files/${f.id}?download=1`} className="btn btn-glass btn-small">Download</a>
+                      {can(ctx, "vehicle.write") && <form action={deleteFile.bind(null, f.id)}><button type="submit" className="btn btn-glass btn-small">Remove</button></form>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {can(ctx, "vehicle.write") && (
+          <FileUpload
+            dealId={deal.id} accept="image/*,application/pdf" label="Photo or PDF"
+            kinds={(["signed_form", "licence", "title", "receipt", "other"] as const).map((k) => ({ value: k, label: FILE_KIND_TEXT[k] }))}
+          />
+        )}
+      </section>
 
       <DealForm
         action={saveDeal.bind(null, deal.id)} submitLabel="Save changes" locked={!write} currency={currency()} paid={deal.paid}

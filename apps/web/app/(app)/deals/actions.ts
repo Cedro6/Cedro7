@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { cancelDeal, createDeal, deliverDeal, ForbiddenError, recordDealPayment, StateError, updateDeal, ValidationError, type DealInput, type OdometerBrand } from "@bos/core";
+import { cancelDeal, createDeal, deliverDeal, ForbiddenError, recordDealPayment, removeDealerFile, StateError, updateDeal, updateDealFollowUp, ValidationError, type DealInput, type FollowUpInput, type OdometerBrand } from "@bos/core";
 import { requireSession } from "../../../lib/session";
 
 const plain = (error: unknown): string =>
@@ -87,4 +87,38 @@ export async function cancel(id: string, form: FormData): Promise<void> {
   revalidatePath("/deals");
   revalidatePath("/vehicles");
   redirect(`/deals/${id}?notice=${encodeURIComponent("Deal cancelled. Any money taken is to be refunded by you.")}`);
+}
+
+/** The paperwork trail after the sale, the 8300 filing, and who sold it. Only the fields the form sent are changed. */
+export async function saveFollowUp(id: string, form: FormData): Promise<void> {
+  const { ctx } = await requireSession();
+  const field = (name: string) => (form.has(name) ? text(form.get(name)) : undefined);
+  const input: FollowUpInput = {
+    tempTagNumber: field("tempTagNumber"), tempTagIssuedOn: field("tempTagIssuedOn"), tempTagExpiresOn: field("tempTagExpiresOn"),
+    titleSentOn: field("titleSentOn"), plateNumber: field("plateNumber"), titleDoneOn: field("titleDoneOn"),
+    buyerOccupation: field("buyerOccupation"), form8300FiledOn: field("form8300FiledOn"), salespersonId: field("salespersonId"),
+  };
+  if (form.has("commission")) input.commission = text(form.get("commission")) === "" ? null : num(form.get("commission"));
+  try {
+    await updateDealFollowUp(ctx, id, input);
+  } catch (error) {
+    redirect(`/deals/${id}?error=${encodeURIComponent(plain(error))}#${text(form.get("section")) || "after-sale"}`);
+  }
+  revalidatePath(`/deals/${id}`);
+  revalidatePath("/");
+  redirect(`/deals/${id}?notice=${encodeURIComponent("Saved.")}#${text(form.get("section")) || "after-sale"}`);
+}
+
+/** Removes a file from a deal or a car, then goes back to it. */
+export async function deleteFile(fileId: string): Promise<void> {
+  const { ctx } = await requireSession();
+  let back = "/deals";
+  try {
+    const owner = await removeDealerFile(ctx, fileId);
+    back = owner.dealId ? `/deals/${owner.dealId}` : `/vehicles/${owner.vehicleId}`;
+  } catch (error) {
+    redirect(`${back}?error=${encodeURIComponent(plain(error))}`);
+  }
+  revalidatePath(back);
+  redirect(`${back}?notice=${encodeURIComponent("File removed.")}`);
 }
