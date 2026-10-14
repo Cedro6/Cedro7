@@ -2,6 +2,7 @@ import Link from "next/link";
 import { analysis, ANALYSIS_PRESETS, can, COMPARE_MODES, daysIn, featureOn, type Analysis, type Pair } from "@bos/core";
 import { CompareChart } from "../../../components/home/charts";
 import { ReportControls } from "../../../components/ReportControls";
+import { DealerReports, type DealerReportQuery } from "../../../components/DealerReports";
 import { formatQty } from "../../../lib/format";
 import { COMPARE_LABEL, PRESET_LABEL, rangeText, readReportQuery, reportHref, type ReportQuery, type ReportTab, type ReportView } from "../../../lib/report-params";
 import { requireSession } from "../../../lib/session";
@@ -426,6 +427,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </section>
     );
   }
+  if (featureOn(ctx.features, "dealer")) return <DealerReports ctx={ctx} query={(await searchParams) as DealerReportQuery} />;
   const asked = readReportQuery(await searchParams);
   const data = await analysis(ctx, { range: asked.range, mode: asked.mode });
   const tabs: { key: ReportTab; label: string }[] = [

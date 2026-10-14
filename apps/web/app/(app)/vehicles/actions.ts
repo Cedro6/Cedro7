@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
-  createVehicle, ForbiddenError, isVehicleStatus, lookupVin, planVehicleImport, runVehicleImport, StateError, updateVehicle, ValidationError,
+  addVehicleCost, createVehicle, ForbiddenError, isVehicleStatus, makeCoverPhoto, removeVehicleCost, lookupVin, planVehicleImport, runVehicleImport, StateError, updateVehicle, ValidationError,
   type VehicleImportRow, type VehicleOwnInput, type VehicleSpecs, type VinLookup,
 } from "@bos/core";
 import { requireSession } from "../../../lib/session";
@@ -107,4 +107,39 @@ export async function doVehicleImport(text: string): Promise<ImportDone> {
     if (!(error instanceof ValidationError || error instanceof StateError || error instanceof ForbiddenError)) console.error("vehicles: import failed", error);
     return { ok: false, error: plain(error) };
   }
+}
+
+/** Money spent on a car after buying it. */
+export async function addCost(vehicleId: string, form: FormData): Promise<void> {
+  const { ctx } = await requireSession();
+  try {
+    await addVehicleCost(ctx, vehicleId, { kind: String(form.get("kind") ?? ""), description: String(form.get("description") ?? ""), amount: num(form.get("amount")) ?? 0, spentOn: String(form.get("spentOn") ?? "") });
+  } catch (error) {
+    redirect(`/vehicles/${vehicleId}?error=${encodeURIComponent(plain(error))}#costs`);
+  }
+  revalidatePath(`/vehicles/${vehicleId}`);
+  redirect(`/vehicles/${vehicleId}?notice=${encodeURIComponent("Cost added.")}#costs`);
+}
+
+export async function deleteCost(vehicleId: string, costId: string): Promise<void> {
+  const { ctx } = await requireSession();
+  try {
+    await removeVehicleCost(ctx, costId);
+  } catch (error) {
+    redirect(`/vehicles/${vehicleId}?error=${encodeURIComponent(plain(error))}#costs`);
+  }
+  revalidatePath(`/vehicles/${vehicleId}`);
+  redirect(`/vehicles/${vehicleId}?notice=${encodeURIComponent("Cost removed.")}#costs`);
+}
+
+/** Makes a photo the cover: the first one listings and the window sticker show. */
+export async function coverPhoto(vehicleId: string, fileId: string): Promise<void> {
+  const { ctx } = await requireSession();
+  try {
+    await makeCoverPhoto(ctx, fileId);
+  } catch (error) {
+    redirect(`/vehicles/${vehicleId}?error=${encodeURIComponent(plain(error))}#photos`);
+  }
+  revalidatePath(`/vehicles/${vehicleId}`);
+  redirect(`/vehicles/${vehicleId}#photos`);
 }
