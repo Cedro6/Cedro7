@@ -33,7 +33,7 @@ export function SignUpForm({ token, kinds, zones, currencies, start = "cedro" }:
           <div className="signup-kinds signup-products" role="radiogroup" aria-labelledby="product-label">
             <label className="signup-kind signup-kind-cedro">
               <input type="radio" name="product" value="cedro" checked={product === "cedro"} onChange={() => setProduct("cedro")} />
-              <span className="type-name">Cedro Terminal</span>
+              <span className="type-name">Clivada</span>
               <span className="muted">For businesses that buy, stock and sell things.</span>
             </label>
             <label className="signup-kind signup-kind-dealer">
@@ -110,7 +110,7 @@ export function SignUpForm({ token, kinds, zones, currencies, start = "cedro" }:
         <p className="muted">At least 10 characters. A few unrelated words is strong and easy to remember. You will be the owner and can add your team afterwards.</p>
       </fieldset>
 
-      <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Setting up…" : product === "dealer" ? "Start Dealer Terminal" : "Start Cedro Terminal"}</button>
+      <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Setting up…" : product === "dealer" ? "Start Dealer Terminal" : "Start Clivada"}</button>
     </form>
   );
 }

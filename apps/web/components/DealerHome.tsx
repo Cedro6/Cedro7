@@ -35,7 +35,7 @@ function Periods({ choice, which, label }: { choice: Choice; which: "sales" | "d
   );
 }
 
-/** The same sales chart as Cedro's Home: the money from cars delivered, drawn even when nothing has sold yet. */
+/** The same sales chart as Clivada's Home: the money from cars delivered, drawn even when nothing has sold yet. */
 async function DealerSalesChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
   const data = await dealSeries(ctx, choice.sales);
   if (!data) return null;
@@ -62,7 +62,7 @@ async function DealerSalesChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
 }
 
 /**
- * Deals in Cedro's Total sales style: the count, then one purple block per outcome, each as wide as its
+ * Deals in Clivada's Total sales style: the count, then one purple block per outcome, each as wide as its
  * share, with its number and percentage. Delivered is solid, still open striped, cancelled faint stripes.
  */
 async function DealCountChart({ ctx, choice }: { ctx: Ctx; choice: Choice }) {
@@ -234,7 +234,7 @@ async function OpenDeals({ ctx }: { ctx: Ctx }) {
   );
 }
 
-/** The cards only a dealer Home has. Today and Calendar are shared with Cedro and drawn by its widgets. */
+/** The cards only a dealer Home has. Today and Calendar are shared with Clivada and drawn by its widgets. */
 export const DEALER_CARDS: ReadonlySet<WidgetId> = new Set<WidgetId>(["lot-tiles", "dealer-sales", "dealer-deals", "lot-attention", "open-deals", "newest-cars", "aged-cars"]);
 
 /** Draws one Dealer Terminal Home card, or null for a card that is not a dealer card. */

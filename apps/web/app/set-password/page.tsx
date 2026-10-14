@@ -13,7 +13,10 @@ export default async function SetPasswordPage({ searchParams }: { searchParams: 
   return (
     <main className="sign-in">
       <section className="glass panel sign-in-card">
-        <div className="brand">Cedro Terminal</div>
+        <div className="brand">
+          <img src="/brand/clivada-white.png" alt="Clivada" className="brand-logo brand-logo-on-dark" width={760} height={144} />
+          <img src="/brand/clivada-dark.png" alt="" aria-hidden="true" className="brand-logo brand-logo-on-light" width={760} height={144} />
+        </div>
         {!owner ? (
           <>
             <h1>This link no longer works</h1>

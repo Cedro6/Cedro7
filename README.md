@@ -1,4 +1,4 @@
-# Cedro Terminal
+# Clivada
 
 One app for a small or midsize product business to run customers, quotes and orders, invoices, stock and purchasing. Each business sees only what its kind of business needs and can switch on the rest.
 

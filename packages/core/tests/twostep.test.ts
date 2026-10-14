@@ -50,12 +50,12 @@ describe("two-step verification", () => {
 
   it("is off until setup is finished with a correct code", async () => {
     expect(await twoStepStatus(app, dana)).toEqual({ on: false, recoveryLeft: 0 });
-    const setup = await beginTwoStep(as("sales", dana), "Cedro Terminal");
+    const setup = await beginTwoStep(as("sales", dana), "Clivada");
     secret = setup.secret;
     expect(secret).toMatch(/^[A-Z2-7]{32}$/);
     expect(setup.uri).toContain(`secret=${secret}`);
-    expect(setup.uri).toContain("otpauth://totp/Cedro%20Terminal%3Adana%40harbor.test");
-    expect((await pendingTwoStep(as("sales", dana), "Cedro Terminal"))!.secret).toBe(secret);
+    expect(setup.uri).toContain("otpauth://totp/Clivada%3Adana%40harbor.test");
+    expect((await pendingTwoStep(as("sales", dana), "Clivada"))!.secret).toBe(secret);
     // Not on yet: sign-in still needs only the password.
     const before = await signInWithPassword(app, EMAIL, GOOD);
     expect(before.ok && before.session.twoStep).toBe(false);
@@ -65,9 +65,9 @@ describe("two-step verification", () => {
     expect(new Set(recovery).size).toBe(8);
     expect(recovery[0]).toMatch(/^[A-Z2-7]{5}-[A-Z2-7]{5}$/);
     expect(await twoStepStatus(app, dana)).toEqual({ on: true, recoveryLeft: 8 });
-    expect(await pendingTwoStep(as("sales", dana), "Cedro Terminal")).toBeNull();
+    expect(await pendingTwoStep(as("sales", dana), "Clivada")).toBeNull();
     expect((await listMembers(as("owner"))).find((m) => m.userId === dana)!.twoStep).toBe(true);
-    await expect(beginTwoStep(as("sales", dana), "Cedro Terminal")).rejects.toThrow(/already on/);
+    await expect(beginTwoStep(as("sales", dana), "Clivada")).rejects.toThrow(/already on/);
   });
 
   it("then asks for a code after the password, and accepts each code once", async () => {
@@ -141,7 +141,7 @@ describe("two-step verification", () => {
   });
 
   it("lets an owner or admin reset it for someone who lost their phone, but not an admin for an owner", async () => {
-    const setup = await beginTwoStep(as("sales", dana), "Cedro Terminal");
+    const setup = await beginTwoStep(as("sales", dana), "Clivada");
     await confirmTwoStep(as("sales", dana), totpCode(setup.secret, totpStep(T0)), T0);
     await expect(resetMemberTwoStep(as("sales", dana), dana)).rejects.toThrow();
     await resetMemberTwoStep(as("admin"), dana);

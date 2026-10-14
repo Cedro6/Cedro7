@@ -17,7 +17,7 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
   return (
     <main className="landing signup-page">
       <header className="landing-top">
-        <Link href="/" className="landing-wordmark">Cedro</Link>
+        <Link href="/" className="landing-wordmark"><Image src="/brand/clivada-white.png" alt="Clivada" width={760} height={144} className="landing-logo" /></Link>
         <nav className="landing-nav" aria-label="Account"><Link href="/sign-in">Sign in</Link></nav>
       </header>
       {!valid ? (
@@ -29,8 +29,8 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
         <div className="signup-split">
           <aside className="signup-side">
             <div className="signup-side-cedro">
-              <span className="door-mark door-mark-cedro" aria-hidden="true"><i /></span>
-              <h1>Set up Cedro Terminal</h1>
+              <Image src="/brand/clivada-white.png" alt="" width={760} height={144} className="door-logo door-logo-cedro" />
+              <h1>Set up Clivada</h1>
               <p>Customers, orders, invoices, stock, purchasing, bills and reports, with Ava to ask. Pick the kind of business and the right tools come on; the rest can be switched on later.</p>
               <p className="signup-trial">{TRIAL_DAYS.cedro} days free with everything on. No card to start. From ${PLANS.cedro_basic.monthly} a month after that.</p>
             </div>

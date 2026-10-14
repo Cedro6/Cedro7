@@ -51,7 +51,11 @@ export function Sidebar({ items, company, product, footer }: { items: NavItem[];
               <img src="/brand/dealer-terminal-dark.png" alt="" aria-hidden="true" className="brand-logo brand-logo-on-light" width={760} height={217} />
             </>
           ) : (
-            "Cedro Terminal"
+            <>
+              {/* The Clivada mark: white on dark, a dark copy for light mode. */}
+              <img src="/brand/clivada-white.png" alt="Clivada" className="brand-logo brand-logo-on-dark" width={760} height={144} />
+              <img src="/brand/clivada-dark.png" alt="" aria-hidden="true" className="brand-logo brand-logo-on-light" width={760} height={144} />
+            </>
           )}
           <small>{company}</small>
         </span>

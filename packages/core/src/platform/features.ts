@@ -27,14 +27,14 @@ export const BUSINESS_TYPES = ["distributor", "retail", "warehouse", "sales", "c
 export type BusinessType = (typeof BUSINESS_TYPES)[number];
 
 /**
- * Products. Cedro Terminal is the business system, with a business type that sets the starting
+ * Products. Clivada is the business system, with a business type that sets the starting
  * switches. Dealer Terminal is a separate membership: its tools are fixed by the product, and a
  * company does not move between products from its own settings.
  */
 export const PRODUCTS = ["cedro", "dealer"] as const;
 export type Product = (typeof PRODUCTS)[number];
 export const productOf = (type: BusinessType): Product => (type === "dealer" ? "dealer" : "cedro");
-/** The business types a Cedro Terminal company may choose between. */
+/** The business types a Clivada company may choose between. */
 export const CEDRO_TYPES: readonly BusinessType[] = ["distributor", "retail", "warehouse", "sales", "contractor"];
 
 /** What each business type starts with. */

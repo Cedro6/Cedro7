@@ -1,4 +1,4 @@
-/* Cedro Terminal styles. One file, read top to bottom: tokens, surfaces, app shell, controls, data, then each screen, then phone rules, then the light palette.
+/* Clivada styles. One file, read top to bottom: tokens, surfaces, app shell, controls, data, then each screen, then phone rules, then the light palette.
    Colours are written once for the dark look. White and black tints go through --w and --k, and text and ground through --ink and --ground,
    so the light palette at the end only has to swap those tokens. Documents, toasts and the map keep fixed colours on purpose. */
 
@@ -2123,7 +2123,7 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 .chart-animated .chart-line { animation: draw 1.3s cubic-bezier(0.45, 0, 0.2, 1) both; }
 .chart-animated .chart-area { animation: fade-in 0.9s ease 0.7s both; }
 .chart-animated .chart-dot { transform-box: fill-box; transform-origin: center; animation: pop-in 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) 1.2s both; }
-/* Dealer deals card: Cedro's Total sales bars, filling the card, blocks growing in from the left. */
+/* Dealer deals card: Clivada's Total sales bars, filling the card, blocks growing in from the left. */
 .deals-card { display: flex; flex-direction: column; gap: 12px; }
 .deals-bars { flex: 1; margin-top: 8px; }
 .deals-bars .hero-cat { white-space: normal; overflow: visible; }
@@ -2562,7 +2562,7 @@ tr.row-total th, tr.row-total td { font-weight: 700; border-top: 2px solid rgba(
 .plan-foot { margin-top: 12px; }
 
 /* ---------------------------------------------------------------------------------------------
-   The welcome page. One dark room with two doors: Cedro Terminal on the cool side, Dealer Terminal
+   The welcome page. One dark room with two doors: Clivada on the cool side, Dealer Terminal
    on the warm side. It keeps its own colours whatever mode the app remembers, because nobody has
    signed in yet. */
 .landing {
@@ -2570,8 +2570,8 @@ tr.row-total th, tr.row-total td { font-weight: 700; border-top: 2px solid rgba(
   --l-ink: #f2f3ee;
   --l-ink-2: #aab0bb;
   --l-line: rgba(255, 255, 255, 0.1);
-  --l-cedro: #a78bfa;
-  --l-cedro-deep: #5b3fd6;
+  --l-cedro: #8cd857;
+  --l-cedro-deep: #3f7a1f;
   --l-dealer: #e9b45a;
   --l-dealer-deep: #b8742a;
   --l-display: "Bricolage Grotesque", "DM Sans", system-ui, sans-serif;
@@ -2602,13 +2602,14 @@ tr.row-total th, tr.row-total td { font-weight: 700; border-top: 2px solid rgba(
 .doors { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; max-width: 1180px; margin: 0 auto; border-radius: 34px; overflow: hidden; background: var(--l-line); }
 .door { position: relative; display: flex; flex-direction: column; gap: 26px; padding: clamp(28px, 4vw, 52px); background: #121316; isolation: isolate; }
 .door::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0.55; pointer-events: none; }
-.door-cedro::before { background: radial-gradient(90% 70% at 0% 0%, rgba(91, 63, 214, 0.45), transparent 70%); }
+.door-cedro::before { background: radial-gradient(90% 70% at 0% 0%, rgba(63, 122, 31, 0.5), transparent 70%); }
 .door-dealer::before { background: radial-gradient(90% 70% at 100% 0%, rgba(184, 116, 42, 0.45), transparent 70%); }
 .door-head { display: flex; align-items: center; gap: 14px; min-height: 44px; }
 .door-head h2 { font-size: clamp(26px, 2.6vw, 34px); }
-.door-mark { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; background: var(--l-ink); flex: none; }
-.door-mark i { width: 15px; height: 15px; border-radius: 999px; background: var(--l-ground); }
 .door-logo { height: 43px; width: auto; display: block; }
+.door-logo-cedro { height: 38px; }
+.landing-logo { height: 26px; width: auto; display: block; }
+.signin-page .brand-logo { width: 150px; margin: 0 0 4px; }
 .door-for { font-size: 17px; line-height: 1.45; max-width: 46ch; color: var(--l-ink); }
 .door-day { margin: 0; display: grid; gap: 18px; }
 .door-day div { display: grid; gap: 4px; padding-left: 16px; border-left: 2px solid var(--door-accent, var(--l-line)); }
@@ -2621,8 +2622,8 @@ tr.row-total th, tr.row-total td { font-weight: 700; border-top: 2px solid rgba(
 .door-foot { margin-top: auto; display: grid; gap: 16px; padding-top: 10px; }
 .door-price { color: var(--l-ink-2); line-height: 1.5; }
 .door-price strong { color: var(--l-ink); font-weight: 600; }
-.door-cta { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 26px; border-radius: 999px; font-weight: 600; font-size: 16px; color: #0b0c0e; background: var(--door-accent); text-decoration: none; transition: transform 0.15s ease, filter 0.15s ease; }
-.door-cta:hover { filter: brightness(1.08); transform: translateY(-1px); color: #0b0c0e; }
+.landing a.door-cta { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 26px; border-radius: 999px; font-weight: 600; font-size: 16px; color: #0b0c0e; background: var(--door-accent); text-decoration: none; transition: transform 0.15s ease, filter 0.15s ease; }
+.landing a.door-cta:hover { filter: brightness(1.08); transform: translateY(-1px); color: #0b0c0e; }
 
 /* Ava, shared by both. */
 .ava-strip { display: grid; grid-template-columns: 180px 1fr; gap: 36px; align-items: center; max-width: 1180px; margin: 64px auto 0; padding: clamp(28px, 4vw, 48px); border: 1px solid var(--l-line); border-radius: 34px; }

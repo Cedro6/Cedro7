@@ -269,7 +269,7 @@ describe("Ava on a dealer account", () => {
     const actions = actionsFor(dealer).map((a) => a.name);
     expect(actions).toEqual(expect.arrayContaining(["propose_vehicle_status", "propose_vehicle_details", "propose_deal", "propose_deliver_deal"]));
     expect(actions).not.toEqual(expect.arrayContaining([expect.stringMatching(/quote|ship_order|invoice|return|stock_adjustment|payment|price/)]));
-    // A Cedro account sees none of the dealer tools.
+    // A Clivada account sees none of the dealer tools.
     expect(toolsFor(as("owner", { dealer: false })).map((t) => t.name)).not.toContain("find_vehicles");
   });
 
@@ -310,7 +310,7 @@ describe("Customize on a dealer Home", () => {
     for (const id of [...start.widgets, ...start.available]) expect(dealerCards).toContain(id);
     expect(start.available).toContain("open-deals");
 
-    // Cedro cards can't be added to a dealer Home, even by asking for them directly.
+    // Clivada cards can't be added to a dealer Home, even by asking for them directly.
     await expect(changeHomeLayout(as("owner"), "dealer", { kind: "add", id: "hero" })).rejects.toThrow(/not available/);
     await changeHomeLayout(as("owner"), "dealer", { kind: "add", id: "open-deals" });
     await changeHomeLayout(as("owner"), "dealer", { kind: "remove", id: "aged-cars" });
@@ -321,7 +321,7 @@ describe("Customize on a dealer Home", () => {
     expect(after.widgets).not.toContain("aged-cars");
     expect(after.widgets.indexOf("dealer-deals")).toBeLessThan(after.widgets.indexOf("dealer-sales"));
 
-    // A regular Cedro company never sees the dealer cards.
+    // A regular Clivada company never sees the dealer cards.
     const cedro = await getHomeLayout(as("owner", { dealer: false }), "distributor");
     expect([...cedro.widgets, ...cedro.available].some((id) => dealerCards.slice(0, 7).includes(id))).toBe(false);
     expect(WIDGETS.length).toBeGreaterThan(14);

@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Cedro Terminal",
+  title: "Clivada",
   description: "Run your business. Not your software.",
+  icons: { icon: "/brand/clivada-icon.png", apple: "/brand/clivada-icon.png" },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

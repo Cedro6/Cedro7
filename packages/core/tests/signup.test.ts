@@ -137,7 +137,7 @@ describe("running the service", () => {
     const s = await signUp(app, link.token, input({ company: "Strict Co", email: "owner@strict.test" }));
     const ctx: Ctx = { pool: app, orgId: s.orgId, userId: s.userId, role: "owner" };
     await expect(setRequireTwoStep(ctx, true)).rejects.toThrow(/your own login first/);
-    const setup = await beginTwoStep(ctx, "Cedro Terminal");
+    const setup = await beginTwoStep(ctx, "Clivada");
     await confirmTwoStep(ctx, totpCode(setup.secret, totpStep()));
     await setRequireTwoStep(ctx, true);
     expect((await currentMembership(app, s.orgId, s.userId))!.requireTwoStep).toBe(true);
