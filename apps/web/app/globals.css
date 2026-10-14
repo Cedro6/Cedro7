@@ -1994,7 +1994,20 @@ body { background: radial-gradient(1000px 680px at 12% -10%, rgba(132, 150, 172,
 @media print {
   @page { margin: 14mm; }
   html, body { background: #fff !important; }
-  .sidebar, .no-print, nextjs-portal { display: none !important; }
+  .sidebar, .no-print, nextjs-portal, .ava-launch, #assistant, .billing-banner { display: none !important; }
+  /* Each sheet starts a fresh page, and a signature block never strands on one of its own. */
+  .paper { break-after: page; }
+  .paper:last-of-type { break-after: auto; }
+  .paper-sign, .guide-dealer, .guide-box, .paper-table { break-inside: avoid; }
+  /* The Buyers Guide is a one-page form: keep it to one page. */
+  .guide { font-size: 12.5px; }
+  .guide-title { font-size: 28px; margin-bottom: 4px; }
+  .guide p { margin: 3px 0; }
+  .guide-h { margin: 8px 0 4px; font-size: 14px; }
+  .guide-box { padding: 6px 9px; margin-bottom: 6px; }
+  .guide-table { margin: 8px 0; }
+  .guide-dealer { margin: 8px 0; padding: 8px; }
+  .paper-sign { margin-top: 20px; }
   .shell { display: block; padding: 0; }
   #main { display: block; }
   .split { display: block; }
@@ -2688,3 +2701,22 @@ tr.row-total th, tr.row-total td { font-weight: 700; border-top: 2px solid rgba(
 .signin-page .sign-in-card { background: #121316; border-color: var(--l-line); box-shadow: none; }
 .signin-page .sign-in-card .brand { font-size: 20px; }
 .signin-page h1 { font-size: 30px; }
+
+/* How a sale is being paid: the choice, and the method or days it needs. */
+.pay-choice { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.pay-choice > .field { flex: 1 1 160px; min-width: 0; }
+.pay-choice-compact { gap: 10px; }
+.pay-hint { flex-basis: 100%; margin: 0; }
+.ship-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.ship-form .pay-choice { flex: 1 1 auto; }
+/* Space between the sheets of a deal's packet on screen; printing breaks pages on its own. */
+.page-break { height: 24px; }
+@media print { .page-break { display: none; } }
+
+/* A printed sheet is laid out for paper. On a phone let the sheet itself scroll sideways rather
+   than the whole page, and let the Buyers Guide's label column wrap. */
+@media (max-width: 620px) {
+  .paper { overflow-x: auto; }
+  .guide-table th { white-space: normal; }
+  .guide-table th, .guide-table td { font-size: 12px; padding: 4px 5px; }
+}

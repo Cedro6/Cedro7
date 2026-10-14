@@ -12,6 +12,7 @@ export function OrderLinesEditor({
   tracked,
   customerPrices,
   initialCustomer,
+  initialLines,
   currency,
 }: {
   /** The company's currency code, such as USD. */
@@ -22,9 +23,15 @@ export function OrderLinesEditor({
   /** Prices for customers on a price list: customer id, then product id. Everyone else pays the product's price. */
   customerPrices: Record<string, Record<string, number>>;
   initialCustomer: string;
+  /** The lines an order already has, when one is being changed rather than written. */
+  initialLines?: { productId: string; qty: number; discountPercent: number }[];
 }) {
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency });
-  const [lines, setLines] = useState<Line[]>([{ key: 1, productId: "", qty: "", discount: "" }]);
+  const [lines, setLines] = useState<Line[]>(
+    initialLines?.length
+      ? initialLines.map((line, i) => ({ key: i + 1, productId: line.productId, qty: String(line.qty), discount: line.discountPercent ? String(line.discountPercent) : "" }))
+      : [{ key: 1, productId: "", qty: "", discount: "" }],
+  );
   const [customer, setCustomer] = useState(initialCustomer);
   const root = useRef<HTMLDivElement>(null);
   // The customer is chosen elsewhere in the same form; follow it so prices match what will be saved.

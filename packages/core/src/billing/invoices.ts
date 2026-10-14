@@ -187,7 +187,7 @@ async function lockInvoice(tx: PoolClient, invoiceId: string): Promise<LockedInv
 export async function invoiceShipmentInTx(
   tx: PoolClient,
   ctx: Ctx,
-  input: { orderId: string; shipmentId: string; lines: { orderLineId: string; qty: number }[] },
+  input: { orderId: string; shipmentId: string; lines: { orderLineId: string; qty: number }[]; dueInDays?: number; payment?: InvoicePayment },
 ): Promise<{ id: string; number: string; amount: number }> {
   const order = await tx.query<{ customer_id: string; tax_rate: number; payment_terms: string | null }>(
     `select o.customer_id, o.tax_rate::float8 as tax_rate, c.payment_terms
@@ -247,7 +247,7 @@ export async function invoiceShipmentInTx(
       depositApplied,
       amount,
       header.payment_terms,
-      termsDays(header.payment_terms),
+      input.dueInDays ?? 0,
       ctx.userId,
     ],
   );
@@ -270,7 +270,8 @@ export async function invoiceShipmentInTx(
       ],
     );
   }
-  await audit(tx, ctx, "invoice.raised", "invoice", id, { number, amount, depositApplied, orderId: input.orderId });
+  if (input.payment) await payInFullInTx(tx, ctx, id, amount, input.payment, `invoice-paid:${id}`);
+  await audit(tx, ctx, "invoice.raised", "invoice", id, { number, amount, depositApplied, orderId: input.orderId, paid: Boolean(input.payment) });
   return { id, number, amount };
 }
 
@@ -324,6 +325,24 @@ export async function requestDeposit(
 }
 
 /** An invoice written by hand, not tied to an order. */
+export type InvoicePayment = { method: string; reference?: string };
+
+/** Marks a whole invoice as paid as it is raised: used when the money came in at the till. */
+async function payInFullInTx(tx: PoolClient, ctx: Ctx, invoiceId: string, amount: number, payment: InvoicePayment, key: string): Promise<void> {
+  if (!(PAYMENT_METHODS as readonly string[]).includes(payment.method)) {
+    throw new ValidationError("method", "Choose how the payment was made.");
+  }
+  const reference = payment.reference?.trim() || null;
+  if (reference && reference.length > 80) throw new ValidationError("reference", "Keep the reference under 80 characters.");
+  if (amount <= 0) return;
+  await tx.query(
+    `insert into payments (org_id, invoice_id, amount, method, reference, idempotency_key, recorded_by)
+     values ($1, $2, $3, $4, $5, $6, $7)`,
+    [ctx.orgId, invoiceId, cents(amount), payment.method, reference, key, ctx.userId],
+  );
+  await audit(tx, ctx, "invoice.payment_recorded", "invoice", invoiceId, { amount: cents(amount), method: payment.method, balance: 0, paidInFull: true });
+}
+
 export async function createInvoice(
   ctx: Ctx,
   input: {
@@ -332,6 +351,8 @@ export async function createInvoice(
     taxRatePercent?: number;
     dueInDays?: number;
     notes?: string;
+    /** Money taken as the invoice is raised, which marks it paid in full. */
+    payment?: InvoicePayment;
   },
 ): Promise<{ id: string; number: string; amount: number }> {
   requirePermission(ctx, "invoice.write");
@@ -394,7 +415,7 @@ export async function createInvoice(
         gross,
         terms,
         notes,
-        input.dueInDays ?? termsDays(terms),
+        input.dueInDays ?? 0,
         ctx.userId,
       ],
     );
@@ -406,7 +427,8 @@ export async function createInvoice(
         [ctx.orgId, id, index + 1, line.productId ?? null, line.description.trim(), line.qty, line.unitPrice, line.amount],
       );
     }
-    await audit(tx, ctx, "invoice.created", "invoice", id, { number, amount: gross });
+    if (input.payment) await payInFullInTx(tx, ctx, id, gross, input.payment, `invoice-paid:${id}`);
+    await audit(tx, ctx, "invoice.created", "invoice", id, { number, amount: gross, paid: Boolean(input.payment) });
     return { id, number, amount: gross };
   });
 }

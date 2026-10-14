@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { can, featureOn, getOrder, listInvoices, listReturnable, listReturns } from "@bos/core";
+import { can, featureOn, getOrder, listInvoices, listReturnable, listReturns, PAYMENT_METHODS } from "@bos/core";
 import { InvoiceBadge } from "../../../../components/InvoiceBadge";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import { formatMoney, formatQty } from "../../../../lib/format";
+import { PaymentChoice } from "../../../../components/PaymentChoice";
 import { requireSession } from "../../../../lib/session";
 import { deposit } from "../../invoices/actions";
 import { cancel, confirm, reserve, ship, takeReturn } from "../actions";
@@ -81,10 +82,14 @@ export default async function OrderPage({
             </button>
           </form>
         )}
+        {can(ctx, "sales_order.write") && (order.status === "quote" || order.status === "confirmed") && order.unitsShipped === 0 && (
+          <Link href={`/sales/${order.id}/edit`} className="btn btn-glass">Change items</Link>
+        )}
         {canShip && open && (tracked ? order.unitsReserved > 0 : true) && (
-          <form action={ship}>
+          <form action={ship} className="ship-form">
             <input type="hidden" name="orderId" value={order.id} />
             <input type="hidden" name="requestId" value={randomUUID()} />
+            <PaymentChoice methods={PAYMENT_METHODS} usualTerms={order.customerPaymentTerms} compact />
             <button type="submit" className="btn btn-primary">
               {tracked ? "Ship what's ready" : "Complete order"}
             </button>

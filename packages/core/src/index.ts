@@ -42,6 +42,7 @@ export {
 } from "./inventory/warehouse";
 export {
   createInvoice,
+  type InvoicePayment,
   customerStatement,
   getInvoice,
   listInvoices,
@@ -127,6 +128,8 @@ export {
   cancelOrder,
   confirmOrder,
   createQuote,
+  updateOrder,
+  type OrderLineInput,
   getOrder,
   listOrders,
   reserveAvailable,

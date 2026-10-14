@@ -14,6 +14,7 @@ import {
   ValidationError,
   voidInvoice,
 } from "@bos/core";
+import { readPaymentChoice } from "../../../lib/payment-choice";
 import { requireSession } from "../../../lib/session";
 
 function friendly(error: unknown): string {
@@ -96,13 +97,14 @@ export async function saveInvoice(formData: FormData): Promise<void> {
   const descriptions = formData.getAll("description").map((value) => String(value).trim());
   const quantities = formData.getAll("qty").map((value) => String(value).trim());
   const prices = formData.getAll("unitPrice").map((value) => String(value).trim());
-  const due = String(formData.get("dueInDays") ?? "").trim();
+  const how = readPaymentChoice(formData);
   let target: string;
   try {
     const made = await createInvoice(ctx, {
       customerId: String(formData.get("customerId") ?? ""),
       taxRatePercent: String(formData.get("taxRatePercent") ?? "").trim() === "" ? undefined : Number(String(formData.get("taxRatePercent")).trim()),
-      dueInDays: due === "" ? undefined : Number(due),
+      dueInDays: how.dueInDays,
+      payment: how.payment,
       notes: String(formData.get("notes") ?? ""),
       // a row left completely empty is ignored; a half-filled one is reported
       lines: descriptions.flatMap((description, index) =>
@@ -111,7 +113,7 @@ export async function saveInvoice(formData: FormData): Promise<void> {
           : [],
       ),
     });
-    target = `/invoices/${made.id}?notice=${encodeURIComponent(`Invoice ${made.number} saved.`)}`;
+    target = `/invoices/${made.id}?notice=${encodeURIComponent(`Invoice ${made.number} saved${how.payment ? " and marked paid in full" : ""}.`)}`;
   } catch (error) {
     target = `/invoices/new?error=${encodeURIComponent(friendly(error))}`;
   }

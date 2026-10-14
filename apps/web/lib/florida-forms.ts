@@ -18,6 +18,15 @@ export const FLORIDA_FORMS = {
 export type FloridaForm = keyof typeof FLORIDA_FORMS;
 export const isFloridaForm = (v: string): v is FloridaForm => v in FLORIDA_FORMS;
 
+/**
+ * The forms a deal actually needs, in the order they are signed. The VIN verification is only for a
+ * car whose current title is from another state.
+ */
+export function formsForDeal(deal: { titleState?: string | null }): FloridaForm[] {
+  const outOfState = (deal.titleState ?? "FL").toUpperCase() !== "FL";
+  return (["82040", "82050", "82993", "82053", ...(outOfState ? (["82042"] as const) : [])] as FloridaForm[]);
+}
+
 type Source = { deal: Deal; company: CompanyProfile; dealer: DealerSettings; today: string };
 
 const mdy = (iso: string | null | undefined) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}` : "");

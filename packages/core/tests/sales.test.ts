@@ -6,6 +6,7 @@ import {
   cancelOrder,
   confirmOrder,
   createQuote,
+  updateOrder,
   ForbiddenError,
   getOrder,
   getProduct,
@@ -284,5 +285,59 @@ describe("rules and access", () => {
     const counts = await overview(as("owner"));
     expect(counts.openOrders).toBe(open.length);
     expect(counts.readyToShip).toBe(open.filter((o) => o.unitsReserved > 0).length);
+  });
+});
+
+describe("changing a quote or an unshipped order", () => {
+  it("rewrites a quote's lines, prices and customer, holding no stock either way", async () => {
+    const held = (await stock("GL-WK-L")).reserved;
+    const made = await quote([["FS-DS3-100", 10]], 6.25);
+    await updateOrder(as("sales"), made.id, {
+      customerId: bayside,
+      taxRatePercent: 0,
+      notes: "Swapped to the bigger box",
+      lines: [{ productId: id("GL-WK-L"), qty: 4 }, { productId: id("FS-DS3-100"), qty: 2, discountPercent: 10 }],
+    });
+    const order = (await getOrder(as("sales"), made.id))!;
+    expect(order.status).toBe("quote");
+    expect(order.lines.map((l) => [l.sku, l.qty, l.discountPercent])).toEqual([["GL-WK-L", 4, 0], ["FS-DS3-100", 2, 10]]);
+    expect(order.tax).toBe(0);
+    expect(order.notes).toBe("Swapped to the bigger box");
+    expect((await stock("GL-WK-L")).reserved).toBe(held);
+  });
+
+  it("moves the stock a confirmed order holds when its quantities change", async () => {
+    const before = (await stock("TL-UKB-50")).reserved;
+    const made = await quote([["TL-UKB-50", 5]]);
+    await confirmOrder(as("sales"), made.id);
+    expect((await stock("TL-UKB-50")).reserved).toBe(before + 5);
+    // Up: more is taken. Down: the difference goes back.
+    await updateOrder(as("sales"), made.id, { customerId: bayside, lines: [{ productId: id("TL-UKB-50"), qty: 9 }] });
+    expect((await stock("TL-UKB-50")).reserved).toBe(before + 9);
+    await updateOrder(as("sales"), made.id, { customerId: bayside, lines: [{ productId: id("TL-UKB-50"), qty: 2 }] });
+    expect((await stock("TL-UKB-50")).reserved).toBe(before + 2);
+    // A line dropped altogether gives back everything it held.
+    await updateOrder(as("sales"), made.id, { customerId: bayside, lines: [{ productId: id("GL-WK-L"), qty: 1 }] });
+    expect((await stock("TL-UKB-50")).reserved).toBe(before);
+    const order = (await getOrder(as("sales"), made.id))!;
+    expect(order.status).toBe("confirmed");
+    expect(order.lines[0]!.sku).toBe("GL-WK-L");
+    await cancelOrder(as("sales"), made.id);
+  });
+
+  it("refuses once anything has shipped, on a cancelled order, and for a role that cannot write", async () => {
+    const made = await quote([["GL-WK-L", 2]]);
+    await confirmOrder(as("sales"), made.id);
+    await shipOrder(as("warehouse"), made.id, { idempotencyKey: randomUUID() });
+    await expect(updateOrder(as("sales"), made.id, { customerId: bayside, lines: [{ productId: id("GL-WK-L"), qty: 3 }] }))
+      .rejects.toThrow(/cannot be changed/);
+    const dropped = await quote([["GL-WK-L", 1]]);
+    await cancelOrder(as("sales"), dropped.id);
+    await expect(updateOrder(as("sales"), dropped.id, { customerId: bayside, lines: [{ productId: id("GL-WK-L"), qty: 1 }] }))
+      .rejects.toThrow(/cancelled/);
+    const live = await quote([["GL-WK-L", 1]]);
+    await expect(updateOrder(as("viewer"), live.id, { customerId: bayside, lines: [{ productId: id("GL-WK-L"), qty: 1 }] }))
+      .rejects.toThrow(ForbiddenError);
+    await expect(updateOrder(as("sales"), live.id, { customerId: bayside, lines: [] })).rejects.toThrow(/at least one product/);
   });
 });

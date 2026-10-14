@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { can, getRegion, listCustomers } from "@bos/core";
+import { PAYMENT_METHODS, can, getRegion, listCustomers } from "@bos/core";
+import { PaymentChoice } from "../../../../components/PaymentChoice";
 import { requireSession } from "../../../../lib/session";
 import { saveInvoice } from "../actions";
 
@@ -44,11 +45,8 @@ export default async function NewInvoicePage({
               <span>Tax %</span>
               <input name="taxRatePercent" type="number" min="0" max="99" step="any" inputMode="decimal" placeholder={`Usual (${region.defaultTaxPercent}%)`} title="Leave blank for your usual rate, or no tax for a customer marked as not charged tax" />
             </label>
-            <label className="field tax-field">
-              <span>Due in days</span>
-              <input name="dueInDays" type="number" min="0" max="365" step="1" inputMode="numeric" placeholder="Terms" />
-            </label>
           </div>
+          <PaymentChoice methods={PAYMENT_METHODS} />
         </section>
         <section className="glass panel">
           <h2 className="title">Lines</h2>

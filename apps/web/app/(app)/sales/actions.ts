@@ -9,6 +9,7 @@ import {
   setCustomerPriceList,
   confirmOrder,
   createQuote,
+  updateOrder,
   createReturn,
   moneyText,
   ForbiddenError,
@@ -19,6 +20,7 @@ import {
   StockInputError,
   ValidationError,
 } from "@bos/core";
+import { readPaymentChoice } from "../../../lib/payment-choice";
 import { requireSession } from "../../../lib/session";
 
 function friendly(error: unknown): string {
@@ -65,6 +67,32 @@ async function act(formData: FormData, run: (orderId: string) => Promise<string>
   redirect(`/sales/${encodeURIComponent(orderId)}?${query}`);
 }
 
+/** Saves a change to a quote, or to an order that has not shipped. */
+export async function saveOrderEdit(formData: FormData): Promise<void> {
+  const { ctx } = await requireSession();
+  const orderId = String(formData.get("orderId") ?? "");
+  const productIds = formData.getAll("productId").map(String);
+  const quantities = formData.getAll("qty").map(String);
+  const discounts = formData.getAll("discountPercent").map(String);
+  const tax = String(formData.get("taxRatePercent") ?? "").trim();
+  let target: string;
+  try {
+    const result = await updateOrder(ctx, orderId, {
+      customerId: String(formData.get("customerId") ?? ""),
+      taxRatePercent: tax === "" ? undefined : Number(tax),
+      notes: String(formData.get("notes") ?? ""),
+      lines: productIds.flatMap((productId, index) =>
+        productId ? [{ productId, qty: Number(quantities[index] || "NaN"), discountPercent: Number(discounts[index] || "0") }] : [],
+      ),
+    });
+    const moved = result.reserved > 0 || result.released > 0 ? ` ${result.reserved} units are now held for it.` : "";
+    target = `/sales/${encodeURIComponent(orderId)}?notice=${encodeURIComponent(`Changes saved.${moved}`)}`;
+  } catch (error) {
+    target = `/sales/${encodeURIComponent(orderId)}/edit?error=${encodeURIComponent(friendly(error))}`;
+  }
+  redirect(target);
+}
+
 export async function confirm(formData: FormData): Promise<void> {
   const { ctx } = await requireSession();
   await act(formData, async (orderId) => {
@@ -84,8 +112,9 @@ export async function reserve(formData: FormData): Promise<void> {
 export async function ship(formData: FormData): Promise<void> {
   const { ctx } = await requireSession();
   await act(formData, async (orderId) => {
-    const result = await shipOrder(ctx, orderId, { idempotencyKey: String(formData.get("requestId") ?? "") });
-    const billed = result.invoice ? ` Invoice ${result.invoice.number} raised.` : "";
+    const how = readPaymentChoice(formData);
+    const result = await shipOrder(ctx, orderId, { idempotencyKey: String(formData.get("requestId") ?? ""), ...how });
+    const billed = result.invoice ? ` Invoice ${result.invoice.number} raised${how.payment ? " and marked paid in full" : ""}.` : "";
     return featureOn(ctx.features, "stock")
       ? `${result.shipmentNumber} shipped with ${result.units} units.${billed}`
       : `Order completed.${billed}`;

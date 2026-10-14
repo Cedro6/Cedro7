@@ -31,6 +31,7 @@ export default async function DealPage({ params, searchParams }: { params: Promi
           <div className="eyebrow"><Link href="/deals">Deals</Link> · {deal.number} · <Link href={`/vehicles/${deal.vehicleId}`}>{deal.stockNumber}</Link></div>
           <h1>{deal.buyerName}: {deal.vehicleName || deal.stockNumber}</h1>
         </div>
+        <Link href={`/deals/${deal.id}/documents`} className="btn btn-glass">Print all documents</Link>
         <Link href={`/deals/${deal.id}/print`} className="btn btn-glass">Buyer&apos;s order</Link>
         {deal.status === "open" && can(ctx, "vehicle.write") && (
           <form action={deliver.bind(null, deal.id)} className="deal-deliver">
@@ -97,6 +98,10 @@ export default async function DealPage({ params, searchParams }: { params: Promi
               </li>
             ))}
           </ul>
+          <div className="actions">
+            <a href={`/deals/${deal.id}/forms/all`} className="btn btn-glass btn-small" target="_blank" rel="noreferrer">Open every state form as one PDF</a>
+            <Link href={`/deals/${deal.id}/documents`} className="btn btn-glass btn-small">All documents, ready to print</Link>
+          </div>
           <p className="muted footnote">These are the state's current forms, filled in their own fields. Tax rates, fees and form versions change; the dealership is responsible for checking each form before it is signed.</p>
         </section>
       )}

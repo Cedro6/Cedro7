@@ -102,7 +102,22 @@ describe("an invoice for each shipment", () => {
       ["Deck screws 3 in, box of 100", 10, 8.5, 0, 8.5, 85],
       ["Garden hose 50 ft, heavy duty", 2, 24, 25, 18, 36],
     ]);
-    expect(days(invoice.issuedAt, invoice.dueAt)).toBe(30);
+    // Due straight away: a sale is paid at the till unless whoever ships it asks for terms.
+    expect(days(invoice.issuedAt, invoice.dueAt)).toBe(0);
+  });
+
+  it("takes terms, or the money itself, from whoever ships it", async () => {
+    const onTerms = await order(net30, [{ code: "GL-WK-L", qty: 1 }]);
+    await shipOrder(as("warehouse"), onTerms, { idempotencyKey: randomUUID(), dueInDays: 30 });
+    const [billed] = await invoicesOf(onTerms);
+    expect(days(billed!.issuedAt, billed!.dueAt)).toBe(30);
+    expect(billed!.state).toBe("unpaid");
+
+    const paid = await order(net30, [{ code: "GL-WK-L", qty: 1 }]);
+    await shipOrder(as("warehouse"), paid, { idempotencyKey: randomUUID(), payment: { method: "Cash" } });
+    const [settled] = await invoicesOf(paid);
+    expect(settled!.state).toBe("paid");
+    expect((await getInvoice(as("owner"), settled!.id))!.balance).toBe(0);
   });
 
   it("is due on issue for a customer with no days in their terms", async () => {
@@ -250,7 +265,7 @@ describe("deposits", () => {
 });
 
 describe("invoices written by hand", () => {
-  it("adds up lines and tax, and is due by the customer's terms unless told otherwise", async () => {
+  it("adds up lines and tax, and is due straight away unless a number of days is given", async () => {
     const made = await createInvoice(as("owner"), {
       customerId: net30,
       taxRatePercent: 8,
@@ -261,10 +276,28 @@ describe("invoices written by hand", () => {
     });
     const invoice = (await getInvoice(as("owner"), made.id))!;
     expect(invoice).toMatchObject({ kind: "manual", subtotal: 175, tax: 14, amount: 189, orderId: null });
-    expect(days(invoice.issuedAt, invoice.dueAt)).toBe(30);
+    // A sale is paid at the till unless someone asks for terms, even for a customer whose record says Net 30.
+    expect(days(invoice.issuedAt, invoice.dueAt)).toBe(0);
     const sooner = await createInvoice(as("owner"), { customerId: net30, dueInDays: 7, lines: [{ description: "Rush fee", qty: 1, unitPrice: 20 }] });
     const detail = (await getInvoice(as("owner"), sooner.id))!;
     expect(days(detail.issuedAt, detail.dueAt)).toBe(7);
+  });
+
+  it("marks an invoice paid in full when the money came in with it", async () => {
+    const made = await createInvoice(as("owner"), {
+      customerId: net30,
+      taxRatePercent: 0,
+      payment: { method: "Card", reference: "4242" },
+      lines: [{ description: "Counter sale", qty: 2, unitPrice: 30 }],
+    });
+    const invoice = (await getInvoice(as("owner"), made.id))!;
+    expect(invoice.amount).toBe(60);
+    expect(invoice.balance).toBe(0);
+    expect(invoice.state).toBe("paid");
+    expect(invoice.payments.map((p) => [p.amount, p.method, p.reference])).toEqual([[60, "Card", "4242"]]);
+    expect(days(invoice.issuedAt, invoice.dueAt)).toBe(0);
+    await expect(createInvoice(as("owner"), { customerId: net30, payment: { method: "Goat" }, lines: [{ description: "x", qty: 1, unitPrice: 1 }] }))
+      .rejects.toThrow(/how the payment was made/);
   });
 
   it("needs a customer, at least one described line, sensible numbers, and the right role", async () => {

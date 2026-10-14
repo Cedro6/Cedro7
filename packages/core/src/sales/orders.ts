@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { withTenant, type PoolClient } from "@bos/db/runtime";
-import { invoiceShipmentInTx } from "../billing/invoices";
+import { invoiceShipmentInTx, type InvoicePayment } from "../billing/invoices";
 import { releaseForSourcesInTx, reserveLinesInTx, shipReservedInTx } from "../inventory/ledger";
 import type { Ctx } from "../platform/context";
 import { StateError, ValidationError } from "../platform/errors";
@@ -54,6 +54,8 @@ export type OrderLine = {
 export type Shipment = { id: string; number: string; shippedAt: Date; shippedBy: string | null; units: number };
 
 export type OrderDetail = OrderSummary & {
+  /** The customer's own terms, if they have any, as a hint when billing. */
+  customerPaymentTerms: string | null;
   taxRate: number;
   subtotal: number;
   tax: number;
@@ -77,7 +79,8 @@ const SUMMARY_SQL = `
          t.units_reserved::float8 as "unitsReserved",
          o.tax_rate::float8 as "taxRate", t.subtotal::float8 as subtotal,
          round(t.taxable * o.tax_rate, 2)::float8 as tax,
-         o.notes, u.name as "ownerName", o.confirmed_at as "confirmedAt", o.cancelled_at as "cancelledAt"
+         o.notes, u.name as "ownerName", o.confirmed_at as "confirmedAt", o.cancelled_at as "cancelledAt",
+         c.payment_terms as "customerPaymentTerms"
   from sales_orders o
   join customers c on c.id = o.customer_id
   left join users u on u.id = o.owner_user_id
@@ -134,16 +137,10 @@ function fourDecimals(value: number): boolean {
   return Math.round(value * 1e4) === value * 1e4;
 }
 
-export async function createQuote(
-  ctx: Ctx,
-  input: {
-    customerId: string;
-    lines: { productId: string; qty: number; unitPrice?: number; discountPercent?: number }[];
-    taxRatePercent?: number;
-    notes?: string;
-  },
-): Promise<{ id: string; number: string }> {
-  requirePermission(ctx, "sales_order.write");
+export type OrderLineInput = { productId: string; qty: number; unitPrice?: number; discountPercent?: number };
+
+/** The checks shared by writing a new order and editing one. */
+function checkOrderInput(input: { customerId: string; lines: OrderLineInput[]; taxRatePercent?: number; notes?: string }) {
   if (!UUID.test(input.customerId)) throw new ValidationError("customerId", "Choose a customer.");
   if (input.lines.length === 0) throw new ValidationError("lines", "Add at least one product.");
   if (input.lines.length > 200) throw new ValidationError("lines", "An order can have at most 200 lines.");
@@ -167,6 +164,39 @@ export async function createQuote(
   }
   const notes = input.notes?.trim() || null;
   if (notes && notes.length > 2000) throw new ValidationError("notes", "Keep notes under 2,000 characters.");
+  return { givenTax, notes };
+}
+
+/** Writes an order's lines at the customer's own prices, in the order given. */
+async function writeOrderLines(tx: PoolClient, ctx: Ctx, orderId: string, customerId: string, lines: OrderLineInput[]): Promise<void> {
+  const productIds = [...new Set(lines.map((line) => line.productId))];
+  // The customer's own prices: a price list's special price or percentage, else the product's price.
+  const price = await customerPricesInTx(tx, customerId, productIds);
+  if (price.size !== productIds.length) throw new ValidationError("lines", "Choose a product on every line.");
+  const untaxed = new Set((await tx.query<{ id: string }>("select id from products where id = any($1::uuid[]) and not taxable", [productIds])).rows.map((r) => r.id));
+  for (const [index, line] of lines.entries()) {
+    const listPrice = line.unitPrice ?? price.get(line.productId)!;
+    const discount = Math.round((line.discountPercent ?? 0) * 100) / 100;
+    const net = Math.round(listPrice * (100 - discount)) / 100;
+    await tx.query(
+      `insert into sales_order_lines (org_id, order_id, position, product_id, qty, unit_price, list_price, discount_pct, taxable)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [ctx.orgId, orderId, index + 1, line.productId, line.qty, net, listPrice, discount, !untaxed.has(line.productId)],
+    );
+  }
+}
+
+export async function createQuote(
+  ctx: Ctx,
+  input: {
+    customerId: string;
+    lines: { productId: string; qty: number; unitPrice?: number; discountPercent?: number }[];
+    taxRatePercent?: number;
+    notes?: string;
+  },
+): Promise<{ id: string; number: string }> {
+  requirePermission(ctx, "sales_order.write");
+  const { givenTax, notes } = checkOrderInput(input);
 
   return withTenant(ctx.pool, ctx.orgId, async (tx) => {
     const customer = await tx.query("select 1 from customers where id = $1 and status = 'active'", [input.customerId]);
@@ -175,12 +205,6 @@ export async function createQuote(
         "select case when c.tax_exempt then 0 else o.default_tax_percent end::float8 as tax from customers c, organizations o where c.id = $1 and o.id = $2",
         [input.customerId, ctx.orgId],
       )).rows[0]?.tax ?? 0;
-    const productIds = [...new Set(input.lines.map((line) => line.productId))];
-    // The customer's own prices: a price list's special price or percentage, else the product's price.
-    const price = await customerPricesInTx(tx, input.customerId, productIds);
-    if (price.size !== productIds.length) throw new ValidationError("lines", "Choose a product on every line.");
-
-    const untaxed = new Set((await tx.query<{ id: string }>("select id from products where id = any($1::uuid[]) and not taxable", [productIds])).rows.map((r) => r.id));
     const number = await nextNumber(tx, ctx.orgId, "sales_order", "SO");
     const order = await tx.query<{ id: string }>(
       `insert into sales_orders (org_id, number, customer_id, tax_rate, notes, owner_user_id, created_by)
@@ -188,18 +212,65 @@ export async function createQuote(
       [ctx.orgId, number, input.customerId, taxPercent / 100, notes, ctx.userId],
     );
     const id = order.rows[0]!.id;
-    for (const [index, line] of input.lines.entries()) {
-      const listPrice = line.unitPrice ?? price.get(line.productId)!;
-      const discount = Math.round((line.discountPercent ?? 0) * 100) / 100;
-      const net = Math.round(listPrice * (100 - discount)) / 100;
-      await tx.query(
-        `insert into sales_order_lines (org_id, order_id, position, product_id, qty, unit_price, list_price, discount_pct, taxable)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [ctx.orgId, id, index + 1, line.productId, line.qty, net, listPrice, discount, !untaxed.has(line.productId)],
-      );
-    }
+    await writeOrderLines(tx, ctx, id, input.customerId, input.lines);
     await audit(tx, ctx, "sales_order.created", id, { number, lines: input.lines.length });
     return { id, number };
+  });
+}
+
+/**
+ * Changes a quote, or an order that has not shipped anything yet: its lines, quantities, prices,
+ * customer, tax rate and notes. Stock held for the old lines is released and taken again for the new
+ * ones, so a quantity that goes up or down leaves the right amount reserved. Once any of it has
+ * shipped the order is fixed: record a return instead.
+ */
+export async function updateOrder(
+  ctx: Ctx,
+  orderId: string,
+  input: { customerId: string; lines: OrderLineInput[]; taxRatePercent?: number; notes?: string },
+): Promise<{ reserved: number; released: number }> {
+  requirePermission(ctx, "sales_order.write");
+  const { givenTax, notes } = checkOrderInput(input);
+  return withTenant(ctx.pool, ctx.orgId, async (tx) => {
+    const order = await lockOrder(tx, orderId);
+    if (!order) throw new StateError("Order not found.");
+    if (order.status === "cancelled") throw new StateError("A cancelled order cannot be changed.");
+    if (order.status !== "quote" && order.status !== "confirmed") {
+      throw new StateError("An order that has shipped cannot be changed. Record a return instead.");
+    }
+    if (order.lines.some((line) => line.qty_shipped > 0)) {
+      throw new StateError("Part of this order has already shipped, so it cannot be changed. Record a return instead.");
+    }
+    const customer = await tx.query("select 1 from customers where id = $1 and status = 'active'", [input.customerId]);
+    if (customer.rowCount === 0) throw new ValidationError("customerId", "Choose a customer.");
+    const taxPercent = givenTax ?? (await tx.query<{ tax: number }>(
+        "select case when c.tax_exempt then 0 else o.default_tax_percent end::float8 as tax from customers c, organizations o where c.id = $1 and o.id = $2",
+        [input.customerId, ctx.orgId],
+      )).rows[0]?.tax ?? 0;
+
+    // Give back everything held for the old lines before they go, so nothing is left reserved against nothing.
+    const releasedBy = await releaseForSourcesInTx(tx, ctx, order.lines.map((line) => line.id));
+    let released = 0;
+    for (const [, qty] of releasedBy) released += qty;
+    await tx.query("delete from sales_order_lines where order_id = $1", [orderId]);
+    await writeOrderLines(tx, ctx, orderId, input.customerId, input.lines);
+    await tx.query(
+      "update sales_orders set customer_id = $2, tax_rate = $3, notes = $4, updated_at = now() where id = $1",
+      [orderId, input.customerId, taxPercent / 100, notes],
+    );
+
+    // A confirmed order holds stock and has its costs frozen, so put both back the way confirming left them.
+    let reserved = 0;
+    if (order.status === "confirmed") {
+      const fresh = await lockOrder(tx, orderId);
+      reserved = featureOn(ctx.features, "stock") ? await reserveOutstanding(tx, ctx, fresh!.lines) : 0;
+      await tx.query(
+        "update sales_order_lines l set unit_cost = p.cost from products p where p.id = l.product_id and l.order_id = $1",
+        [orderId],
+      );
+    }
+    await audit(tx, ctx, "sales_order.updated", orderId, { lines: input.lines.length, released, reserved });
+    return { reserved, released };
   });
 }
 
@@ -325,7 +396,7 @@ export async function reserveAvailable(ctx: Ctx, orderId: string): Promise<{ res
 export async function shipOrder(
   ctx: Ctx,
   orderId: string,
-  input: { idempotencyKey: string },
+  input: { idempotencyKey: string; dueInDays?: number; payment?: InvoicePayment },
 ): Promise<{ shipmentNumber: string; units: number; replayed: boolean; invoice: { number: string; amount: number } | null }> {
   requirePermission(ctx, "sales_order.ship");
   if (!input.idempotencyKey.trim()) throw new ValidationError("idempotencyKey", "A request id is required.");
@@ -399,6 +470,8 @@ export async function shipOrder(
       orderId,
       shipmentId,
       lines: ready.map((line) => ({ orderLineId: line.id, qty: line.qty_reserved })),
+      dueInDays: input.dueInDays,
+      payment: input.payment,
     });
     await audit(tx, ctx, tracked ? "sales_order.shipped" : "sales_order.completed", orderId, { shipmentNumber, units, status, invoice: invoice.number });
     return { shipmentNumber, units, replayed: false, invoice: { number: invoice.number, amount: invoice.amount } };
