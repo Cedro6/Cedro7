@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { ask, AssistantLimitError, writeBriefing, confirmProposal, dismissProposal, ForbiddenError, StateError, ValidationError, type AssistantTurn, type Screen } from "@bos/core";
-import { assistantConfigured, callModel, monthlyLimit } from "../../../lib/assistant";
+import { assistantConfigured, callModel } from "../../../lib/assistant";
+import { billingFor } from "../../../lib/billing";
 import { requireSession } from "../../../lib/session";
 
 export type AskResult = { answer: string; error: string; lookups: number; proposals: { id: string; summary: string }[] };
@@ -17,7 +18,7 @@ export async function askAssistant(question: string, history: AssistantTurn[], s
     .filter((turn) => (turn?.role === "user" || turn?.role === "assistant") && typeof turn.text === "string")
     .slice(-8);
   try {
-    const result = await ask(ctx, { question: asked, company: membership.orgName, person: membership.userName, monthlyLimit: monthlyLimit(), history: turns, screen }, callModel);
+    const result = await ask(ctx, { question: asked, company: membership.orgName, person: membership.userName, monthlyLimit: billingFor(membership).avaQuestions, history: turns, screen }, callModel);
     return { answer: result.text, error: "", lookups: result.lookups.length, proposals: result.proposals.map(({ id, summary }) => ({ id, summary })) };
   } catch (error) {
     if (error instanceof AssistantLimitError) {
@@ -57,7 +58,7 @@ export async function writeMyBriefing(): Promise<BriefingResult> {
   const { ctx, membership } = await requireSession();
   if (!assistantConfigured()) return { body: "", error: "Ava has not been switched on for this site yet." };
   try {
-    const briefing = await writeBriefing(ctx, { company: membership.orgName, person: membership.userName, monthlyLimit: monthlyLimit() }, callModel);
+    const briefing = await writeBriefing(ctx, { company: membership.orgName, person: membership.userName, monthlyLimit: billingFor(membership).avaQuestions }, callModel);
     revalidatePath("/");
     return { body: briefing.body, error: "" };
   } catch (error) {

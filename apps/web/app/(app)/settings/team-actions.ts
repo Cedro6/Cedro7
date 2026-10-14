@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createPasswordLink, ForbiddenError, inviteMember, resetMemberTwoStep, updateMember, ValidationError } from "@bos/core";
 import { requireSession } from "../../../lib/session";
+import { ensureRoomForMember, syncSeats } from "../../../lib/billing";
 
 export type TeamState = { error: string; notice: string; link: string; linkFor: string };
 const blank: TeamState = { error: "", notice: "", link: "", linkFor: "" };
@@ -23,10 +24,12 @@ async function linkTo(token: string): Promise<string> {
 }
 
 export async function invite(_previous: TeamState, form: FormData): Promise<TeamState> {
-  const { ctx } = await requireSession();
+  const { ctx, membership } = await requireSession();
   const name = String(form.get("name") ?? "");
   try {
+    await ensureRoomForMember(ctx, membership);
     const made = await inviteMember(ctx, { name, email: String(form.get("email") ?? ""), role: String(form.get("role") ?? "") });
+    await syncSeats(ctx, membership);
     revalidatePath("/settings");
     return { ...blank, notice: `${name.trim()} added. Send them the link below to set their password. It works for 7 days.`, link: await linkTo(made.token), linkFor: name.trim() };
   } catch (error) {
@@ -46,7 +49,7 @@ export async function newLink(_previous: TeamState, form: FormData): Promise<Tea
 }
 
 export async function changeMember(_previous: TeamState, form: FormData): Promise<TeamState> {
-  const { ctx } = await requireSession();
+  const { ctx, membership } = await requireSession();
   const status = form.get("status");
   try {
     if (form.get("resetTwoStep") === "1") {
@@ -54,7 +57,9 @@ export async function changeMember(_previous: TeamState, form: FormData): Promis
       revalidatePath("/settings");
       return { ...blank, notice: "Two-step verification is off for them. They sign in with just their password until they set it up again." };
     }
+    if (status === "active") await ensureRoomForMember(ctx, membership);
     await updateMember(ctx, String(form.get("userId") ?? ""), status ? { status: String(status) } : { role: String(form.get("role") ?? "") });
+    if (status) await syncSeats(ctx, membership);
     revalidatePath("/", "layout");
     return { ...blank, notice: status === "suspended" ? "Suspended. They can no longer sign in." : status ? "Reactivated." : "Role saved." };
   } catch (error) {

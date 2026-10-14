@@ -26,6 +26,7 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
           <>
             <h1>Set up your company</h1>
             <p className="muted">About two minutes. Pick the product, then the kind of business, and your company starts with the tools that fit.</p>
+            <p className="muted">Free for 30 days for Dealer Terminal and 14 days for Cedro Terminal. No card needed to start.</p>
             <SignUpForm
               token={token}
               zones={timeZones()}
