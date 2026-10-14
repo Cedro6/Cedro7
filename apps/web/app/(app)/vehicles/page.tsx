@@ -30,7 +30,6 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
           <label className="sr-only" htmlFor="q">Search vehicles</label>
           <input id="q" name="q" type="search" placeholder="Stock number, VIN, make or model" defaultValue={q} />
         </form>
-        <a href="/vehicles/listing-csv" className="btn btn-glass" title="Cars on the lot with an asking price, for Facebook Marketplace, CarGurus and other listing sites">Listing file (CSV)</a>
         {write && (
           <>
             <Link href="/vehicles/new?manual=1" className="btn btn-glass">Add without a VIN</Link>
