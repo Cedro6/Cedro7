@@ -12,6 +12,7 @@ import { listPurchaseOrders, listSuppliers } from "../purchasing/orders";
 import { listOrders } from "../sales/orders";
 import { dealerAttention } from "../dealer/attention";
 import { dealSalesSeries, getDeal, listDeals, type DealStatus } from "../dealer/deals";
+import { cashReport, listDealerFiles } from "../dealer/operations";
 import { getVehicle, listVehicles, lotSummary, isVehicleStatus } from "../dealer/vehicles";
 
 /** Dealer Terminal companies get lookups about cars and deals instead of orders, invoices and stock. */
@@ -243,7 +244,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: "deal_detail",
-    description: "One deal in full: buyer, car, price, dealer fee, trade-in, tax, fees, total, payments recorded and what is still owed, odometer, and what the title paperwork still needs. Needs the deal id from find_deals.",
+    description: "One deal in full: buyer, car, price, dealer fee, trade-in, tax, fees, total, payments recorded and what is still owed, odometer, what the title paperwork still needs, the salesperson, the temp tag and title application dates, signed paperwork kept, and whether IRS Form 8300 (cash over $10,000) is due or filed. Needs the deal id from find_deals.",
     input_schema: { type: "object", properties: { deal_id: { type: "string" } }, required: ["deal_id"] },
     allowed: (ctx) => isDealer(ctx) && can(ctx, "vehicle.read"),
     run: async (ctx, input) => {
@@ -256,6 +257,10 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         taxable: d.taxable, salesTax: d.stateTax, surtax: d.surtax, tagAndTitle: d.tagTitleFees, otherFees: d.otherFees, total: d.total,
         payments: d.payments.map((p) => ({ amount: p.amount, method: p.method, on: p.paidOn })), owed: d.balance,
         odometer: d.odometer, soldAsIs: d.soldAsIs, delivered: d.deliveredOn, paperworkMissing: missing, gross: d.gross,
+        salesperson: d.salespersonName, commission: d.commission,
+        afterSale: { tempTag: d.tempTagNumber, tempTagExpires: d.tempTagExpiresOn, titleSentToTagOffice: d.titleSentOn, plate: d.plateNumber, titleDone: d.titleDoneOn },
+        signedPaperworkFiles: (await listDealerFiles(ctx, { dealId: d.id })).filter((f) => f.kind === "signed_form").length,
+        form8300: (() => { const c = cashReport(d.payments); return c.required ? { cashCounted: c.total, dueBy: c.dueOn, filedOn: d.form8300FiledOn } : null; })(),
         link: `/deals/${d.id}`,
       };
     },
