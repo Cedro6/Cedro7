@@ -90,7 +90,9 @@ export default async function DealPage({ params, searchParams }: { params: Promi
             </li>
             {Object.entries(FLORIDA_FORMS).map(([key, f]) => (
               <li key={key}>
-                <div><strong>{f.title}</strong><div className="muted">{f.about}</div></div>
+                <div><strong>{f.title}</strong><div className="muted">{f.about}</div>
+                  {key === "82042" && <div className={(deal.titleState ?? "FL").toUpperCase() === "FL" ? "muted" : "badge badge-warn"}>{(deal.titleState ?? "FL").toUpperCase() === "FL" ? "Not needed for this car: its title is a Florida title." : `Needed for this car: its title is from ${deal.titleState!.toUpperCase()}.`}</div>}
+                </div>
                 <Link href={`/deals/${deal.id}/documents/${key}`} className="btn btn-glass btn-small">Fill and open</Link>
               </li>
             ))}
